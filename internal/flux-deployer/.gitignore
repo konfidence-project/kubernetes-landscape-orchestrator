@@ -1,0 +1,57 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Output from go build / go run
+*.out
+
+# Go vendor directory (if vendoring dependencies)
+vendor/
+
+# Go test output
+*.test
+*.cover
+*.prof
+
+# Coverage reports
+coverage.*
+*.cov
+
+# Logs
+*.log
+
+# Notes
+.*.md
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sw?
+*.swo
+*.swp
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Kubernetes config/testing
+.kube/
+config/crd/bases/*_edited.yaml
+
+# Kubebuilder cache files and build artifacts
+testbin/
+controller-gen
+kustomize
+
+# Generated CRDs and deep copy files (can be re-generated)
+zz_generated.*
+
+# Cache for controller runtime/envtest
+testenv/
+
+# Env files
+.env
+.envrc
