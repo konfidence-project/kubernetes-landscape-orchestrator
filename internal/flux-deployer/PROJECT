@@ -8,4 +8,10 @@ layout:
 - go.kubebuilder.io/v4
 projectName: landscape-flux-deployer
 repo: github.com/konfidence-project/landscape-flux-deployer
+resources:
+- controller: true
+  domain: konfidence.cloud
+  group: landscape
+  kind: ArtifactDeployment
+  version: v1alpha1
 version: "3"
