@@ -36,6 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	"github.com/konfidence-project/landscape-flux-deployer/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -198,6 +200,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := (&controller.ArtifactDeploymentReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ArtifactDeployment")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {
