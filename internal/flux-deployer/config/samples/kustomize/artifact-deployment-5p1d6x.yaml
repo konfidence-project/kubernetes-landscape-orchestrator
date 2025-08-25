@@ -1,0 +1,23 @@
+apiVersion: landscape.konfidence.cloud/v1alpha1
+kind: ArtifactDeployment
+metadata:
+  name: podinfo-5p1d6x
+  namespace: target-namespace
+  labels:
+    konfidence.cloud/stage: dev
+    konfidence.cloud/vector-id: e4fc4f
+    konfidence.cloud/vector-deployment-id: 5p1d6x
+    konfidence.cloud/registry-insecure: "true"
+    konfidence.cloud/registry-skip-auth: "true"
+spec:
+  manifest:
+    type: Kustomize
+    allowReuse: true
+  component:
+    name: podinfo
+    provider: konfidence-dev
+    resources:
+      - name: podinfo-kustomize
+        type: ociImage
+        image: host.docker.internal:5000/kustomize/podinfo
+        version: v0.1.0

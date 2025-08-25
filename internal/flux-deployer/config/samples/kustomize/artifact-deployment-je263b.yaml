@@ -1,0 +1,32 @@
+apiVersion: landscape.konfidence.cloud/v1alpha1
+kind: ArtifactDeployment
+metadata:
+  name: podinfo-je263b
+  namespace: target-namespace
+  labels:
+    konfidence.cloud/stage: dev
+    konfidence.cloud/vector-id: e4fc4f
+    konfidence.cloud/vector-deployment-id: je263b
+spec:
+  manifest:
+    type: Kustomize
+    allowReuse: true
+  component:
+    name: podinfo
+    provider: konfidence-dev
+    resources:
+      - name: podinfo-kustomize
+        type: ociImage
+        image: demo.goharbor.io/kden-test/kustomize/podinfo
+        version: v0.1.0
+
+#---
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  name: demo-goharbor-io
+#  namespace: target-namespace
+#type: Opaque
+#stringData:
+#  username:
+#  password:

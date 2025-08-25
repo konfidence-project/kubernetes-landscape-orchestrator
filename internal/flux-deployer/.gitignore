@@ -44,7 +44,6 @@ config/crd/bases/*_edited.yaml
 # Kubebuilder cache files and build artifacts
 testbin/
 controller-gen
-kustomize
 
 # Generated CRDs and deep copy files (can be re-generated)
 zz_generated.*

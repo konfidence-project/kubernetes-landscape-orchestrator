@@ -1,0 +1,23 @@
+apiVersion: landscape.konfidence.cloud/v1alpha1
+kind: ArtifactDeployment
+metadata:
+  name: podinfo-6fa82f
+  namespace: target-namespace
+  labels:
+    konfidence.cloud/stage: dev
+    konfidence.cloud/vector-id: e4fc4f
+    konfidence.cloud/vector-deployment-id: 6fa82f
+    konfidence.cloud/registry-insecure: "true"
+    konfidence.cloud/registry-skip-auth: "true"
+spec:
+  manifest:
+    type: Helm
+    allowReuse: true
+  component:
+    name: podinfo
+    provider: konfidence-dev
+    resources:
+      - name: podinfo-helm
+        type: ociImage
+        image: host.docker.internal:5000/helm-charts/podinfo
+        version: 6.9.1

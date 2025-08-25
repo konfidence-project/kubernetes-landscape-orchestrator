@@ -37,8 +37,17 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	// see https://github.com/fluxcd/helm-controller/tree/main/api/v2
+	helmv2 "github.com/fluxcd/helm-controller/api/v2"
+	// see https://github.com/fluxcd/kustomize-controller/tree/main/api/v1
+	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
+
+	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
+	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
 	"github.com/konfidence-project/landscape-flux-deployer/internal/controller"
-	// +kubebuilder:scaffold:imports
+	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/reconciler"
 )
 
 var (
@@ -48,6 +57,10 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(landscapev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(sourcev1.AddToScheme(scheme))
+	utilruntime.Must(helmv2.AddToScheme(scheme))
+	utilruntime.Must(kustomizev1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
@@ -200,14 +213,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.ArtifactDeploymentReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+	if err := (&controller.HelmArtifactDeploymentReconciler{
+		Client:                   mgr.GetClient(),
+		HelmRepositoryReconciler: &reconciler.HelmRepositoryReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme()},
+		HelmReleaseReconciler:    &reconciler.HelmReleaseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme()},
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ArtifactDeployment")
+		setupLog.Error(err, "unable to create helm controller", "controller", "ArtifactDeployment")
 		os.Exit(1)
 	}
-	// +kubebuilder:scaffold:builder
+	if err := (&controller.KustomizeArtifactDeploymentReconciler{
+		Client:                  mgr.GetClient(),
+		OCIRepositoryReconciler: &reconciler.OCIRepositoryReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme()},
+		KustomizationReconciler: &reconciler.KustomizationReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme()},
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create kustomize controller", "controller", "ArtifactDeployment")
+		os.Exit(1)
+	}
 
 	if metricsCertWatcher != nil {
 		setupLog.Info("Adding metrics certificate watcher to manager")
