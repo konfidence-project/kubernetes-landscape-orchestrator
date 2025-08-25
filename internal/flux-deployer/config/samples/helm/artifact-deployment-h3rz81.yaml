@@ -1,0 +1,32 @@
+apiVersion: landscape.konfidence.cloud/v1alpha1
+kind: ArtifactDeployment
+metadata:
+  name: podinfo-h3rz81
+  namespace: target-namespace
+  labels:
+    konfidence.cloud/stage: dev
+    konfidence.cloud/vector-id: e4fc4f
+    konfidence.cloud/vector-deployment-id: h3rz81
+spec:
+  manifest:
+    type: Helm
+    allowReuse: true
+  component:
+    name: podinfo
+    provider: konfidence-dev
+    resources:
+      - name: podinfo-helm
+        type: ociImage
+        image: demo.goharbor.io/kden-test/helm-charts/podinfo
+        version: 6.9.1
+
+#---
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  name: demo-goharbor-io
+#  namespace: target-namespace
+#type: Opaque
+#stringData:
+#  username:
+#  password:
