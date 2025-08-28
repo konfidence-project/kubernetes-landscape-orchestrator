@@ -12,24 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func CreateTaskExecution(ctx context.Context, k8sClient client.Client, name string, namespace string, specName string, specType string, dependencies *[]string, jobSpec string) {
-	var spec landscape.TaskExecutionSpec
-
-	if dependencies == nil {
-		spec = landscape.TaskExecutionSpec{
-			Name: specName,
-			Type: specType,
-			Spec: jobSpec,
-		}
-	} else {
-		spec = landscape.TaskExecutionSpec{
-			Name:      specName,
-			Type:      specType,
-			DependsOn: *dependencies,
-			Spec:      jobSpec,
-		}
-	}
-
+func CreateTaskExecution(ctx context.Context, k8sClient client.Client, name string, namespace string, specName string, specType string, dependsOn []string, jobSpec string) {
 	taskExecution := &landscape.TaskExecution{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "landscape.konfidence.cloud/v1alpha1",
@@ -39,7 +22,12 @@ func CreateTaskExecution(ctx context.Context, k8sClient client.Client, name stri
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: spec,
+		Spec: landscape.TaskExecutionSpec{
+			Name:      specName,
+			Type:      specType,
+			DependsOn: dependsOn,
+			Spec:      jobSpec,
+		},
 	}
 
 	Expect(k8sClient.Create(ctx, taskExecution)).To(Succeed())
