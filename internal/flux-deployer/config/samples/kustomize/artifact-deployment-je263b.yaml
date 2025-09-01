@@ -8,6 +8,7 @@ metadata:
     konfidence.cloud/vector-id: e4fc4f
     konfidence.cloud/vector-deployment-id: je263b
 spec:
+  taskManifests: []
   manifest:
     type: Kustomize
     allowReuse: true
@@ -26,7 +27,6 @@ spec:
 #metadata:
 #  name: demo-goharbor-io
 #  namespace: target-namespace
-#type: Opaque
-#stringData:
-#  username:
-#  password:
+#type: kubernetes.io/dockerconfigjson
+#data:
+#  .dockerconfigjson:

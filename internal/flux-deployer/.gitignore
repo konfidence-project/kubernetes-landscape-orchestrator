@@ -26,6 +26,10 @@ coverage.*
 # Notes
 .*.md
 
+# Hidden YAML files
+.*.yaml
+.*.yml
+
 # IDEs and editors
 .vscode/
 .idea/
