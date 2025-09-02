@@ -8,7 +8,6 @@ metadata:
     konfidence.cloud/vector-id: e4fc4f
     konfidence.cloud/vector-deployment-id: je263b
 spec:
-  taskManifests: []
   manifest:
     type: Kustomize
     allowReuse: true
@@ -20,6 +19,7 @@ spec:
         type: ociImage
         image: demo.goharbor.io/kden-test/kustomize/podinfo
         version: v0.1.0
+  taskManifests: []
 
 #---
 #apiVersion: v1

@@ -21,3 +21,4 @@ spec:
         type: ociImage
         image: host.docker.internal:5000/kustomize/podinfo
         version: v0.1.0
+  taskManifests: []
