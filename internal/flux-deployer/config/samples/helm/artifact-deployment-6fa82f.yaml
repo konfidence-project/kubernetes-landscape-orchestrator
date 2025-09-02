@@ -21,3 +21,4 @@ spec:
         type: ociImage
         image: host.docker.internal:5000/helm-charts/podinfo
         version: 6.9.1
+  taskManifests: []
