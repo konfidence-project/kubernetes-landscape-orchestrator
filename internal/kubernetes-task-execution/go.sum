@@ -79,6 +79,8 @@ github.com/klauspost/compress v1.18.0 h1:c/Cqfb0r+Yi+JtIEq73FWXVkRonBlf0CRNYc8Zt
 github.com/klauspost/compress v1.18.0/go.mod h1:2Pp+KzxcywXVXMr50+X0Q/Lsb43OQHYWRCY2AiWywWQ=
 github.com/konfidence-project/crds/api/landscape v0.0.1 h1:v74sKN8GNeZ5kuF5lWmLtRNkQluiUP1pW3BKxuaWRrA=
 github.com/konfidence-project/crds/api/landscape v0.0.1/go.mod h1:8bcJNEvUk5KMMwxSecijlBgaY7rkXiPKHBXjjbMQFZ0=
+github.com/konfidence-project/crds/api/landscape v0.0.2-0.20250903084109-2401d570573c h1:cQdV2HfDJ70rwY5wNzhLC0hCa1rXN2sMTMq0vvIMIas=
+github.com/konfidence-project/crds/api/landscape v0.0.2-0.20250903084109-2401d570573c/go.mod h1:8bcJNEvUk5KMMwxSecijlBgaY7rkXiPKHBXjjbMQFZ0=
 github.com/kr/pretty v0.2.1/go.mod h1:ipq/a2n7PKx3OHsz4KJII5eveXtPO4qwEXGdVfWzfnI=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
