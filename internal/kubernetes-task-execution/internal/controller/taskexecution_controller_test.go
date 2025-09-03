@@ -24,15 +24,17 @@ import (
 	testutil "github.com/konfidence-project/landscape-kubernetes-task-execution-controller/internal/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 var _ = Describe("TaskExecution Controller", func() {
 	const (
 		TaskExecution     = "task-execution-001"
-		TaskExecutionType = "k8s"
-		TaskExecutionSpec = ""
+		TaskExecutionType = "k8s-job"
+		TaskExecutionSpec = "{\"template\": {\"spec\": {\"containers\": [ {\"name\": \"task-execution-001\",\"image\": \"busybox\",\"command\": [\"echo\",\"I am task 1 of service 1\"]}],\"restartPolicy\": \"Never\"}},\"backoffLimit\": 4}"
 		Namespace         = "default"
 		timeout           = time.Second * 10
 		interval          = time.Millisecond * 250
@@ -57,11 +59,40 @@ var _ = Describe("TaskExecution Controller", func() {
 			Eventually(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, taskExecutionLookupKey, taskExecution)).To(Succeed())
 				g.Expect(taskExecution.Spec.Name).To(Equal(TaskExecution))
+			}, timeout, interval).Should(Succeed())
+
+			// check that the job has been created and has valid properties
+			job := &batchv1.Job{}
+			jobLookupKey := types.NamespacedName{Name: TaskExecution, Namespace: Namespace}
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, jobLookupKey, job)).To(Succeed())
+				g.Expect(job.Spec.Template.Spec.RestartPolicy).To(Equal(corev1.RestartPolicyNever))
+				g.Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
+				g.Expect(job.Spec.Template.Spec.Containers[0].Name).To(Equal("task-execution-001"))
+				g.Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal("busybox"))
+				g.Expect(job.Spec.Template.Spec.Containers[0].Command).To(HaveLen(2))
+				g.Expect(job.Spec.Template.Spec.Containers[0].Command[0]).To(Equal("echo"))
+				g.Expect(job.Spec.Template.Spec.Containers[0].Command[1]).To(Equal("I am task 1 of service 1"))
+				g.Expect(*job.Spec.BackoffLimit).To(Equal(int32(4)))
+				g.Expect(isJobComplete(job)).To(BeTrue())
+			}, timeout, interval).Should(Succeed())
+
+			// check that the taskExecution has been marked as successful
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, taskExecutionLookupKey, taskExecution)).To(Succeed())
 				g.Expect(taskExecution.Status.Conditions).To(HaveLen(1))
-				g.Expect(taskExecution.Status.Conditions[0].Reason).To(Equal(landscape.TaskSucceeded))
-				g.Expect(taskExecution.Status.Conditions[0].Type).To(Equal(landscape.TaskSucceeded))
-				g.Expect(taskExecution.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+				g.Expect(meta.IsStatusConditionTrue(taskExecution.Status.Conditions, landscape.TaskSucceeded)).To(BeTrue())
 			}, timeout, interval).Should(Succeed())
 		})
 	})
 })
+
+func isJobComplete(job *batchv1.Job) bool {
+	for _, c := range job.Status.Conditions {
+		if c.Type == batchv1.JobComplete && c.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+
+	return false
+}

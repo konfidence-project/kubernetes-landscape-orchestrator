@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -26,7 +27,9 @@ func CreateTaskExecution(ctx context.Context, k8sClient client.Client, name stri
 			Name:      specName,
 			Type:      specType,
 			DependsOn: dependsOn,
-			Spec:      jobSpec,
+			Spec: runtime.RawExtension{
+				Raw: []byte(jobSpec),
+			},
 		},
 	}
 
@@ -58,14 +61,4 @@ func CleanupTaskExecution(k8sClient client.Client, taskExecutionName string, nam
 	if taskExecution != nil {
 		DeleteTaskExecution(ctx, k8sClient, taskExecution)
 	}
-}
-
-func ContainsReference(references []metav1.OwnerReference, name string, kind string) bool {
-	for _, ref := range references {
-		if ref.Kind == kind && ref.Name == name {
-			return true
-		}
-	}
-
-	return false
 }
