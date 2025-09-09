@@ -6,7 +6,7 @@ namespace: landscape-kubernetes-task-execution-controller-system
 # "wordpress" becomes "alices-wordpress".
 # Note that it should also match with the prefix (text before '-') of the namespace
 # field above.
-namePrefix: landscape-kubernetes-task-execution-controller-
+namePrefix: landscape-k8s-task-execution-
 
 # Labels to add to all resources and selectors.
 #labels:
