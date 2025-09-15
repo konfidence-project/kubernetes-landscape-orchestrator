@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	e "github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -70,18 +71,15 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	err := r.Get(ctx, types.NamespacedName{Namespace: taskExecution.Namespace, Name: taskExecution.Name}, job)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			log.Error(err, "Unable to fetch job")
-			return ctrl.Result{}, err
+			return ctrl.Result{}, e.Wrap(err, "Unable to fetch job")
 		} else {
 			job, err := r.constructJob(taskExecution)
 			if err != nil {
-				log.Error(err, "Unable to construct job from template")
-				return ctrl.Result{}, err
+				return ctrl.Result{}, e.Wrap(err, "Unable to construct job from template")
 			}
 
 			if err = r.Create(ctx, job); err != nil {
-				log.Error(err, "Unable to create job", "job", job)
-				return ctrl.Result{}, err
+				return ctrl.Result{}, e.Wrap(err, "Unable to create job")
 			}
 
 			log.V(1).Info("Created job", "job", job)
@@ -99,17 +97,17 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if err := r.updateTaskExecutionStatus(ctx, req, metav1.Condition{Type: landscape.TaskFailed,
 			Status: metav1.ConditionTrue, Reason: landscape.TaskFailed,
 			Message: fmt.Sprintf("Reconciling TaskExecution %s failed", taskExecution.Name)}); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, e.Wrap(err, "Unable to update task execution status")
 		}
 
-		err := fmt.Errorf("task execution failed due to job failure")
+		err := e.Errorf("task execution failed due to job failure")
 		log.Error(err, "Task execution failed")
 	case batchv1.JobComplete:
 		log.Info(fmt.Sprintf("Job %s completed successfully", job.Name))
 		if err := r.updateTaskExecutionStatus(ctx, req, metav1.Condition{Type: landscape.TaskSucceeded,
 			Status: metav1.ConditionTrue, Reason: landscape.TaskSucceeded,
 			Message: fmt.Sprintf("TaskExecution %s reconciled successfully", taskExecution.Name)}); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, e.Wrap(err, "Unable to update task execution status")
 		}
 
 		log.Info("TaskExecution reconciled")
@@ -119,17 +117,14 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 func (r *TaskExecutionReconciler) updateTaskExecutionStatus(ctx context.Context, req ctrl.Request, condition metav1.Condition) error {
-	log := logf.FromContext(ctx)
 	taskExecution := &landscape.TaskExecution{}
 	if err := r.Get(ctx, req.NamespacedName, taskExecution); err != nil {
-		log.Error(err, "Unable to fetch taskExecution")
-		return err
+		return e.Wrap(err, "Unable to fetch taskExecution")
 	}
 
 	meta.SetStatusCondition(&taskExecution.Status.Conditions, condition)
 	if err := r.Status().Update(ctx, taskExecution); err != nil {
-		log.Error(err, "Failed to update taskExecution status")
-		return err
+		return e.Wrap(err, "Failed to update taskExecution status")
 	}
 
 	return nil
@@ -138,7 +133,7 @@ func (r *TaskExecutionReconciler) updateTaskExecutionStatus(ctx context.Context,
 func (r *TaskExecutionReconciler) constructJob(taskExecution *landscape.TaskExecution) (*batchv1.Job, error) {
 	jobSpec := batchv1.JobSpec{}
 	if err := json.Unmarshal(taskExecution.Spec.Spec.Raw, &jobSpec); err != nil {
-		return nil, err
+		return nil, e.Wrap(err, "Unable to unmarshal taskExecution spec")
 	}
 
 	job := &batchv1.Job{
@@ -150,7 +145,7 @@ func (r *TaskExecutionReconciler) constructJob(taskExecution *landscape.TaskExec
 	}
 
 	if err := ctrl.SetControllerReference(taskExecution, job, r.Scheme); err != nil {
-		return nil, err
+		return nil, e.Wrap(err, "Unable to set controller reference for job")
 	}
 
 	return job, nil
