@@ -18,13 +18,13 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
-	e "github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -70,16 +70,16 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	job := &batchv1.Job{}
 	err := r.Get(ctx, types.NamespacedName{Namespace: taskExecution.Namespace, Name: taskExecution.Name}, job)
 	if err != nil {
-		if !errors.IsNotFound(err) {
-			return ctrl.Result{}, e.Wrap(err, "Unable to fetch job")
+		if !apiErrors.IsNotFound(err) {
+			return ctrl.Result{}, fmt.Errorf("unable to fetch job: %w", err)
 		} else {
 			job, err := r.constructJob(taskExecution)
 			if err != nil {
-				return ctrl.Result{}, e.Wrap(err, "Unable to construct job from template")
+				return ctrl.Result{}, fmt.Errorf("unable to construct job from template: %w", err)
 			}
 
 			if err = r.Create(ctx, job); err != nil {
-				return ctrl.Result{}, e.Wrap(err, "Unable to create job")
+				return ctrl.Result{}, fmt.Errorf("unable to create job: %w", err)
 			}
 
 			log.V(1).Info("Created job", "job", job)
@@ -97,17 +97,17 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if err := r.updateTaskExecutionStatus(ctx, req, metav1.Condition{Type: landscape.TaskFailed,
 			Status: metav1.ConditionTrue, Reason: landscape.TaskFailed,
 			Message: fmt.Sprintf("Reconciling TaskExecution %s failed", taskExecution.Name)}); err != nil {
-			return ctrl.Result{}, e.Wrap(err, "Unable to update task execution status")
+			return ctrl.Result{}, fmt.Errorf("unable to update task execution status: %w", err)
 		}
 
-		err := e.Errorf("task execution failed due to job failure")
+		err := errors.New("task execution failed due to job failure")
 		log.Error(err, "Task execution failed")
 	case batchv1.JobComplete:
 		log.Info(fmt.Sprintf("Job %s completed successfully", job.Name))
 		if err := r.updateTaskExecutionStatus(ctx, req, metav1.Condition{Type: landscape.TaskSucceeded,
 			Status: metav1.ConditionTrue, Reason: landscape.TaskSucceeded,
 			Message: fmt.Sprintf("TaskExecution %s reconciled successfully", taskExecution.Name)}); err != nil {
-			return ctrl.Result{}, e.Wrap(err, "Unable to update task execution status")
+			return ctrl.Result{}, fmt.Errorf("unable to update task execution status: %w", err)
 		}
 
 		log.Info("TaskExecution reconciled")
@@ -119,12 +119,12 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *TaskExecutionReconciler) updateTaskExecutionStatus(ctx context.Context, req ctrl.Request, condition metav1.Condition) error {
 	taskExecution := &landscape.TaskExecution{}
 	if err := r.Get(ctx, req.NamespacedName, taskExecution); err != nil {
-		return e.Wrap(err, "Unable to fetch taskExecution")
+		return fmt.Errorf("unable to fetch taskExecution: %w", err)
 	}
 
 	meta.SetStatusCondition(&taskExecution.Status.Conditions, condition)
 	if err := r.Status().Update(ctx, taskExecution); err != nil {
-		return e.Wrap(err, "Failed to update taskExecution status")
+		return fmt.Errorf("failed to update taskExecution status: %w", err)
 	}
 
 	return nil
@@ -133,7 +133,7 @@ func (r *TaskExecutionReconciler) updateTaskExecutionStatus(ctx context.Context,
 func (r *TaskExecutionReconciler) constructJob(taskExecution *landscape.TaskExecution) (*batchv1.Job, error) {
 	jobSpec := batchv1.JobSpec{}
 	if err := json.Unmarshal(taskExecution.Spec.Spec.Raw, &jobSpec); err != nil {
-		return nil, e.Wrap(err, "Unable to unmarshal taskExecution spec")
+		return nil, fmt.Errorf("unable to unmarshal taskExecution spec: %w", err)
 	}
 
 	job := &batchv1.Job{
@@ -145,7 +145,7 @@ func (r *TaskExecutionReconciler) constructJob(taskExecution *landscape.TaskExec
 	}
 
 	if err := ctrl.SetControllerReference(taskExecution, job, r.Scheme); err != nil {
-		return nil, e.Wrap(err, "Unable to set controller reference for job")
+		return nil, fmt.Errorf("unable to set controller reference for job: %w", err)
 	}
 
 	return job, nil
