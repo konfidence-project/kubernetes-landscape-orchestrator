@@ -19,7 +19,6 @@ package reconciler
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +31,7 @@ import (
 
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
 	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
 )
 
 //
@@ -40,9 +40,12 @@ import (
 //
 
 type OCIRepositoryReconciler struct {
-	Client client.Client
-	Scheme *runtime.Scheme
+	Client         client.Client
+	Scheme         *runtime.Scheme
+	ConfigProvider fluxcd.FluxConfigProvider
 }
+
+var _ fluxcd.FluxReconciler = new(OCIRepositoryReconciler)
 
 func (r *OCIRepositoryReconciler) Reconcile(
 	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) (isReady bool, err error) {
@@ -78,7 +81,7 @@ func (r *OCIRepositoryReconciler) mutateOCIRepository(
 
 	// update spec
 	ociRepository.Spec = sourcev1.OCIRepositorySpec{
-		Interval:  metav1.Duration{Duration: 10 * time.Second},
+		Interval:  r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
 		URL:       fmt.Sprintf("oci://%s", ocmResource.Image),
 		Insecure:  isInsecure(deployment),
 		SecretRef: getSecretRef(deployment, ocmResource),

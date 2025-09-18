@@ -19,7 +19,6 @@ package reconciler
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,6 +34,7 @@ import (
 
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
 	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
 	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
 )
 
@@ -44,9 +44,12 @@ import (
 //
 
 type HelmReleaseReconciler struct {
-	Client client.Client
-	Scheme *runtime.Scheme
+	Client         client.Client
+	Scheme         *runtime.Scheme
+	ConfigProvider fluxcd.FluxConfigProvider
 }
+
+var _ fluxcd.FluxReconciler = new(HelmReleaseReconciler)
 
 func (r *HelmReleaseReconciler) Reconcile(
 	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) (isReady bool, err error) {
@@ -90,7 +93,7 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 
 	// update spec
 	helmRelease.Spec = helmv2.HelmReleaseSpec{
-		Interval: metav1.Duration{Duration: 10 * time.Second},
+		Interval: r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
 		Chart: &helmv2.HelmChartTemplate{
 			Spec: helmv2.HelmChartTemplateSpec{
 				SourceRef: helmv2.CrossNamespaceObjectReference{
@@ -102,12 +105,11 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 				Version: ocmResource.Version,
 			},
 		},
-		DriftDetection: &helmv2.DriftDetection{
-			Mode: helmv2.DriftDetectionEnabled,
-		},
-		Install: &helmv2.Install{
-			Timeout: &metav1.Duration{Duration: 5 * time.Minute},
-		},
+		KubeConfig:       r.ConfigProvider.GetKubeConfigRef(deployment.GetNamespace()),
+		TargetNamespace:  r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
+		StorageNamespace: r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
+		DriftDetection:   r.ConfigProvider.GetHelmDriftDetectionMode(deployment.GetNamespace()),
+		Install:          r.ConfigProvider.GetHelmInstallConfig(deployment.GetNamespace()),
 	}
 
 	return nil

@@ -37,3 +37,27 @@ Run a minimal OCI registry ([olareg](https://github.com/olareg/olareg)) on your 
 ```bash
 docker run -d --rm -p 127.0.0.1:5000:5000 ghcr.io/olareg/olareg:edge serve
 ```
+
+## Kubeconfig for remote clusters
+
+If the deployment target is a remote Kubernetes cluster, you need to provide a kubeconfig to the deployer so it can connect to that cluster. The `./create-kubeconfig-secret/create-kubeconfig.sh` script outputs a base64 encoded kubeconfig string by executing the following steps: 
+
+- Step 1: Creates RBAC resources in the remote cluster. For this your current kube-context should point to the remote cluster.
+  - Creates a `ServiceAccount` which is later used by Flux to connect to the remote cluster.
+  - Creates a `ClusterRoleBinding` to bind the service account to the cluster-admin role (you can scope this down if needed).
+  - Creates a `Secret` of type `kubernetes.io/service-account-token` which contains the token used to authenticate as the service account.
+- Step 2: Reads token and certificate data from the created secret.
+- Step 3: Creates a kubeconfig file using the token and certificate data.
+- Step 4: Base64 encodes the kubeconfig file and prints it to stdout.
+
+Copy the base64 encoded kubeconfig string to the Kubernetes secret as printed below.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kubeconfig-remote-cluster
+  namespace: target-namespace
+data:
+  kubeconfig: <base64-encoded-kubeconfig>
+```
