@@ -19,7 +19,6 @@ package reconciler
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,6 +33,7 @@ import (
 
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
 	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
 	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
 )
 
@@ -43,9 +43,12 @@ import (
 //
 
 type KustomizationReconciler struct {
-	Client client.Client
-	Scheme *runtime.Scheme
+	Client         client.Client
+	Scheme         *runtime.Scheme
+	ConfigProvider fluxcd.FluxConfigProvider
 }
+
+var _ fluxcd.FluxReconciler = new(KustomizationReconciler)
 
 func (r *KustomizationReconciler) Reconcile(
 	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) (isReady bool, err error) {
@@ -81,14 +84,15 @@ func (r *KustomizationReconciler) mutateKustomization(
 
 	// update spec
 	kustomization.Spec = kustomizev1.KustomizationSpec{
-		Interval: metav1.Duration{Duration: 10 * time.Second},
+		Interval: r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
 		SourceRef: kustomizev1.CrossNamespaceSourceReference{
 			Kind:      sourcev1.OCIRepositoryKind,
 			Namespace: deployment.GetNamespace(),
 			Name:      buildResourceName(deployment, ocmResource),
 		},
 		Path:            "./",
-		TargetNamespace: deployment.GetNamespace(),
+		KubeConfig:      r.ConfigProvider.GetKubeConfigRef(deployment.GetNamespace()),
+		TargetNamespace: r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
 		NameSuffix:      fmt.Sprintf("-%s", utils.Must(utils.GetKonfidenceLabel(&deployment.ObjectMeta, "vector-deployment-id"))),
 		Prune:           true,
 		Wait:            true,
