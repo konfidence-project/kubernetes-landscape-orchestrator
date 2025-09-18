@@ -97,7 +97,7 @@ func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manage
 		switch obj.(type) {
 		case *landscapev1alpha1.ArtifactDeployment:
 			// ... for 'Kustomize' manifest types
-			return obj.(*landscapev1alpha1.ArtifactDeployment).Spec.Manifest.Type == "Kustomize"
+			return obj.(*landscapev1alpha1.ArtifactDeployment).Spec.Manifest.Type == "cloud.konfidence.flux.kustomize"
 		case *sourcev1.OCIRepository, *kustomizev1.Kustomization:
 			// ... or owned resources
 			return true

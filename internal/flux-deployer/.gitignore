@@ -16,6 +16,10 @@ vendor/
 *.cover
 *.prof
 
+# Go workspace file
+go.work
+go.work.sum
+
 # Coverage reports
 coverage.*
 *.cov

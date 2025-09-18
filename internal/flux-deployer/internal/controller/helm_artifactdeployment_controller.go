@@ -46,7 +46,8 @@ type HelmArtifactDeploymentReconciler struct {
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments/finalizers,verbs=update
-// +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=helmrepositories,helmcharts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=helmrepositories,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=helmcharts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;create;update;patch;delete
 
 func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -67,6 +68,11 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 
 	// reconcile each OCM resource of the deployment
 	for _, ocmResource := range deployment.Spec.Component.Resources {
+		if ocmResource.Type != "helmChart" {
+			// we only handle helm chart, skip all other resource types
+			continue
+		}
+
 		if _, err := r.HelmRepositoryReconciler.Reconcile(ctx, deployment, &ocmResource); err != nil {
 			log.Error(err, fmt.Sprintf("failed to reconcile HelmRepository of OCM resource '%s'", ocmResource.Name),
 				"ArtifactDeployment", deployment)
@@ -99,7 +105,7 @@ func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) er
 		switch obj.(type) {
 		case *landscapev1alpha1.ArtifactDeployment:
 			// ... for 'Helm' manifest types
-			return obj.(*landscapev1alpha1.ArtifactDeployment).Spec.Manifest.Type == "Helm"
+			return obj.(*landscapev1alpha1.ArtifactDeployment).Spec.Manifest.Type == "cloud.konfidence.flux.helm"
 		case *sourcev1.HelmRepository, *sourcev1.HelmChart, *helmv2.HelmRelease:
 			// ... or owned resources
 			return true

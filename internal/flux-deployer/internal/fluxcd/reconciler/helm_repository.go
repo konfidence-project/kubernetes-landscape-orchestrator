@@ -31,7 +31,6 @@ import (
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
 	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
 	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
 )
 
 //
@@ -81,8 +80,7 @@ func (r *HelmRepositoryReconciler) mutateHelmRepository(
 	// update spec
 	helmRepository.Spec = sourcev1.HelmRepositorySpec{
 		Interval:  r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
-		Type:      "oci",
-		URL:       fmt.Sprintf("oci://%s", utils.Must(utils.ParseHostnameWithPortFromURL(ocmResource.Image))),
+		URL:       ocmResource.Image,
 		Insecure:  isInsecure(deployment),
 		SecretRef: getSecretRef(deployment, ocmResource),
 	}
