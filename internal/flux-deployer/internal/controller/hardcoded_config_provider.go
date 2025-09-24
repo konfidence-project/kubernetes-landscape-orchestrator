@@ -13,7 +13,7 @@ import (
 
 type HardCodedConfigProvider struct{}
 
-var _ fluxcd.FluxConfigProvider = new(HardCodedConfigProvider)
+var _ fluxcd.FluxConfigProvider = (*HardCodedConfigProvider)(nil)
 
 // TODO (max # 2025-09-15): This is just a dummy implementation. The deployer needs two kind of configurations:
 // 1. Konfidence specific configurations, e.g. deployment target.

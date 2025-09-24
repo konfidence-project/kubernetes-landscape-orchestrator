@@ -44,7 +44,7 @@ type HelmRepositoryReconciler struct {
 	ConfigProvider fluxcd.FluxConfigProvider
 }
 
-var _ fluxcd.FluxReconciler = new(HelmRepositoryReconciler)
+var _ fluxcd.FluxReconciler = (*HelmRepositoryReconciler)(nil)
 
 func (r *HelmRepositoryReconciler) Reconcile(
 	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) (isReady bool, err error) {

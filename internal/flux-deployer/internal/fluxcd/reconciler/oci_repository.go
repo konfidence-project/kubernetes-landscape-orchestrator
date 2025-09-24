@@ -45,7 +45,7 @@ type OCIRepositoryReconciler struct {
 	ConfigProvider fluxcd.FluxConfigProvider
 }
 
-var _ fluxcd.FluxReconciler = new(OCIRepositoryReconciler)
+var _ fluxcd.FluxReconciler = (*OCIRepositoryReconciler)(nil)
 
 func (r *OCIRepositoryReconciler) Reconcile(
 	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) (isReady bool, err error) {

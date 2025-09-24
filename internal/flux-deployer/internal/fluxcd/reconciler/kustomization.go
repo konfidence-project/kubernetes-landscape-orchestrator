@@ -48,7 +48,7 @@ type KustomizationReconciler struct {
 	ConfigProvider fluxcd.FluxConfigProvider
 }
 
-var _ fluxcd.FluxReconciler = new(KustomizationReconciler)
+var _ fluxcd.FluxReconciler = (*KustomizationReconciler)(nil)
 
 func (r *KustomizationReconciler) Reconcile(
 	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) (isReady bool, err error) {
