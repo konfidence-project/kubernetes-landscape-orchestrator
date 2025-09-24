@@ -49,7 +49,7 @@ type HelmReleaseReconciler struct {
 	ConfigProvider fluxcd.FluxConfigProvider
 }
 
-var _ fluxcd.FluxReconciler = new(HelmReleaseReconciler)
+var _ fluxcd.FluxReconciler = (*HelmReleaseReconciler)(nil)
 
 func (r *HelmReleaseReconciler) Reconcile(
 	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) (isReady bool, err error) {
