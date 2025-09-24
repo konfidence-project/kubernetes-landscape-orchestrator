@@ -6,6 +6,7 @@ import (
 
 	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
 	. "github.com/onsi/gomega"
+	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -60,5 +61,31 @@ func CleanupTaskExecution(k8sClient client.Client, taskExecutionName string, nam
 
 	if taskExecution != nil {
 		DeleteTaskExecution(ctx, k8sClient, taskExecution)
+	}
+}
+
+func DeleteJob(ctx context.Context, k8sClient client.Client, job *batchv1.Job) {
+	err := k8sClient.Delete(ctx, job)
+	Expect(err).ToNot(HaveOccurred(), "Failed to delete job: %s", job.Name)
+}
+
+func GetJob(ctx context.Context, k8sClient client.Client, name string, namespace string, opt bool) *batchv1.Job {
+	job := &batchv1.Job{}
+	jobLookupKey := types.NamespacedName{Name: name, Namespace: namespace}
+	err := k8sClient.Get(ctx, jobLookupKey, job)
+
+	if opt && err != nil && errors.IsNotFound(err) {
+		return nil
+	}
+
+	Expect(err).ToNot(HaveOccurred(), "Failed to fetch job: %s", name)
+	return job
+}
+func CleanupJob(k8sClient client.Client, jobName string, namespace string) {
+	ctx := context.Background()
+	job := GetJob(ctx, k8sClient, jobName, namespace, true)
+
+	if job != nil {
+		DeleteJob(ctx, k8sClient, job)
 	}
 }

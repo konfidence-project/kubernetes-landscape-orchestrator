@@ -27,6 +27,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -42,10 +43,12 @@ var _ = Describe("TaskExecution Controller", func() {
 
 	BeforeEach(func() {
 		testutil.CleanupTaskExecution(k8sClient, TaskExecution, Namespace)
+		testutil.CleanupJob(k8sClient, TaskExecution, Namespace)
 	})
 
 	AfterEach(func() {
 		testutil.CleanupTaskExecution(k8sClient, TaskExecution, Namespace)
+		testutil.CleanupJob(k8sClient, TaskExecution, Namespace)
 	})
 
 	Context("When reconciling a taskExecution", func() {
@@ -74,7 +77,17 @@ var _ = Describe("TaskExecution Controller", func() {
 				g.Expect(job.Spec.Template.Spec.Containers[0].Command[0]).To(Equal("echo"))
 				g.Expect(job.Spec.Template.Spec.Containers[0].Command[1]).To(Equal("I am task 1 of service 1"))
 				g.Expect(*job.Spec.BackoffLimit).To(Equal(int32(4)))
-				g.Expect(isJobComplete(job)).To(BeTrue())
+			}, timeout, interval).Should(Succeed())
+
+			// set the job to completed
+			startTime := metav1.Now()
+			completionTime := metav1.NewTime(startTime.Add(time.Minute))
+			job.Status.StartTime = &startTime
+			job.Status.CompletionTime = &completionTime
+			job.Status.Conditions = append(job.Status.Conditions, batchv1.JobCondition{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue})
+			job.Status.Conditions = append(job.Status.Conditions, batchv1.JobCondition{Type: batchv1.JobComplete, Status: corev1.ConditionTrue})
+			Eventually(func(g Gomega) {
+				Expect(k8sClient.Status().Update(ctx, job)).To(Succeed())
 			}, timeout, interval).Should(Succeed())
 
 			// check that the taskExecution has been marked as successful
@@ -86,13 +99,3 @@ var _ = Describe("TaskExecution Controller", func() {
 		})
 	})
 })
-
-func isJobComplete(job *batchv1.Job) bool {
-	for _, c := range job.Status.Conditions {
-		if c.Type == batchv1.JobComplete && c.Status == corev1.ConditionTrue {
-			return true
-		}
-	}
-
-	return false
-}
