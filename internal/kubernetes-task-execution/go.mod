@@ -3,7 +3,7 @@ module github.com/konfidence-project/landscape-kubernetes-task-execution-control
 go 1.24.5
 
 require (
-	github.com/konfidence-project/crds/api/landscape v0.0.2-0.20250903084109-2401d570573c
+	github.com/konfidence-project/crds/api/landscape v0.0.2-0.20250918180601-e029cc38e492
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.38.0
 	k8s.io/api v0.33.4
