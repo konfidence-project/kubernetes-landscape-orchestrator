@@ -138,6 +138,9 @@ func (r *TaskExecutionReconciler) createOrGetJob(ctx context.Context, taskExecut
 		return nil, fmt.Errorf("unable to set controller reference for job: %w", err)
 	}
 
+	if err = r.Update(ctx, job); err != nil {
+		return nil, fmt.Errorf("unable to update job: %w", err)
+	}
 	return job, nil
 }
 
