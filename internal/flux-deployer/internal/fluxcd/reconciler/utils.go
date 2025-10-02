@@ -48,14 +48,14 @@ func getSecretRef(deployment *landscapev1alpha1.ArtifactDeployment, ocmResource 
 	// TODO (karsten # 2025-09-18) how to properly handle secrets?
 	return nil
 
-	label, err := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-skip-auth")
-	skipAuth, err := strconv.ParseBool(label)
-
-	if skipAuth && err == nil { // nil if skipAuth is true and no parsing error
-		return nil
-	} else {
-		return &fluxcd.LocalObjectReference{
-			Name: utils.SanitizeK8sResourceName(utils.Must(utils.ParseHostnameWithPortFromURL(ocmResource.Image))),
-		}
-	}
+	//label, err := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-skip-auth")
+	//skipAuth, err := strconv.ParseBool(label)
+	//
+	//if skipAuth && err == nil { // nil if skipAuth is true and no parsing error
+	//	return nil
+	//} else {
+	//	return &fluxcd.LocalObjectReference{
+	//		Name: utils.SanitizeK8sResourceName(utils.Must(utils.ParseHostnameWithPortFromURL(ocmResource.Image))),
+	//	}
+	//}
 }

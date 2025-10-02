@@ -62,3 +62,6 @@ testenv/
 # Env files
 .env
 .envrc
+
+# generated files like CRDs for testing
+test/data/generated/

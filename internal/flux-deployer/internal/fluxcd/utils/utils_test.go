@@ -131,37 +131,37 @@ func TestParsePathFromURL(t *testing.T) {
 	}{
 		{
 			name:     "hostname with port and simple path",
-			input:    "example.com:8080/path",
+			input:    "http://example.com:8080/path",
 			expected: "path",
 		},
 		{
 			name:     "hostname with nested path",
-			input:    "example.com/path/to/resource",
+			input:    "http://example.com/path/to/resource",
 			expected: "path/to/resource",
 		},
 		{
 			name:     "hostname with query parameters",
-			input:    "example.com/api/v1?param=value",
-			expected: "api/v1?param=value",
+			input:    "http://example.com/api/v1?param=value",
+			expected: "api/v1",
 		},
 		{
 			name:     "hostname with fragment",
-			input:    "example.com/docs#section1",
-			expected: "docs#section1",
+			input:    "http://example.com/docs#section1",
+			expected: "docs",
 		},
 		{
 			name:     "localhost with nested path",
-			input:    "localhost:3000/api/v1/users",
+			input:    "http://localhost:3000/api/v1/users",
 			expected: "api/v1/users",
 		},
 		{
 			name:     "complex path with special characters",
-			input:    "api.example.com/v1/users/123?format=json&sort=asc",
-			expected: "v1/users/123?format=json&sort=asc",
+			input:    "http://api.example.com/v1/users/123?format=json&sort=asc",
+			expected: "v1/users/123",
 		},
 		{
 			name:     "root path",
-			input:    "example.com/",
+			input:    "http://example.com/",
 			expected: "",
 		},
 	}
