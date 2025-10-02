@@ -69,14 +69,14 @@ func (r *KustomizationReconciler) Reconcile(
 	// map the status conditions of the Kustomization to the ArtifactDeployment
 	r.mapStatusConditions(deployment, kustomization)
 
-	return meta.IsStatusConditionTrue(kustomization.Status.Conditions, "Ready"), nil
+	return meta.IsStatusConditionTrue(kustomization.Status.Conditions, conditionTypeReady), nil
 }
 
 func (r *KustomizationReconciler) mutateKustomization(
 	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource, kustomization *kustomizev1.Kustomization) error {
 
 	// set owner reference (with controller:=true) if newly created
-	if kustomization.ObjectMeta.CreationTimestamp.IsZero() {
+	if kustomization.CreationTimestamp.IsZero() {
 		if err := controllerutil.SetControllerReference(deployment, kustomization, r.Scheme); err != nil {
 			return fmt.Errorf("failed to set owner reference on Kustomization: %w", err)
 		}
@@ -118,7 +118,7 @@ func (r *KustomizationReconciler) mapStatusConditions(
 
 func mapKustomizationConditionType(conditionType string) string {
 	switch conditionType {
-	case "Ready":
+	case conditionTypeReady:
 		return landscapev1alpha1.ArtifactDeployedCondition
 	case "Healthy":
 		return landscapev1alpha1.AppHealthyCondition

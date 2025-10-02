@@ -59,11 +59,11 @@ func Must(s string, err error) string {
 }
 
 // ParseHostnameWithPortFromURL extracts the hostname (incl. port) from a URL-like string
-func ParseHostnameWithPortFromURL(url string) (string, error) {
+func ParseHostnameWithPortFromURL(stringUrl string) (string, error) {
 	// split the string at the first "/" to separate host:port from the rest
-	parts := strings.SplitN(url, "/", 2)
+	parts := strings.SplitN(stringUrl, "/", 2)
 	if len(parts) < 1 {
-		return "", fmt.Errorf("invalid URL: %s", url)
+		return "", fmt.Errorf("invalid URL: %s", stringUrl)
 	}
 	return parts[0], nil
 }

@@ -25,6 +25,8 @@ import (
 	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
 )
 
+const conditionTypeReady = "Ready"
+
 func buildHelmRepositoryResourceName(
 	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) string {
 
@@ -40,6 +42,9 @@ func buildResourceName(
 
 func isInsecure(deployment *landscapev1alpha1.ArtifactDeployment) bool {
 	label, err := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-insecure")
+	if err != nil {
+		return false
+	}
 	isInsecure, err := strconv.ParseBool(label)
 	return err == nil && isInsecure // true if insecure is true and no parsing error
 }
@@ -48,14 +53,14 @@ func getSecretRef(deployment *landscapev1alpha1.ArtifactDeployment, ocmResource 
 	// TODO (karsten # 2025-09-18) how to properly handle secrets?
 	return nil
 
-	//label, err := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-skip-auth")
-	//skipAuth, err := strconv.ParseBool(label)
-	//
-	//if skipAuth && err == nil { // nil if skipAuth is true and no parsing error
+	// label, err := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-skip-auth")
+	// skipAuth, err := strconv.ParseBool(label)
+
+	// if skipAuth && err == nil { // nil if skipAuth is true and no parsing error
 	//	return nil
-	//} else {
+	// } else {
 	//	return &fluxcd.LocalObjectReference{
 	//		Name: utils.SanitizeK8sResourceName(utils.Must(utils.ParseHostnameWithPortFromURL(ocmResource.Image))),
 	//	}
-	//}
+	// }
 }

@@ -73,7 +73,7 @@ func (r *OCIRepositoryReconciler) mutateOCIRepository(
 	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource, ociRepository *sourcev1.OCIRepository) error {
 
 	// set owner reference (with controller:=true) if newly created
-	if ociRepository.ObjectMeta.CreationTimestamp.IsZero() {
+	if ociRepository.CreationTimestamp.IsZero() {
 		if err := controllerutil.SetControllerReference(deployment, ociRepository, r.Scheme); err != nil {
 			return fmt.Errorf("failed to set owner reference on OCIRepository: %w", err)
 		}
@@ -110,7 +110,7 @@ func (r *OCIRepositoryReconciler) mapStatusConditions(
 
 func mapOCIRepositoryConditionType(conditionType string) string {
 	switch conditionType {
-	case "Ready":
+	case conditionTypeReady:
 		return landscapev1alpha1.ArtifactFetchedCondition
 	default:
 		return ""

@@ -69,23 +69,19 @@ func (r *HelmReleaseReconciler) Reconcile(
 
 	// map the status conditions of the HelmChart and HelmRelease to the ArtifactDeployment
 	if helmChart := r.getHelmChart(ctx, deployment, ocmResource); helmChart != nil {
-		if isReady, err := r.mapStatusConditionsFromHelmChart(deployment, helmChart); err != nil {
-			return false, fmt.Errorf("failed to map status condition: %w", err)
-		} else {
-			if isReady {
-				r.mapStatusConditionsFromHelmRelease(deployment, helmRelease)
-			} // else: HelmChart is not ready, skipping status update
-		}
+		if isReady := r.mapStatusConditionsFromHelmChart(deployment, helmChart); isReady {
+			r.mapStatusConditionsFromHelmRelease(deployment, helmRelease)
+		} // else: HelmChart is not ready, skipping status update
 	} // else: HelmChart not yet available, skipping status update
 
-	return meta.IsStatusConditionTrue(helmRelease.Status.Conditions, "Ready"), nil
+	return meta.IsStatusConditionTrue(helmRelease.Status.Conditions, conditionTypeReady), nil
 }
 
 func (r *HelmReleaseReconciler) mutateHelmRelease(
 	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource, helmRelease *helmv2.HelmRelease) error {
 
 	// set owner reference (with controller:=true) if newly created
-	if helmRelease.ObjectMeta.CreationTimestamp.IsZero() {
+	if helmRelease.CreationTimestamp.IsZero() {
 		if err := controllerutil.SetControllerReference(deployment, helmRelease, r.Scheme); err != nil {
 			return fmt.Errorf("failed to set owner reference on HelmRelease: %w", err)
 		}
@@ -132,7 +128,7 @@ func (r *HelmReleaseReconciler) getHelmChart(
 }
 
 func (r *HelmReleaseReconciler) mapStatusConditionsFromHelmChart(
-	deployment *landscapev1alpha1.ArtifactDeployment, helmChart *sourcev1.HelmChart) (bool, error) {
+	deployment *landscapev1alpha1.ArtifactDeployment, helmChart *sourcev1.HelmChart) bool {
 
 	for _, condition := range helmChart.Status.Conditions {
 		if conditionType := mapHelmChartConditionType(condition.Type); conditionType != "" {
@@ -145,12 +141,12 @@ func (r *HelmReleaseReconciler) mapStatusConditionsFromHelmChart(
 		}
 	}
 
-	return meta.IsStatusConditionTrue(helmChart.Status.Conditions, "Ready"), nil
+	return meta.IsStatusConditionTrue(helmChart.Status.Conditions, conditionTypeReady)
 }
 
 func mapHelmChartConditionType(conditionType string) string {
 	switch conditionType {
-	case "Ready":
+	case conditionTypeReady:
 		return landscapev1alpha1.ArtifactFetchedCondition
 	default:
 		return ""
@@ -174,7 +170,7 @@ func (r *HelmReleaseReconciler) mapStatusConditionsFromHelmRelease(
 
 func mapHelmReleaseConditionType(conditionType string) string {
 	switch conditionType {
-	case "Ready":
+	case conditionTypeReady:
 		return landscapev1alpha1.ArtifactDeployedCondition
 	case "Released":
 		return landscapev1alpha1.AppHealthyCondition
