@@ -56,7 +56,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 
 	// get the ArtifactDeployment object
 	deployment := &landscapev1alpha1.ArtifactDeployment{}
-	if err := r.Client.Get(ctx, req.NamespacedName, deployment); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, deployment); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
@@ -102,10 +102,10 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Create a predicate to filter ...
 	manifestTypeFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		switch obj.(type) {
+		switch obj := obj.(type) {
 		case *landscapev1alpha1.ArtifactDeployment:
 			// ... for 'Helm' manifest types
-			return obj.(*landscapev1alpha1.ArtifactDeployment).Spec.Manifest.Type == "cloud.konfidence.flux.helm"
+			return obj.Spec.Manifest.Type == "cloud.konfidence.flux.helm"
 		case *sourcev1.HelmRepository, *sourcev1.HelmChart, *helmv2.HelmRelease:
 			// ... or owned resources
 			return true

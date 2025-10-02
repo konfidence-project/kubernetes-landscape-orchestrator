@@ -71,7 +71,7 @@ func (r *HelmRepositoryReconciler) mutateHelmRepository(
 	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource, helmRepository *sourcev1.HelmRepository) error {
 
 	// set owner reference (with controller:=true) if newly created
-	if helmRepository.ObjectMeta.CreationTimestamp.IsZero() {
+	if helmRepository.CreationTimestamp.IsZero() {
 		if err := controllerutil.SetControllerReference(deployment, helmRepository, r.Scheme); err != nil {
 			return fmt.Errorf("failed to set owner reference on HelmRepository: %w", err)
 		}
