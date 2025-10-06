@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: manager-role
+  name: landscape-flux-deployer-manager
 rules:
 - apiGroups:
   - helm.toolkit.fluxcd.io

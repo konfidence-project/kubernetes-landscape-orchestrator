@@ -4,12 +4,11 @@ metadata:
   labels:
     app.kubernetes.io/name: landscape-flux-deployer
     app.kubernetes.io/managed-by: kustomize
-  name: leader-election-rolebinding
+  name: landscape-flux-deployer-leader-election-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: leader-election-role
+  name: landscape-flux-deployer-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: controller-manager
-  namespace: system
+  name: landscape-flux-deployer

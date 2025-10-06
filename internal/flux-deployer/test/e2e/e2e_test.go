@@ -34,10 +34,10 @@ import (
 const namespace = "landscape-flux-deployer-system"
 
 // serviceAccountName created for the project
-const serviceAccountName = "landscape-flux-deployer-controller-manager"
+const serviceAccountName = "landscape-flux-deployer-manager"
 
 // metricsServiceName is the name of the metrics service of the project
-const metricsServiceName = "landscape-flux-deployer-controller-manager-metrics-service"
+const metricsServiceName = "landscape-flux-deployer-manager-metrics-service"
 
 // metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
 const metricsRoleBindingName = "landscape-flux-deployer-metrics-binding"
