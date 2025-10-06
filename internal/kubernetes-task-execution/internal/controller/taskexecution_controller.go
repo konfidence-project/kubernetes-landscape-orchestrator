@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -66,7 +67,8 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	patch := client.MergeFrom(taskExecution.DeepCopy())
+	originalTaskExecution := taskExecution.DeepCopy()
+	patch := client.MergeFrom(originalTaskExecution)
 	job, err := r.createOrGetJob(ctx, taskExecution)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -92,8 +94,10 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		log.Info("TaskExecution reconciled")
 	}
 
-	if err := r.Client.Status().Patch(ctx, taskExecution, patch); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to update taskExecution status: %w", err)
+	if !reflect.DeepEqual(taskExecution.Status, originalTaskExecution.Status) {
+		if err := r.Client.Status().Patch(ctx, taskExecution, patch); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to update taskExecution status: %w", err)
+		}
 	}
 
 	return ctrl.Result{}, nil
