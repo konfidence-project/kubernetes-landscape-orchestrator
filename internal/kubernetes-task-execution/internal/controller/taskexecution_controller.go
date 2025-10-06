@@ -111,7 +111,7 @@ func (r *TaskExecutionReconciler) createOrGetJob(ctx context.Context, taskExecut
 		if !apiErrors.IsNotFound(err) {
 			return nil, fmt.Errorf("unable to fetch job: %w", err)
 		} else {
-			job, err := r.constructJob(taskExecution)
+			job, err = r.constructJob(taskExecution)
 			if err != nil {
 				return nil, fmt.Errorf("unable to construct job from template: %w", err)
 			}
