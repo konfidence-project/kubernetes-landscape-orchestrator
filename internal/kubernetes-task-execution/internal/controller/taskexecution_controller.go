@@ -167,7 +167,7 @@ var (
 // SetupWithManager sets up the controller with the Manager.
 func (r *TaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &batchv1.Job{}, taskExecutionOwnerKey, func(rawObj client.Object) []string {
-		// grab the taskExecution object and extract the owner
+		// grab the job object and extract the owner
 		job := rawObj.(*batchv1.Job)
 		owner := metav1.GetControllerOf(job)
 		if owner == nil {
