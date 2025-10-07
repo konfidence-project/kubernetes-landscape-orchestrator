@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("TaskExecution Controller", func() {
@@ -43,12 +44,12 @@ var _ = Describe("TaskExecution Controller", func() {
 
 	BeforeEach(func() {
 		testutil.CleanupTaskExecution(k8sClient, TaskExecution, Namespace)
-		testutil.CleanupJob(k8sClient, TaskExecution, Namespace)
+		testutil.CleanupJobs(k8sClient)
 	})
 
 	AfterEach(func() {
 		testutil.CleanupTaskExecution(k8sClient, TaskExecution, Namespace)
-		testutil.CleanupJob(k8sClient, TaskExecution, Namespace)
+		testutil.CleanupJobs(k8sClient)
 	})
 
 	Context("When reconciling a taskExecution", func() {
@@ -65,21 +66,22 @@ var _ = Describe("TaskExecution Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			// check that the job has been created and has valid properties
-			job := &batchv1.Job{}
-			jobLookupKey := types.NamespacedName{Name: TaskExecution, Namespace: Namespace}
+			jobs := &batchv1.JobList{}
 			Eventually(func(g Gomega) {
-				g.Expect(k8sClient.Get(ctx, jobLookupKey, job)).To(Succeed())
-				g.Expect(job.Spec.Template.Spec.RestartPolicy).To(Equal(corev1.RestartPolicyNever))
-				g.Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
-				g.Expect(job.Spec.Template.Spec.Containers[0].Name).To(Equal("task-execution-001"))
-				g.Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal("busybox"))
-				g.Expect(job.Spec.Template.Spec.Containers[0].Command).To(HaveLen(2))
-				g.Expect(job.Spec.Template.Spec.Containers[0].Command[0]).To(Equal("echo"))
-				g.Expect(job.Spec.Template.Spec.Containers[0].Command[1]).To(Equal("I am task 1 of service 1"))
-				g.Expect(*job.Spec.BackoffLimit).To(Equal(int32(4)))
+				g.Expect(k8sClient.List(ctx, jobs, client.InNamespace(Namespace))).To(Succeed())
+				g.Expect(jobs.Items).To(HaveLen(1))
+				g.Expect(jobs.Items[0].Spec.Template.Spec.RestartPolicy).To(Equal(corev1.RestartPolicyNever))
+				g.Expect(jobs.Items[0].Spec.Template.Spec.Containers).To(HaveLen(1))
+				g.Expect(jobs.Items[0].Spec.Template.Spec.Containers[0].Name).To(Equal("task-execution-001"))
+				g.Expect(jobs.Items[0].Spec.Template.Spec.Containers[0].Image).To(Equal("busybox"))
+				g.Expect(jobs.Items[0].Spec.Template.Spec.Containers[0].Command).To(HaveLen(2))
+				g.Expect(jobs.Items[0].Spec.Template.Spec.Containers[0].Command[0]).To(Equal("echo"))
+				g.Expect(jobs.Items[0].Spec.Template.Spec.Containers[0].Command[1]).To(Equal("I am task 1 of service 1"))
+				g.Expect(*jobs.Items[0].Spec.BackoffLimit).To(Equal(int32(4)))
 			}, timeout, interval).Should(Succeed())
 
 			// set the job to completed
+			job := jobs.Items[0]
 			startTime := metav1.Now()
 			completionTime := metav1.NewTime(startTime.Add(time.Minute))
 			job.Status.StartTime = &startTime
@@ -87,7 +89,7 @@ var _ = Describe("TaskExecution Controller", func() {
 			job.Status.Conditions = append(job.Status.Conditions, batchv1.JobCondition{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue})
 			job.Status.Conditions = append(job.Status.Conditions, batchv1.JobCondition{Type: batchv1.JobComplete, Status: corev1.ConditionTrue})
 			Eventually(func(g Gomega) {
-				Expect(k8sClient.Status().Update(ctx, job)).To(Succeed())
+				Expect(k8sClient.Status().Update(ctx, &job)).To(Succeed())
 			}, timeout, interval).Should(Succeed())
 
 			// check that the taskExecution has been marked as successful

@@ -24,16 +24,14 @@ import (
 	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/rand"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -105,47 +103,28 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 func (r *TaskExecutionReconciler) createOrGetJob(ctx context.Context, taskExecution *landscape.TaskExecution) (*batchv1.Job, error) {
 	log := logf.FromContext(ctx)
-	job := &batchv1.Job{}
-	err := r.Get(ctx, types.NamespacedName{Namespace: taskExecution.Namespace, Name: taskExecution.Name}, job)
-	if err != nil {
-		if !apiErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("unable to fetch job: %w", err)
-		} else {
-			job, err = r.constructJob(taskExecution)
-			if err != nil {
-				return nil, fmt.Errorf("unable to construct job from template: %w", err)
-			}
-			if err = r.Create(ctx, job); err != nil {
-				return nil, fmt.Errorf("unable to create job: %w", err)
-			}
+	jobs := &batchv1.JobList{}
+	if err := r.List(ctx, jobs, client.InNamespace(taskExecution.Namespace), client.MatchingFields{taskExecutionOwnerKey: taskExecution.Name}); err != nil {
+		return nil, fmt.Errorf("unable to list jobs: %w", err)
+	}
 
-			log.V(1).Info("Created job", "job", job)
+	if len(jobs.Items) > 1 {
+		return nil, fmt.Errorf("multiple matching jobs found for taskExecution: %s", taskExecution.Name)
+	}
+
+	if len(jobs.Items) == 0 {
+		newJob, err := r.constructJob(taskExecution)
+		if err != nil {
+			return nil, fmt.Errorf("unable to construct job from template: %w", err)
 		}
+		if err = r.Create(ctx, newJob); err != nil {
+			return nil, fmt.Errorf("unable to create job: %w", err)
+		}
+		log.Info("Created job", "job", newJob)
+		return newJob, nil
+	} else {
+		return &jobs.Items[0], nil
 	}
-
-	// check if owner ref is set
-	hasRef, err := controllerutil.HasOwnerReference(job.OwnerReferences, taskExecution, r.Scheme)
-	if err != nil {
-		return nil, fmt.Errorf("unable to check job owner references: %w", err)
-	}
-
-	if hasRef {
-		return job, nil
-	}
-
-	// if not get latest job object and add owner ref to the job
-	if err := r.Get(ctx, types.NamespacedName{Namespace: taskExecution.Namespace, Name: taskExecution.Name}, job); err != nil {
-		return nil, err
-	}
-
-	if err := ctrl.SetControllerReference(taskExecution, job, r.Scheme); err != nil {
-		return nil, fmt.Errorf("unable to set controller reference for job: %w", err)
-	}
-
-	if err = r.Update(ctx, job); err != nil {
-		return nil, fmt.Errorf("unable to update job: %w", err)
-	}
-	return job, nil
 }
 
 func (r *TaskExecutionReconciler) constructJob(taskExecution *landscape.TaskExecution) (*batchv1.Job, error) {
@@ -154,9 +133,10 @@ func (r *TaskExecutionReconciler) constructJob(taskExecution *landscape.TaskExec
 		return nil, fmt.Errorf("unable to unmarshal taskExecution spec: %w", err)
 	}
 
+	name := fmt.Sprintf("%s-%s", taskExecution.Name, rand.String(8))
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      taskExecution.Name,
+			Name:      name,
 			Namespace: taskExecution.Namespace,
 		},
 		Spec: jobSpec,
@@ -179,8 +159,31 @@ func (r *TaskExecutionReconciler) isJobFinished(job *batchv1.Job) (bool, batchv1
 	return false, ""
 }
 
+var (
+	taskExecutionOwnerKey = ".metadata.controller"
+	apiGVStr              = landscape.GroupVersion.String()
+)
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *TaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &batchv1.Job{}, taskExecutionOwnerKey, func(rawObj client.Object) []string {
+		// grab the taskExecution object and extract the owner
+		job := rawObj.(*batchv1.Job)
+		owner := metav1.GetControllerOf(job)
+		if owner == nil {
+			return nil
+		}
+		// make sure it is a taskExecution...
+		if owner.APIVersion != apiGVStr || owner.Kind != landscape.TaskExecutionKind {
+			return nil
+		}
+
+		// and if so, return it
+		return []string{owner.Name}
+	}); err != nil {
+		return fmt.Errorf("unable to create index for job owner reference: %w", err)
+	}
+
 	taskExecutionFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		switch o := obj.(type) {
 		case *landscape.TaskExecution:
