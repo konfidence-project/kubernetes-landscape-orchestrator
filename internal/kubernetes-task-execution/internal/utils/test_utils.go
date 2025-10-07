@@ -69,23 +69,18 @@ func DeleteJob(ctx context.Context, k8sClient client.Client, job *batchv1.Job) {
 	Expect(err).ToNot(HaveOccurred(), "Failed to delete job: %s", job.Name)
 }
 
-func GetJob(ctx context.Context, k8sClient client.Client, name string, namespace string, opt bool) *batchv1.Job {
-	job := &batchv1.Job{}
-	jobLookupKey := types.NamespacedName{Name: name, Namespace: namespace}
-	err := k8sClient.Get(ctx, jobLookupKey, job)
+func GetJobs(ctx context.Context, k8sClient client.Client) *batchv1.JobList {
+	jobs := &batchv1.JobList{}
+	err := k8sClient.List(ctx, jobs)
 
-	if opt && err != nil && errors.IsNotFound(err) {
-		return nil
-	}
-
-	Expect(err).ToNot(HaveOccurred(), "Failed to fetch job: %s", name)
-	return job
+	Expect(err).ToNot(HaveOccurred(), "Failed to fetch jobs")
+	return jobs
 }
-func CleanupJob(k8sClient client.Client, jobName string, namespace string) {
+func CleanupJobs(k8sClient client.Client) {
 	ctx := context.Background()
-	job := GetJob(ctx, k8sClient, jobName, namespace, true)
+	jobs := GetJobs(ctx, k8sClient)
 
-	if job != nil {
-		DeleteJob(ctx, k8sClient, job)
+	for _, job := range jobs.Items {
+		DeleteJob(ctx, k8sClient, &job)
 	}
 }
