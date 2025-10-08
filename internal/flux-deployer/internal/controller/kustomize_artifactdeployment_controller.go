@@ -19,9 +19,11 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -63,7 +65,8 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 	}
 
 	// preserve original deployment status for patching it later
-	patch := client.MergeFrom(deployment.DeepCopy())
+	originalDeployment := deployment.DeepCopy()
+	patch := client.MergeFrom(originalDeployment)
 
 	for _, ocmResource := range deployment.Spec.Component.Resources {
 		if isReady, err := r.OCIRepositoryReconciler.Reconcile(ctx, deployment, &ocmResource); err != nil {
@@ -82,8 +85,10 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 	}
 
 	// patch the deployment status updates
-	if err := r.Client.Status().Patch(ctx, deployment, patch); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to patch artifact deployment status: %w", err)
+	if !reflect.DeepEqual(deployment.Status, originalDeployment.Status) {
+		if err := r.Client.Status().Patch(ctx, deployment, patch); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to patch artifact deployment status: %w", err)
+		}
 	}
 
 	log.Info("finish reconciling Kustomize artifact deployment")
@@ -107,9 +112,9 @@ func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manage
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("kustomize_artifactdeployment").
-		For(&landscapev1alpha1.ArtifactDeployment{}).WithEventFilter(manifestTypeFilter).
+		For(&landscapev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
 		Owns(&sourcev1.OCIRepository{}).
 		Owns(&kustomizev1.Kustomization{}).
+		Named("kustomize_artifactdeployment").
 		Complete(r)
 }
