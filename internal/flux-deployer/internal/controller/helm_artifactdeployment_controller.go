@@ -19,9 +19,11 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -64,7 +66,8 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	// preserve original deployment status for patching it later
-	patch := client.MergeFrom(deployment.DeepCopy())
+	originalDeployment := deployment.DeepCopy()
+	patch := client.MergeFrom(originalDeployment)
 
 	// reconcile each OCM resource of the deployment
 	for _, ocmResource := range deployment.Spec.Component.Resources {
@@ -90,8 +93,10 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 	// Option 3: make the behavior configurable (whether option A or B), e.g. via a field in the ArtifactDeployment spec (allowPartialDeployments: bool)
 
 	// patch the deployment status updates
-	if err := r.Client.Status().Patch(ctx, deployment, patch); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to patch artifact deployment status: %w", err)
+	if !reflect.DeepEqual(deployment.Status, originalDeployment.Status) {
+		if err := r.Client.Status().Patch(ctx, deployment, patch); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to patch artifact deployment status: %w", err)
+		}
 	}
 
 	log.Info("finish reconciling Helm artifact deployment")
@@ -115,10 +120,10 @@ func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) er
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("helm_artifactdeployment").
-		For(&landscapev1alpha1.ArtifactDeployment{}).WithEventFilter(manifestTypeFilter).
+		For(&landscapev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
 		Owns(&sourcev1.HelmRepository{}).
 		Owns(&sourcev1.HelmChart{}).
 		Owns(&helmv2.HelmRelease{}).
+		Named("helm_artifactdeployment").
 		Complete(r)
 }
