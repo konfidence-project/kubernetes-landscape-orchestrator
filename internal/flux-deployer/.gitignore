@@ -1,9 +1,17 @@
 # Binaries
-bin/
 *.exe
 *.dll
 *.so
 *.dylib
+
+# Do ignore things like bin/k8s/
+bin/*/
+
+# Do not ignore hermit binary and pkg files in bin/
+!bin/hermit
+!bin/.hermit/
+!bin/*.pkg
+!bin/.*pkg
 
 # Output from go build / go run
 *.out
