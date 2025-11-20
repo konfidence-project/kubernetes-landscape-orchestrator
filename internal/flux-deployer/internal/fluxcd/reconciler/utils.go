@@ -51,7 +51,9 @@ func isInsecure(deployment *landscapev1alpha1.ArtifactDeployment) bool {
 
 func getSecretRef(deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) *fluxcd.LocalObjectReference {
 	// TODO (karsten # 2025-09-18) how to properly handle secrets?
-	return nil
+	return &fluxcd.LocalObjectReference{
+		Name: "jfrog-artifactory-secret", // quick troublshooting for showroom
+	}
 
 	// label, err := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-skip-auth")
 	// skipAuth, err := strconv.ParseBool(label)
