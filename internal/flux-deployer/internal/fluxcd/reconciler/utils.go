@@ -49,7 +49,7 @@ func isInsecure(deployment *landscapev1alpha1.ArtifactDeployment) bool {
 	return err == nil && isInsecure // true if insecure is true and no parsing error
 }
 
-func getSecretRef(deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) *fluxcd.LocalObjectReference {
+func getSecretRef(_ *landscapev1alpha1.ArtifactDeployment, _ *landscapev1alpha1.OCMResource) *fluxcd.LocalObjectReference {
 	// TODO (karsten # 2025-09-18) how to properly handle secrets?
 	return &fluxcd.LocalObjectReference{
 		Name: "jfrog-artifactory-secret", // quick troublshooting for showroom
