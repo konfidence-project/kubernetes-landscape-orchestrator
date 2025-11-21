@@ -34,7 +34,6 @@ import (
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
 	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
 	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
 )
 
 //
@@ -93,7 +92,7 @@ func (r *KustomizationReconciler) mutateKustomization(
 		Path:            "./",
 		KubeConfig:      r.ConfigProvider.GetKubeConfigRef(deployment.GetNamespace()),
 		TargetNamespace: r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
-		NameSuffix:      fmt.Sprintf("-%s", utils.Must(utils.GetKonfidenceLabel(&deployment.ObjectMeta, "vector-deployment-id"))),
+		NameSuffix:      "-" + deployment.Name[:6],
 		Prune:           true,
 		Wait:            true,
 	}
