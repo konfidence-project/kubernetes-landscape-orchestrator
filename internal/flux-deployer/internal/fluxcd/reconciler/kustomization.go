@@ -47,18 +47,18 @@ type KustomizationReconciler struct {
 	ConfigProvider fluxcd.FluxConfigProvider
 }
 
-var _ fluxcd.FluxReconciler = (*KustomizationReconciler)(nil)
+var _ fluxcd.FluxKustomizeReconciler = (*KustomizationReconciler)(nil)
 
 func (r *KustomizationReconciler) Reconcile(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) (isReady bool, err error) {
+	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource) (isReady bool, err error) {
 
 	kustomization := &kustomizev1.Kustomization{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: deployment.GetNamespace(),
-			Name:      buildResourceName(deployment, ocmResource),
+			Name:      buildResourceName(deployment, &kustomizeResource.OCMResource),
 		},
 	}
-	mutateFn := func() error { return r.mutateKustomization(deployment, ocmResource, kustomization) }
+	mutateFn := func() error { return r.mutateKustomization(deployment, kustomizeResource, kustomization) }
 
 	// create or update the Kustomization resource
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, kustomization, mutateFn); err != nil {
@@ -72,7 +72,7 @@ func (r *KustomizationReconciler) Reconcile(
 }
 
 func (r *KustomizationReconciler) mutateKustomization(
-	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource, kustomization *kustomizev1.Kustomization) error {
+	deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource, kustomization *kustomizev1.Kustomization) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if kustomization.CreationTimestamp.IsZero() {
@@ -87,9 +87,9 @@ func (r *KustomizationReconciler) mutateKustomization(
 		SourceRef: kustomizev1.CrossNamespaceSourceReference{
 			Kind:      sourcev1.OCIRepositoryKind,
 			Namespace: deployment.GetNamespace(),
-			Name:      buildResourceName(deployment, ocmResource),
+			Name:      buildResourceName(deployment, &kustomizeResource.OCMResource),
 		},
-		Path:            "./",
+		Path:            kustomizeResource.Path,
 		KubeConfig:      r.ConfigProvider.GetKubeConfigRef(deployment.GetNamespace()),
 		TargetNamespace: r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
 		NameSuffix:      "-" + deployment.Name[:6],

@@ -41,8 +41,8 @@ import (
 // HelmArtifactDeploymentReconciler reconciles ArtifactDeployment objects where manifest type is 'Helm'
 type HelmArtifactDeploymentReconciler struct {
 	client.Client
-	HelmRepositoryReconciler fluxcd.FluxReconciler
-	HelmReleaseReconciler    fluxcd.FluxReconciler
+	HelmRepositoryReconciler fluxcd.FluxHelmReconciler
+	HelmReleaseReconciler    fluxcd.FluxHelmReconciler
 }
 
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
@@ -76,12 +76,19 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 			continue
 		}
 
-		if _, err := r.HelmRepositoryReconciler.Reconcile(ctx, deployment, &ocmResource); err != nil {
-			log.Error(err, fmt.Sprintf("failed to reconcile HelmRepository of OCM resource '%s'", ocmResource.Name),
+		helmChartResource, err := fluxcd.Map(ocmResource).ToHelm()
+		if err != nil {
+			log.Error(err, fmt.Sprintf("failed to map OCM resource %q to HelmChartResource", ocmResource.Name),
+				"ArtifactDeployment", deployment)
+			continue
+		}
+
+		if _, err := r.HelmRepositoryReconciler.Reconcile(ctx, deployment, helmChartResource); err != nil {
+			log.Error(err, fmt.Sprintf("failed to reconcile HelmRepository of OCM resource %q", ocmResource.Name),
 				"ArtifactDeployment", deployment)
 		} else {
-			if _, err := r.HelmReleaseReconciler.Reconcile(ctx, deployment, &ocmResource); err != nil {
-				log.Error(err, fmt.Sprintf("failed to reconcile HelmRelease of OCM resource '%s'", ocmResource.Name),
+			if _, err := r.HelmReleaseReconciler.Reconcile(ctx, deployment, helmChartResource); err != nil {
+				log.Error(err, fmt.Sprintf("failed to reconcile HelmRelease of OCM resource %s", ocmResource.Name),
 					"ArtifactDeployment", deployment)
 			}
 		}

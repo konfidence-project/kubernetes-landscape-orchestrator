@@ -9,17 +9,17 @@ metadata:
     konfidence.cloud/vector-deployment-id: je263b
 spec:
   manifest:
-    type: Kustomize
+    type: cloud.konfidence.flux.kustomize
     allowReuse: true
   component:
     name: podinfo
-    provider: konfidence-dev
     resources:
       - name: podinfo-kustomize
-        type: ociImage
-        image: demo.goharbor.io/kden-test/kustomize/podinfo
-        version: v0.1.0
-  taskManifests: []
+        type: kustomize
+        content:
+          type: ociArtifact
+          imageReference: demo.goharbor.io/kden-test/kustomize/podinfo:v0.1.0
+  taskManifests: [ ]
 
 #---
 #apiVersion: v1

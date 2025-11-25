@@ -41,8 +41,8 @@ import (
 // KustomizeArtifactDeploymentReconciler reconciles ArtifactDeployment objects where manifest type is 'Kustomize'
 type KustomizeArtifactDeploymentReconciler struct {
 	client.Client
-	OCIRepositoryReconciler fluxcd.FluxReconciler
-	KustomizationReconciler fluxcd.FluxReconciler
+	OCIRepositoryReconciler fluxcd.FluxKustomizeReconciler
+	KustomizationReconciler fluxcd.FluxKustomizeReconciler
 }
 
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
@@ -69,12 +69,24 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 	patch := client.MergeFrom(originalDeployment)
 
 	for _, ocmResource := range deployment.Spec.Component.Resources {
-		if isReady, err := r.OCIRepositoryReconciler.Reconcile(ctx, deployment, &ocmResource); err != nil {
+		if ocmResource.Type != "kustomize" {
+			// we only handle kustomize resources, skip all other resource types
+			continue
+		}
+
+		kustomizeResource, err := fluxcd.Map(ocmResource).ToKustomize()
+		if err != nil {
+			log.Error(err, fmt.Sprintf("failed to map OCM resource %q to KustomizeResource", ocmResource.Name),
+				"ArtifactDeployment", deployment)
+			continue
+		}
+
+		if isReady, err := r.OCIRepositoryReconciler.Reconcile(ctx, deployment, kustomizeResource); err != nil {
 			log.Error(err, fmt.Sprintf("failed to reconcile OCIRepository of OCM resource '%s'", ocmResource.Name),
 				"ArtifactDeployment", deployment)
 		} else {
 			if isReady {
-				if _, err := r.KustomizationReconciler.Reconcile(ctx, deployment, &ocmResource); err != nil {
+				if _, err := r.KustomizationReconciler.Reconcile(ctx, deployment, kustomizeResource); err != nil {
 					log.Error(err, fmt.Sprintf("failed to reconcile Kustomization of OCM resource '%s'", ocmResource.Name),
 						"ArtifactDeployment", deployment)
 				}

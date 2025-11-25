@@ -7,18 +7,17 @@ metadata:
     konfidence.cloud/stage: dev
     konfidence.cloud/vector-id: e4fc4f
     konfidence.cloud/vector-deployment-id: 6fa82f
-    konfidence.cloud/registry-insecure: "true"
     konfidence.cloud/registry-skip-auth: "true"
 spec:
   manifest:
-    type: Helm
+    type: cloud.konfidence.flux.helm
     allowReuse: true
   component:
     name: podinfo
-    provider: konfidence-dev
     resources:
       - name: podinfo-helm
-        type: ociImage
-        image: host.docker.internal:5000/helm-charts/podinfo
-        version: 6.9.1
-  taskManifests: []
+        type: helmChart
+        content:
+          type: ociArtifact
+          imageReference: host.docker.internal:5000/helm-charts/podinfo:6.9.1
+  taskManifests: [ ]
