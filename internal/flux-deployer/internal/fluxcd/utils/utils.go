@@ -18,7 +18,6 @@ package utils
 
 import (
 	"fmt"
-	"net/url"
 	"regexp"
 	"strings"
 
@@ -56,26 +55,6 @@ func Must(s string, err error) string {
 		panic(err)
 	}
 	return s
-}
-
-// ParseHostnameWithPortFromURL extracts the hostname (incl. port) from a URL-like string
-func ParseHostnameWithPortFromURL(stringUrl string) (string, error) {
-	// split the string at the first "/" to separate host:port from the rest
-	parts := strings.SplitN(stringUrl, "/", 2)
-	if len(parts) < 1 {
-		return "", fmt.Errorf("invalid URL: %s", stringUrl)
-	}
-	return parts[0], nil
-}
-
-// ParsePathFromURL extracts the path from a URL-like string
-func ParsePathFromURL(stringUrl string) (string, error) {
-	u, err := url.Parse(stringUrl)
-	if err != nil {
-		return "", fmt.Errorf("invalid URL: %s", stringUrl)
-	}
-
-	return strings.TrimLeft(u.Path, "/"), nil
 }
 
 func GetKonfidenceLabel(meta *metav1.ObjectMeta, label string) (string, error) {

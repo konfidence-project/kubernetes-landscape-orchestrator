@@ -19,6 +19,7 @@ package reconciler
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -44,18 +45,19 @@ type HelmRepositoryReconciler struct {
 	ConfigProvider fluxcd.FluxConfigProvider
 }
 
-var _ fluxcd.FluxReconciler = (*HelmRepositoryReconciler)(nil)
+var _ fluxcd.FluxHelmReconciler = (*HelmRepositoryReconciler)(nil)
 
 func (r *HelmRepositoryReconciler) Reconcile(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) (isReady bool, err error) {
+	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource) (isReady bool, err error) {
 
 	helmRepository := &sourcev1.HelmRepository{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: deployment.GetNamespace(),
-			Name:      buildHelmRepositoryResourceName(deployment, ocmResource),
+			Name:      buildHelmRepositoryResourceName(deployment, &helmChartResource.OCMResource),
 		},
 	}
-	mutateFn := func() error { return r.mutateHelmRepository(deployment, ocmResource, helmRepository) }
+
+	mutateFn := func() error { return r.mutateHelmRepository(deployment, helmChartResource, helmRepository) }
 
 	// create or update the HelmRepository resource
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, helmRepository, mutateFn); err != nil {
@@ -68,7 +70,7 @@ func (r *HelmRepositoryReconciler) Reconcile(
 }
 
 func (r *HelmRepositoryReconciler) mutateHelmRepository(
-	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource, helmRepository *sourcev1.HelmRepository) error {
+	deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource, helmRepository *sourcev1.HelmRepository) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if helmRepository.CreationTimestamp.IsZero() {
@@ -80,9 +82,13 @@ func (r *HelmRepositoryReconciler) mutateHelmRepository(
 	// update spec
 	helmRepository.Spec = sourcev1.HelmRepositorySpec{
 		Interval:  r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
-		URL:       ocmResource.Image,
+		URL:       helmChartResource.Repository,
 		Insecure:  isInsecure(deployment),
-		SecretRef: getSecretRef(deployment, ocmResource),
+		SecretRef: getSecretRef(deployment, &helmChartResource.OCMResource),
+	}
+
+	if strings.HasPrefix(helmRepository.Spec.URL, "oci://") {
+		helmRepository.Spec.Type = sourcev1.HelmRepositoryTypeOCI
 	}
 
 	return nil

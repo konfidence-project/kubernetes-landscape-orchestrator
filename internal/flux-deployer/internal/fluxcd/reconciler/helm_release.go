@@ -35,7 +35,6 @@ import (
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
 	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
 	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
 )
 
 //
@@ -49,18 +48,19 @@ type HelmReleaseReconciler struct {
 	ConfigProvider fluxcd.FluxConfigProvider
 }
 
-var _ fluxcd.FluxReconciler = (*HelmReleaseReconciler)(nil)
+var _ fluxcd.FluxHelmReconciler = (*HelmReleaseReconciler)(nil)
 
 func (r *HelmReleaseReconciler) Reconcile(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) (isReady bool, err error) {
+	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource) (isReady bool, err error) {
 
 	helmRelease := &helmv2.HelmRelease{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: deployment.GetNamespace(),
-			Name:      buildResourceName(deployment, ocmResource),
+			Name:      buildResourceName(deployment, &helmChartResource.OCMResource),
 		},
 	}
-	mutateFn := func() error { return r.mutateHelmRelease(deployment, ocmResource, helmRelease) }
+
+	mutateFn := func() error { return r.mutateHelmRelease(deployment, helmChartResource, helmRelease) }
 
 	// create or update the HelmRelease resource
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, helmRelease, mutateFn); err != nil {
@@ -68,7 +68,7 @@ func (r *HelmReleaseReconciler) Reconcile(
 	}
 
 	// map the status conditions of the HelmChart and HelmRelease to the ArtifactDeployment
-	if helmChart := r.getHelmChart(ctx, deployment, ocmResource); helmChart != nil {
+	if helmChart := r.getHelmChart(ctx, deployment, &helmChartResource.OCMResource); helmChart != nil {
 		if isReady := r.mapStatusConditionsFromHelmChart(deployment, helmChart); isReady {
 			r.mapStatusConditionsFromHelmRelease(deployment, helmRelease)
 		} // else: HelmChart is not ready, skipping status update
@@ -78,7 +78,7 @@ func (r *HelmReleaseReconciler) Reconcile(
 }
 
 func (r *HelmReleaseReconciler) mutateHelmRelease(
-	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource, helmRelease *helmv2.HelmRelease) error {
+	deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource, helmRelease *helmv2.HelmRelease) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if helmRelease.CreationTimestamp.IsZero() {
@@ -95,10 +95,10 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 				SourceRef: helmv2.CrossNamespaceObjectReference{
 					Kind:      sourcev1.HelmRepositoryKind,
 					Namespace: deployment.GetNamespace(),
-					Name:      buildHelmRepositoryResourceName(deployment, ocmResource),
+					Name:      buildHelmRepositoryResourceName(deployment, &helmChartResource.OCMResource),
 				},
-				Chart:   utils.Must(utils.ParsePathFromURL(ocmResource.Image)),
-				Version: ocmResource.Version,
+				Chart:   helmChartResource.ChartName,
+				Version: helmChartResource.Version,
 			},
 		},
 		KubeConfig:       r.ConfigProvider.GetKubeConfigRef(deployment.GetNamespace()),

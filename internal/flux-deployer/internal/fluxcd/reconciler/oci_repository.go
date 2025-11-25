@@ -45,18 +45,18 @@ type OCIRepositoryReconciler struct {
 	ConfigProvider fluxcd.FluxConfigProvider
 }
 
-var _ fluxcd.FluxReconciler = (*OCIRepositoryReconciler)(nil)
+var _ fluxcd.FluxKustomizeReconciler = (*OCIRepositoryReconciler)(nil)
 
 func (r *OCIRepositoryReconciler) Reconcile(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) (isReady bool, err error) {
+	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource) (isReady bool, err error) {
 
 	ociRepository := &sourcev1.OCIRepository{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: deployment.GetNamespace(),
-			Name:      buildResourceName(deployment, ocmResource),
+			Name:      buildResourceName(deployment, &kustomizeResource.OCMResource),
 		},
 	}
-	mutateFn := func() error { return r.mutateOCIRepository(deployment, ocmResource, ociRepository) }
+	mutateFn := func() error { return r.mutateOCIRepository(deployment, kustomizeResource, ociRepository) }
 
 	// create or update the OCIRepository resource
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, ociRepository, mutateFn); err != nil {
@@ -70,7 +70,7 @@ func (r *OCIRepositoryReconciler) Reconcile(
 }
 
 func (r *OCIRepositoryReconciler) mutateOCIRepository(
-	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource, ociRepository *sourcev1.OCIRepository) error {
+	deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource, ociRepository *sourcev1.OCIRepository) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if ociRepository.CreationTimestamp.IsZero() {
@@ -82,11 +82,11 @@ func (r *OCIRepositoryReconciler) mutateOCIRepository(
 	// update spec
 	ociRepository.Spec = sourcev1.OCIRepositorySpec{
 		Interval:  r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
-		URL:       fmt.Sprintf("oci://%s", ocmResource.Image),
+		URL:       kustomizeResource.Repository,
 		Insecure:  isInsecure(deployment),
-		SecretRef: getSecretRef(deployment, ocmResource),
+		SecretRef: getSecretRef(deployment, &kustomizeResource.OCMResource),
 		Reference: &sourcev1.OCIRepositoryRef{
-			Tag: ocmResource.Version,
+			Tag: kustomizeResource.Tag,
 		},
 	}
 

@@ -8,17 +8,16 @@ metadata:
     konfidence.cloud/vector-id: e4fc4f
     konfidence.cloud/vector-deployment-id: 5p1d6x
     konfidence.cloud/registry-insecure: "true"
-    konfidence.cloud/registry-skip-auth: "true"
 spec:
   manifest:
-    type: Kustomize
+    type: cloud.konfidence.flux.kustomize
     allowReuse: true
   component:
     name: podinfo
-    provider: konfidence-dev
     resources:
       - name: podinfo-kustomize
-        type: ociImage
-        image: host.docker.internal:5000/kustomize/podinfo
-        version: v0.1.0
-  taskManifests: []
+        type: kustomize
+        content:
+          type: ociArtifact
+          imageReference: host.docker.internal:5000/kustomize/podinfo:v0.1.0
+  taskManifests: [ ]
