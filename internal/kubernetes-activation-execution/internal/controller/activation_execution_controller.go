@@ -58,7 +58,7 @@ func (r *ActivationExecutionReconciler) Reconcile(ctx context.Context, req ctrl.
 
 	originalActivationExecution := activationExecution.DeepCopy()
 	patch := client.MergeFrom(originalActivationExecution)
-	err := r.reconcileActivationExecution(ctx, req, activationExecution)
+	err := r.reconcileActivationExecution(ctx, activationExecution)
 
 	if !reflect.DeepEqual(activationExecution.Status, originalActivationExecution.Status) {
 		if patchError := r.Client.Status().Patch(ctx, activationExecution, patch); patchError != nil {
@@ -76,7 +76,7 @@ func (r *ActivationExecutionReconciler) Reconcile(ctx context.Context, req ctrl.
 	return ctrl.Result{}, err
 }
 
-func (r *ActivationExecutionReconciler) reconcileActivationExecution(ctx context.Context, req ctrl.Request, activationExecution *landscape.ActivationExecution) error {
+func (r *ActivationExecutionReconciler) reconcileActivationExecution(ctx context.Context, activationExecution *landscape.ActivationExecution) error {
 	log := logf.FromContext(ctx)
 	log.Info("Reconciling activationExecution")
 
