@@ -48,7 +48,8 @@ var (
 // CertManager.
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	_, _ = fmt.Fprintf(GinkgoWriter, "Starting landscape-kubernetes-activation-execution-controller integration test suite\n")
+	_, _ = fmt.Fprintf(GinkgoWriter, "Starting landscape-kubernetes-activation-execution-controller"+
+		" integration test suite\n")
 	RunSpecs(t, "e2e suite")
 }
 
