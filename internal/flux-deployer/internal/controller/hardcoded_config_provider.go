@@ -6,7 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
-	meta2 "github.com/fluxcd/pkg/apis/meta"
+	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 
 	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
 )
@@ -36,10 +36,10 @@ func (r *HardCodedConfigProvider) GetHelmDriftDetectionMode(landscape string) *h
 	}
 }
 
-func (r *HardCodedConfigProvider) GetKubeConfigRef(landscape string) *meta2.KubeConfigReference {
+func (r *HardCodedConfigProvider) GetKubeConfigRef(landscape string) *fluxmeta.KubeConfigReference {
 	if landscape == "remote-target-namespace" {
-		return &meta2.KubeConfigReference{
-			SecretRef: meta2.SecretKeyReference{
+		return &fluxmeta.KubeConfigReference{
+			SecretRef: &fluxmeta.SecretKeyReference{
 				Name: "kubeconfig-remote-cluster",
 				Key:  "kubeconfig",
 			},
