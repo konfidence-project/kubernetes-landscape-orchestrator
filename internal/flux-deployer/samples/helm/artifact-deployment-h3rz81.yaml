@@ -21,3 +21,13 @@ spec:
           helmRepository: https://stefanprodan.github.io/podinfo
           type: helm
   taskManifests: []
+
+#---
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  name: stefanprodan-github-io
+#  namespace: target-namespace
+#type: kubernetes.io/dockerconfigjson
+#data:
+#  .dockerconfigjson:

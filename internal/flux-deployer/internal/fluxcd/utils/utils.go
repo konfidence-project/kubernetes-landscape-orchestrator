@@ -64,3 +64,22 @@ func GetKonfidenceLabel(meta *metav1.ObjectMeta, label string) (string, error) {
 	}
 	return value, nil
 }
+
+// ParseHostnameWithPortFromURL extracts the hostname (incl. port) from a URL-like string
+func ParseHostnameWithPortFromURL(stringUrl string) (string, error) {
+	// split the string at the first "/" to separate host:port from the rest
+	parts := strings.SplitN(removeProtocol(stringUrl), "/", 2)
+
+	if len(parts) < 1 {
+		return "", fmt.Errorf("invalid URL: %s", stringUrl)
+	}
+	return parts[0], nil
+}
+
+func removeProtocol(stringUrl string) string {
+	parts := strings.SplitN(stringUrl, "//", 2)
+	if len(parts) == 2 {
+		return parts[1]
+	}
+	return stringUrl
+}

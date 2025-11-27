@@ -80,6 +80,54 @@ func TestSanitizeK8sResourceName(t *testing.T) {
 	}
 }
 
+func TestParseHostnameWithPortFromURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "hostname with protocol and path",
+			input:    "https://stefanprodan.github.io/podinfo",
+			expected: "stefanprodan.github.io",
+		},
+		{
+			name:     "hostname with port and path",
+			input:    "example.com:8080/path/to/resource",
+			expected: "example.com:8080",
+		},
+		{
+			name:     "hostname without port",
+			input:    "example.com/path/to/resource",
+			expected: "example.com",
+		},
+		{
+			name:     "hostname with port only",
+			input:    "example.com:8080",
+			expected: "example.com:8080",
+		},
+		{
+			name:     "hostname only",
+			input:    "example.com",
+			expected: "example.com",
+		},
+		{
+			name:     "localhost with port",
+			input:    "localhost:3000/api/v1",
+			expected: "localhost:3000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, _ := ParseHostnameWithPortFromURL(tt.input)
+			if result != tt.expected {
+				t.Errorf("ParseHostnameWithPortFromURL(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestGetKonfidenceLabel(t *testing.T) {
 	tests := []struct {
 		name     string
