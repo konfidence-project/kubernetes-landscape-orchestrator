@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var _ = Describe("ActivationExecution Controller", func() {
@@ -33,6 +34,12 @@ var _ = Describe("ActivationExecution Controller", func() {
 		ActivationExecution     = "activation-execution-001"
 		ActivationExecutionType = "k8s-job"
 		ActivationExecutionSpec = "{}"
+		HttpRouteName           = "example-http-route"
+		GatewayName             = "example-gateway"
+		HostName                = "example-host"
+		VectorId                = "vector-123"
+		ServiceName             = "example-service"
+		ServicePort             = 80
 		Namespace               = "default"
 		timeout                 = time.Second * 10
 		interval                = time.Millisecond * 250
@@ -40,15 +47,16 @@ var _ = Describe("ActivationExecution Controller", func() {
 
 	BeforeEach(func() {
 		testutil.CleanupActivationExecution(k8sClient, ActivationExecution, Namespace)
+		testutil.CleanupHttpRoutes(k8sClient)
 	})
 
 	AfterEach(func() {
 		testutil.CleanupActivationExecution(k8sClient, ActivationExecution, Namespace)
+		testutil.CleanupHttpRoutes(k8sClient)
 	})
 
 	Context("When reconciling a activationExecution", func() {
 		It("should successfully reconcile the activationExecution", func() {
-
 			ctx := context.Background()
 			testutil.CreateActivationExecution(ctx, k8sClient, ActivationExecution, Namespace, ActivationExecution, ActivationExecutionType, ActivationExecutionSpec)
 
@@ -61,7 +69,27 @@ var _ = Describe("ActivationExecution Controller", func() {
 				g.Expect(activationExecution.Spec.Type).To(Equal(ActivationExecutionType))
 			}, timeout, interval).Should(Succeed())
 
-			// TODO implement first test
+			// check that the httpRoute has been created and has valid properties
+			headerMatchType := gwapiv1.HeaderMatchExact
+			port := int32(ServicePort)
+			httpRoute := &gwapiv1.HTTPRoute{}
+			httpRouteLookupKey := types.NamespacedName{Name: HttpRouteName, Namespace: Namespace}
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, httpRouteLookupKey, httpRoute)).To(Succeed())
+				g.Expect(httpRoute.Spec.CommonRouteSpec.ParentRefs).To(HaveLen(1))
+				g.Expect(httpRoute.Spec.CommonRouteSpec.ParentRefs[0].Name).To(Equal(gwapiv1.ObjectName(GatewayName)))
+				g.Expect(httpRoute.Spec.Hostnames).To(HaveLen(1))
+				g.Expect(httpRoute.Spec.Hostnames[0]).To(Equal(gwapiv1.Hostname(HostName)))
+				g.Expect(httpRoute.Spec.Rules).To(HaveLen(1))
+				g.Expect(httpRoute.Spec.Rules[0].Matches).To(HaveLen(1))
+				g.Expect(httpRoute.Spec.Rules[0].Matches[0].Headers).To(HaveLen(1))
+				g.Expect(httpRoute.Spec.Rules[0].Matches[0].Headers[0].Name).To(Equal(gwapiv1.HTTPHeaderName(XVectorId)))
+				g.Expect(httpRoute.Spec.Rules[0].Matches[0].Headers[0].Value).To(Equal(VectorId))
+				g.Expect(httpRoute.Spec.Rules[0].Matches[0].Headers[0].Type).To(Equal(&headerMatchType))
+				g.Expect(httpRoute.Spec.Rules[0].BackendRefs).To(HaveLen(1))
+				g.Expect(httpRoute.Spec.Rules[0].BackendRefs[0].BackendRef.Name).To(Equal(gwapiv1.ObjectName(ServiceName)))
+				g.Expect(httpRoute.Spec.Rules[0].BackendRefs[0].BackendRef.Port).To(Equal(&port))
+			}, timeout, interval).Should(Succeed())
 
 			// check that the activationExecution has been marked as successful
 			Eventually(func(g Gomega) {
