@@ -84,7 +84,7 @@ func (r *HelmRepositoryReconciler) mutateHelmRepository(
 		Interval:  r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
 		URL:       helmChartResource.Repository,
 		Insecure:  isInsecure(deployment),
-		SecretRef: getSecretRef(deployment, &helmChartResource.OCMResource),
+		SecretRef: getSecretRef(deployment, helmChartResource.Repository),
 	}
 
 	if strings.HasPrefix(helmRepository.Spec.URL, "oci://") {

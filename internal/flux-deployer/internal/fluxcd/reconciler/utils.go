@@ -49,18 +49,17 @@ func isInsecure(deployment *landscapev1alpha1.ArtifactDeployment) bool {
 	return err == nil && isInsecure // true if insecure is true and no parsing error
 }
 
-func getSecretRef(_ *landscapev1alpha1.ArtifactDeployment, _ *landscapev1alpha1.OCMResource) *fluxcd.LocalObjectReference {
-	// TODO (karsten # 2025-09-18) how to properly handle secrets?
-	return nil
+func getSecretRef(deployment *landscapev1alpha1.ArtifactDeployment, repositoryString string) *fluxcd.LocalObjectReference {
+	// TODO (karsten/max # 2025-09-18) how to properly handle secrets? will be addressed with https://github.com/konfidence-project/konfidence-project/issues/259
 
-	// label, err := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-skip-auth")
-	// skipAuth, err := strconv.ParseBool(label)
+	label, labelErr := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-skip-auth")
+	skipAuth, parseErr := strconv.ParseBool(label)
 
-	// if skipAuth && err == nil { // nil if skipAuth is true and no parsing error
-	//	return nil
-	// } else {
-	//	return &fluxcd.LocalObjectReference{
-	//		Name: utils.SanitizeK8sResourceName(utils.Must(utils.ParseHostnameWithPortFromURL(ocmResource.Image))),
-	//	}
-	// }
+	if labelErr == nil && parseErr == nil && skipAuth { // nil if skipAuth is true and no parsing error
+		return nil
+	} else {
+		return &fluxcd.LocalObjectReference{
+			Name: utils.SanitizeK8sResourceName(utils.Must(utils.ParseHostnameWithPortFromURL(repositoryString))),
+		}
+	}
 }
