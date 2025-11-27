@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 func CreateActivationExecution(ctx context.Context, k8sClient client.Client, name string, namespace string, specName string, specType string, executionSpec string) {
@@ -59,5 +60,27 @@ func CleanupActivationExecution(k8sClient client.Client, activationExecutionName
 
 	if activationExecution != nil {
 		DeleteActivationExecution(ctx, k8sClient, activationExecution)
+	}
+}
+
+func DeleteHttpRoute(ctx context.Context, k8sClient client.Client, httpRoute *gwapiv1.HTTPRoute) {
+	err := k8sClient.Delete(ctx, httpRoute)
+	Expect(err).ToNot(HaveOccurred(), "Failed to delete httpRoute: %s", httpRoute.Name)
+}
+
+func GetHttpRoutes(ctx context.Context, k8sClient client.Client) *gwapiv1.HTTPRouteList {
+	httpRoutes := &gwapiv1.HTTPRouteList{}
+	err := k8sClient.List(ctx, httpRoutes)
+
+	Expect(err).ToNot(HaveOccurred(), "Failed to fetch httpRoutes")
+	return httpRoutes
+}
+
+func CleanupHttpRoutes(k8sClient client.Client) {
+	ctx := context.Background()
+	httpRoutes := GetHttpRoutes(ctx, k8sClient)
+
+	for _, httpRoute := range httpRoutes.Items {
+		DeleteHttpRoute(ctx, k8sClient, &httpRoute)
 	}
 }
