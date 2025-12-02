@@ -86,17 +86,21 @@ func main() {
 	configProvider := &controller.HardCodedConfigProvider{}
 
 	if err := (&controller.HelmArtifactDeploymentReconciler{
-		Client:                   mgr.GetClient(),
-		HelmRepositoryReconciler: &reconciler.HelmRepositoryReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider},
-		HelmReleaseReconciler:    &reconciler.HelmReleaseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider},
+		Client:                        mgr.GetClient(),
+		ReadyConditionStatusUpdater:   &controller.ReadyConditionStatusUpdater{},
+		DeploymentResultStatusUpdater: &controller.DeploymentResultStatusUpdater{Client: mgr.GetClient()},
+		HelmRepositoryReconciler:      &reconciler.HelmRepositoryReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider},
+		HelmReleaseReconciler:         &reconciler.HelmReleaseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create helm controller", "controller", "ArtifactDeployment")
 		os.Exit(1)
 	}
 	if err := (&controller.KustomizeArtifactDeploymentReconciler{
-		Client:                  mgr.GetClient(),
-		OCIRepositoryReconciler: &reconciler.OCIRepositoryReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider},
-		KustomizationReconciler: &reconciler.KustomizationReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider},
+		Client:                        mgr.GetClient(),
+		ReadyConditionStatusUpdater:   &controller.ReadyConditionStatusUpdater{},
+		DeploymentResultStatusUpdater: &controller.DeploymentResultStatusUpdater{Client: mgr.GetClient()},
+		OCIRepositoryReconciler:       &reconciler.OCIRepositoryReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider},
+		KustomizationReconciler:       &reconciler.KustomizationReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create kustomize controller", "controller", "ArtifactDeployment")
 		os.Exit(1)

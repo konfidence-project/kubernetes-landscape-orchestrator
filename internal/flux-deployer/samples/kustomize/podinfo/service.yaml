@@ -2,6 +2,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: podinfo
+  labels:
+    konfidence.cloud/appname: podinfo-a
 spec:
   type: ClusterIP
   selector:

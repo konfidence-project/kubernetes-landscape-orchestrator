@@ -5,6 +5,7 @@ metadata:
   name: {{ template "podinfo.fullname" . }}
   namespace: {{ include "podinfo.namespace" . }}
   labels:
+    konfidence.cloud/appname: "podinfo-a"
     {{- include "podinfo.labels" . | nindent 4 }}
 {{- with .Values.service.annotations }}
   annotations:
