@@ -41,8 +41,10 @@ import (
 // KustomizeArtifactDeploymentReconciler reconciles ArtifactDeployment objects where manifest type is 'Kustomize'
 type KustomizeArtifactDeploymentReconciler struct {
 	client.Client
-	OCIRepositoryReconciler fluxcd.FluxKustomizeReconciler
-	KustomizationReconciler fluxcd.FluxKustomizeReconciler
+	DeploymentResultStatusUpdater StatusUpdater
+	ReadyConditionStatusUpdater   StatusUpdater
+	OCIRepositoryReconciler       fluxcd.FluxKustomizeReconciler
+	KustomizationReconciler       fluxcd.FluxKustomizeReconciler
 }
 
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
@@ -94,6 +96,16 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 				log.Info("OCIRepository is not ready, skipping Kustomization reconciliation")
 			}
 		}
+	}
+
+	err := r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
+	if err != nil {
+		log.Error(err, "failed to handle Kustomize deployment result", "ArtifactDeployment", deployment)
+	}
+
+	err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
+	if err != nil {
+		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
 	}
 
 	// patch the deployment status updates

@@ -41,8 +41,10 @@ import (
 // HelmArtifactDeploymentReconciler reconciles ArtifactDeployment objects where manifest type is 'Helm'
 type HelmArtifactDeploymentReconciler struct {
 	client.Client
-	HelmRepositoryReconciler fluxcd.FluxHelmReconciler
-	HelmReleaseReconciler    fluxcd.FluxHelmReconciler
+	DeploymentResultStatusUpdater StatusUpdater
+	ReadyConditionStatusUpdater   StatusUpdater
+	HelmRepositoryReconciler      fluxcd.FluxHelmReconciler
+	HelmReleaseReconciler         fluxcd.FluxHelmReconciler
 }
 
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
@@ -94,10 +96,20 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
+	err := r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
+	if err != nil {
+		log.Error(err, "failed to handle Helm artifact deployment result", "ArtifactDeployment", deployment)
+	}
+
 	// TODO (max # 2025-08-08): How to handle status conditions in case of multiple OCM resources (e.g. multiple Helm charts)?
 	// Option 1: collect all status conditions and merge them; if the status for a condition differs, set to Unknown (Reason: "DeploymentPartiallyFailed")
 	// Option 2: if the conditions is false for any of the OCM resources, set the status to false (i.e. only true if all are true)
 	// Option 3: make the behavior configurable (whether option A or B), e.g. via a field in the ArtifactDeployment spec (allowPartialDeployments: bool)
+
+	err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
+	if err != nil {
+		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
+	}
 
 	// patch the deployment status updates
 	if !reflect.DeepEqual(deployment.Status, originalDeployment.Status) {

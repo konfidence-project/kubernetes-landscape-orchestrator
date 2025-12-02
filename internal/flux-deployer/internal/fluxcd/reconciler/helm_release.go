@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -106,6 +107,11 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 		StorageNamespace: r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
 		DriftDetection:   r.ConfigProvider.GetHelmDriftDetectionMode(deployment.GetNamespace()),
 		Install:          r.ConfigProvider.GetHelmInstallConfig(deployment.GetNamespace()),
+		CommonMetadata: &helmv2.CommonMetadata{
+			Labels: map[string]string{
+				"konfidence.cloud/artifact-deployment": utils.SanitizeK8sResourceName(deployment.Name),
+			},
+		},
 	}
 
 	return nil
