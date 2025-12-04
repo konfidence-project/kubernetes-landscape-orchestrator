@@ -72,11 +72,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.ActivationExecutionReconciler{
+	if err := (&controller.ActivationTaskExecutionReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ActivationExecution")
+		setupLog.Error(err, "unable to create controller", "controller", "ActivationTaskExecution")
 		os.Exit(1)
 	}
 

@@ -95,7 +95,7 @@ var _ = BeforeSuite(func() {
 
 	reconcileScheme = k8sManager.GetScheme()
 
-	err = (&ActivationExecutionReconciler{
+	err = (&ActivationTaskExecutionReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
 	}).SetupWithManager(k8sManager)
