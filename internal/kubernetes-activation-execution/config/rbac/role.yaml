@@ -27,7 +27,7 @@ rules:
 - apiGroups:
   - landscape.konfidence.cloud
   resources:
-  - activationexecutions
+  - activationtaskexecutions
   verbs:
   - create
   - delete
@@ -39,7 +39,7 @@ rules:
 - apiGroups:
   - landscape.konfidence.cloud
   resources:
-  - activationexecutions/status
+  - activationtaskexecutions/status
   verbs:
   - get
   - patch
