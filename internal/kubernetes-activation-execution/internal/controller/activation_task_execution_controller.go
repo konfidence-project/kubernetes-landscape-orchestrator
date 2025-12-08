@@ -151,7 +151,6 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Con
 		log.Info("Created httpRoute", "httpRoute", httpRoute)
 	}
 
-	// TODO if the httpRoute already exists check that the spec is valid and matches the parameters and that the ownerref is set
 	return httpRoute, nil
 }
 
