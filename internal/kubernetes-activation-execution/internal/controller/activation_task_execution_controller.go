@@ -43,7 +43,8 @@ type ActivationTaskExecutionReconciler struct {
 }
 
 const (
-	XVectorId = "x-vector-id"
+	XVectorId                       = "x-vector-id"
+	HttpActivationTaskExecutionType = "http-k8s-service"
 )
 
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=activationtaskexecutions,verbs=get;list;watch;create;update;patch;delete
@@ -212,9 +213,8 @@ func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request,
 func (r *ActivationTaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	activationTaskExecutionFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		switch o := obj.(type) {
-		// TODO specify type to listen for
 		case *landscape.ActivationTaskExecution:
-			return o.Spec.Type == "k8s-job"
+			return o.Spec.Type == HttpActivationTaskExecutionType
 		default:
 			return false
 		}
