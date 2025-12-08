@@ -50,7 +50,7 @@ type VectorAssignmentReconciler struct {
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=vectorassignments,verbs=get;list;watch
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=vectorassignments/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch
-// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproute,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch
 
 // SetupWithManager sets up the controller with the Manager.

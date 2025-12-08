@@ -18,7 +18,7 @@ rules:
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
-  - httproute
+  - httproutes
   verbs:
   - create
   - get
