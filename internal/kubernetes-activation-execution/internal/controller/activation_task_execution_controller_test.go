@@ -33,7 +33,7 @@ import (
 var _ = Describe("ActivationTaskExecution Controller", func() {
 	const (
 		ActivationTaskExecution     = "activation-execution-001"
-		ActivationTaskExecutionType = "k8s-job"
+		ActivationTaskExecutionType = HttpActivationTaskExecutionType
 		ActivationTaskExecutionSpec = "{}"
 		GatewayName                 = "example-gateway"
 		HostName                    = "example-host"
