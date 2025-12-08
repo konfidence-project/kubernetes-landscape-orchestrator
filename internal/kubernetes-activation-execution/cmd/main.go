@@ -28,6 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -39,6 +40,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(landscape.AddToScheme(scheme))
+	utilruntime.Must(gwapiv1.Install(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
@@ -70,11 +72,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.ActivationExecutionReconciler{
+	if err := (&controller.ActivationTaskExecutionReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ActivationExecution")
+		setupLog.Error(err, "unable to create controller", "controller", "ActivationTaskExecution")
 		os.Exit(1)
 	}
 

@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -62,9 +63,12 @@ var _ = BeforeSuite(func() {
 	err = landscape.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = gwapiv1.Install(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "test", "data", "crds", "landscape")},
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "test", "data", "crds", "landscape"), filepath.Join("..", "..", "test", "tempdata", "crds", "gatewayapi")},
 		ErrorIfCRDPathMissing: true,
 	}
 
@@ -91,7 +95,7 @@ var _ = BeforeSuite(func() {
 
 	reconcileScheme = k8sManager.GetScheme()
 
-	err = (&ActivationExecutionReconciler{
+	err = (&ActivationTaskExecutionReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
 	}).SetupWithManager(k8sManager)
