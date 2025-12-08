@@ -1,0 +1,13 @@
+apiVersion: landscape.konfidence.cloud/v1alpha1
+kind: VectorAssignment
+metadata:
+  name: podinfo-vector1-6fa82f
+  namespace: target-namespace
+spec:
+  manifest:
+    type: cloud.konfidence.flux.helm
+    allowReuse: true
+  artifactDeploymentRef:
+    name: podinfo-6fa82f
+  vectorDeploymentRef:
+    name: vector1

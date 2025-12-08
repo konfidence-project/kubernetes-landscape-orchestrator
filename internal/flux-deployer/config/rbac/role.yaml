@@ -5,6 +5,28 @@ metadata:
   name: landscape-flux-deployer-manager
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - httproute
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - helm.toolkit.fluxcd.io
   resources:
   - helmreleases
@@ -50,10 +72,19 @@ rules:
   - landscape.konfidence.cloud
   resources:
   - artifactdeployments/status
+  - vectorassignments/status
   verbs:
   - get
   - patch
   - update
+- apiGroups:
+  - landscape.konfidence.cloud
+  resources:
+  - vectorassignments
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - source.toolkit.fluxcd.io
   resources:

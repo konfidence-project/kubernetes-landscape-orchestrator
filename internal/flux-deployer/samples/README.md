@@ -19,10 +19,23 @@ Install Flux in that cluster:
 flux install
 ```
 
-Create a namespace (this is where the application will be deployed):
+Install istio in that cluster:
+
+```bash
+istioctl install
+```
+
+Install the Gateway-API CRDs in that cluster:
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+```
+
+Create a namespace (this is where the application will be deployed) and label it for istio sidecar injection:
 
 ```bash
 kubectl create namespace target-namespace
+kubectl label namespace target-namespace istio-injection=enabled
 ```
 
 Install the `ArtifactDeployment` CRD:
