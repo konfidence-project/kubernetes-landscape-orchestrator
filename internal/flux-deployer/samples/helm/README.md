@@ -35,3 +35,11 @@ Apply the CR:
 ```bash
 kubectl apply -f ./artifact-deployment-6fa82f.yaml
 ```
+
+## Create `VectorAssignment` CR
+
+Apply the CR:
+
+```bash
+kubectl apply -f ./vector-assignment-6fa82f.yaml
+```

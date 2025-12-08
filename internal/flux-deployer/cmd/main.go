@@ -20,12 +20,14 @@ import (
 	"flag"
 	"os"
 
+	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/reconciler"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
@@ -37,7 +39,6 @@ import (
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
 	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
 	"github.com/konfidence-project/landscape-flux-deployer/internal/controller"
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/reconciler"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -52,6 +53,7 @@ func init() {
 	utilruntime.Must(sourcev1.AddToScheme(scheme))
 	utilruntime.Must(helmv2.AddToScheme(scheme))
 	utilruntime.Must(kustomizev1.AddToScheme(scheme))
+	utilruntime.Must(gatewayv1.Install(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
@@ -103,6 +105,12 @@ func main() {
 		KustomizationReconciler:       &reconciler.KustomizationReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create kustomize controller", "controller", "ArtifactDeployment")
+		os.Exit(1)
+	}
+	if err := (&controller.VectorAssignmentReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create vector assignment controller", "controller", "VectorAssignment")
 		os.Exit(1)
 	}
 
