@@ -65,7 +65,7 @@ func main() {
 		Scheme:                 scheme,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "981612b5.konfidence.cloud",
+		LeaderElectionID:       "ce951900.konfidence.cloud",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
