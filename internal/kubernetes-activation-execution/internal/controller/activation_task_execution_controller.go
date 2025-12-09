@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -45,7 +46,29 @@ type ActivationTaskExecutionReconciler struct {
 const (
 	XVectorId                       = "x-vector-id"
 	HttpActivationTaskExecutionType = "http-k8s-service"
+	Gateway                         = "gateway"
+	Domain                          = "kden-showroom.msp03.shoot.gardener.cc-one.showroom.apeirora.eu"
 )
+
+// HTTPRouteConfig defines necessary configuration parameters to construct GatewayAPI httpRoute resources
+type HTTPRouteConfig struct {
+	HTTPRouteName string `json:"httpRouteName"`
+	GatewayName   string `json:"gatewayName"`
+	HostName      string `json:"hostName"`
+	VectorID      string `json:"vectorId"`
+	ServiceName   string `json:"serviceName"`
+	Port          int32  `json:"port"`
+}
+
+type DeploymentSpec struct {
+	ServicePorts []ServicePort `json:"ServicePorts"`
+}
+
+type ServicePort struct {
+	Port       int32  `json:"port"`
+	Name       string `json:"name"`
+	TargetPort string `json:"targetPort"`
+}
 
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=activationtaskexecutions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=activationtaskexecutions/status,verbs=get;update;patch
@@ -65,11 +88,6 @@ func (r *ActivationTaskExecutionReconciler) Reconcile(ctx context.Context, req c
 	activationTaskExecution := &landscape.ActivationTaskExecution{}
 	if err := r.Get(ctx, req.NamespacedName, activationTaskExecution); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-
-	// for now, we simply return an error if the execution does not contain any httpRouteConfigs
-	if len(activationTaskExecution.Spec.HTTPRouteConfigs) == 0 {
-		return ctrl.Result{}, fmt.Errorf("activationExecution %s does not contain any httpRoute configurations", activationTaskExecution.Name)
 	}
 
 	originalActivationTaskExecution := activationTaskExecution.DeepCopy()
@@ -106,8 +124,14 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(ctx
 		return fmt.Errorf("unable to fetch vectorActivation: %w", err)
 	}
 
-	// create httpRoutes based on execution config
-	for _, httpRouteConfig := range activationTaskExecution.Spec.HTTPRouteConfigs {
+	// parse httpRoute configurations from associated vectorDeployment
+	httpRouteConfigs, err := r.parseHttpConfigs(ctx, req, activationTaskExecution, vectorActivation)
+	if err != nil {
+		return fmt.Errorf("unable to parse httpRoute configurations from vectorDeployment: %w", err)
+	}
+
+	// create httpRoutes based on configurations
+	for _, httpRouteConfig := range httpRouteConfigs {
 		_, err := r.getOrCreateHttpRoute(ctx, req, httpRouteConfig, vectorActivation)
 		if err != nil {
 			return err
@@ -123,7 +147,7 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(ctx
 	return nil
 }
 
-func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Context, req ctrl.Request, httpRouteConfig landscape.HTTPRouteConfig, vectorActivation *landscape.VectorActivation) (*gwapiv1.HTTPRoute, error) {
+func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Context, req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *landscape.VectorActivation) (*gwapiv1.HTTPRoute, error) {
 	log := logf.FromContext(ctx)
 
 	httpRoute := &gwapiv1.HTTPRoute{}
@@ -135,7 +159,6 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Con
 	if err != nil && !errors.IsNotFound(err) {
 		return nil, fmt.Errorf("unable to fetch httpRoute: %w", err)
 	}
-
 	if err != nil && errors.IsNotFound(err) {
 		log.Info("No matching httpRoute found. Creating a new one...")
 
@@ -154,7 +177,7 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Con
 	return httpRoute, nil
 }
 
-func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request, httpRouteConfig landscape.HTTPRouteConfig, vectorActivation *landscape.VectorActivation) (*gwapiv1.HTTPRoute, error) {
+func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *landscape.VectorActivation) (*gwapiv1.HTTPRoute, error) {
 	headerMatchType := gwapiv1.HeaderMatchExact
 	httpRoute := &gwapiv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
@@ -206,6 +229,47 @@ func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request,
 	}
 
 	return httpRoute, nil
+}
+
+func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(ctx context.Context, req ctrl.Request, activationTaskExecution *landscape.ActivationTaskExecution, vectorActivation *landscape.VectorActivation) ([]HTTPRouteConfig, error) {
+	var httpRouteConfigs []HTTPRouteConfig
+	vectorDeployment := &landscape.VectorDeployment{}
+	if err := r.Get(ctx, types.NamespacedName{Name: vectorActivation.Spec.VectorDeployment, Namespace: req.Namespace}, vectorDeployment); err != nil {
+		return nil, fmt.Errorf("failed to get VectorDeployment %s: %w", vectorActivation.Spec.VectorDeployment, err)
+	}
+
+	for _, deploymentResult := range vectorDeployment.Status.DeploymentResults {
+		// TODO do we need the registration type instead?
+		if deploymentResult.Type == activationTaskExecution.Spec.Type {
+			var deploymentSpec DeploymentSpec
+
+			err := json.Unmarshal(deploymentResult.Spec.Raw, &deploymentSpec)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal deploymentResult %s for the port property: %w", deploymentResult.Name, err)
+			}
+
+			serviceName := deploymentResult.Name
+			hostName := fmt.Sprintf("%s.%s.%s", serviceName, vectorActivation.Spec.Stage, Domain)
+			for _, servicePort := range deploymentSpec.ServicePorts {
+				if servicePort.TargetPort == "http" {
+					httpRouteConfigs = append(httpRouteConfigs, HTTPRouteConfig{
+						HTTPRouteName: servicePort.Name,
+						GatewayName:   Gateway,
+						HostName:      hostName,
+						VectorID:      vectorActivation.Spec.Vector,
+						ServiceName:   serviceName,
+						Port:          servicePort.Port,
+					})
+				}
+			}
+		}
+	}
+
+	if len(httpRouteConfigs) == 0 {
+		return nil, fmt.Errorf("no matching httpRoute configurations found in vectorDeployment %s", vectorDeployment.Name)
+	}
+
+	return httpRouteConfigs, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
