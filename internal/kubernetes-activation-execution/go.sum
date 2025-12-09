@@ -79,10 +79,8 @@ github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/klauspost/compress v1.18.0 h1:c/Cqfb0r+Yi+JtIEq73FWXVkRonBlf0CRNYc8Zttxdo=
 github.com/klauspost/compress v1.18.0/go.mod h1:2Pp+KzxcywXVXMr50+X0Q/Lsb43OQHYWRCY2AiWywWQ=
-github.com/konfidence-project/crds/api/landscape v0.9.0 h1:GegmsPqAWwDQHyMfJZK/9rOuNwcfh8Ka6dkvsArVwJw=
-github.com/konfidence-project/crds/api/landscape v0.9.0/go.mod h1:6hqikwmeLOVmV5+EfhRbCigqa1mEu14OYyheEcLZJ+Q=
-github.com/konfidence-project/crds/api/landscape v0.11.0 h1:CLmthIcGbkRbmfTLjpQyxvKfeFWBM/G5Sv7tM9l7Pwc=
-github.com/konfidence-project/crds/api/landscape v0.11.0/go.mod h1:6hqikwmeLOVmV5+EfhRbCigqa1mEu14OYyheEcLZJ+Q=
+github.com/konfidence-project/crds/api/landscape v0.12.0 h1:px1SHInQHjZQuliFphPH1z+AXPdmSFmbOXFx1W1pTNk=
+github.com/konfidence-project/crds/api/landscape v0.12.0/go.mod h1:6hqikwmeLOVmV5+EfhRbCigqa1mEu14OYyheEcLZJ+Q=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=

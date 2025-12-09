@@ -14,7 +14,7 @@ import (
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-func CreateActivationTaskExecution(ctx context.Context, k8sClient client.Client, name string, namespace string, specType string, executionSpec string, httpRouteConfigs []landscape.HTTPRouteConfig, vectorActivation string) {
+func CreateActivationTaskExecution(ctx context.Context, k8sClient client.Client, name string, namespace string, specType string, executionSpec string, vectorActivation string) {
 	activationTaskExecution := &landscape.ActivationTaskExecution{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "landscape.konfidence.cloud/v1alpha1",
@@ -30,7 +30,6 @@ func CreateActivationTaskExecution(ctx context.Context, k8sClient client.Client,
 				Raw: []byte(executionSpec),
 			},
 			VectorActivation: vectorActivation,
-			HTTPRouteConfigs: httpRouteConfigs,
 		},
 	}
 
@@ -127,6 +126,47 @@ func CleanupVectorActivations(k8sClient client.Client) {
 	for _, vectorActivation := range vectorActivations.Items {
 		DeleteVectorActivation(ctx, k8sClient, &vectorActivation)
 	}
+}
+
+func CreateVectorDeployment(ctx context.Context, k8sClient client.Client, name string, namespace string, vector string) {
+	vectorDeployment := &landscape.VectorDeployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: landscape.VectorDeploymentSpec{
+			Vector: vector,
+		},
+	}
+
+	Expect(k8sClient.Create(ctx, vectorDeployment)).To(Succeed())
+}
+
+func DeleteVectorDeployment(ctx context.Context, k8sClient client.Client, vectorDeployment *landscape.VectorDeployment) {
+	err := k8sClient.Delete(ctx, vectorDeployment)
+	Expect(err).ToNot(HaveOccurred(), "Failed to delete vectorDeployment: %s", vectorDeployment.Name)
+}
+
+func GetVectorDeployments(ctx context.Context, k8sClient client.Client) *landscape.VectorDeploymentList {
+	vectorDeployments := &landscape.VectorDeploymentList{}
+	err := k8sClient.List(ctx, vectorDeployments)
+
+	Expect(err).ToNot(HaveOccurred(), "Failed to fetch vectorDeployments")
+	return vectorDeployments
+}
+
+func CleanupVectorDeployments(k8sClient client.Client) {
+	ctx := context.Background()
+	vectorDeployments := GetVectorDeployments(ctx, k8sClient)
+
+	for _, vectorDeployment := range vectorDeployments.Items {
+		DeleteVectorDeployment(ctx, k8sClient, &vectorDeployment)
+	}
+}
+
+func UpdateVectorDeploymentStatus(ctx context.Context, k8sClient client.Client, vectorDeployment *landscape.VectorDeployment) {
+	err := k8sClient.Status().Update(ctx, vectorDeployment)
+	Expect(err).ToNot(HaveOccurred(), "Failed to update status of vectorDeployment: %s", vectorDeployment.Name)
 }
 
 func HasOwnerReference(ownerReferences []metav1.OwnerReference, ref metav1.OwnerReference) bool {
