@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
@@ -26,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -35,14 +37,11 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		ActivationTaskExecution     = "activation-execution-001"
 		ActivationTaskExecutionType = HttpActivationTaskExecutionType
 		ActivationTaskExecutionSpec = "{}"
-		GatewayName                 = "example-gateway"
-		HostName                    = "example-host"
+		GatewayName                 = Gateway
 		HttpRouteName1              = "example-http-route-1"
-		VectorId1                   = "vector-123"
 		ServiceName1                = "example-service-1"
 		ServicePort1                = 80
 		HttpRouteName2              = "example-http-route-2"
-		VectorId2                   = "vector-456"
 		ServiceName2                = "example-service-2"
 		ServicePort2                = 81
 		Namespace                   = "default"
@@ -51,6 +50,8 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		VectorActivation            = "vector-activation-001"
 		Vector001                   = "https://registry.kdenv.lab/ocm/vector//common.konfidence.cloud/example/vector:0.0.1"
 		VectorDeployment            = "vector-deployment-001"
+		HostName1                   = ServiceName1 + "." + Stage + "." + Domain
+		HostName2                   = ServiceName2 + "." + Stage + "." + Domain
 		timeout                     = time.Second * 10
 		interval                    = time.Millisecond * 250
 	)
@@ -59,12 +60,14 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		testutil.CleanupActivationTaskExecution(k8sClient, ActivationTaskExecution, Namespace)
 		testutil.CleanupHttpRoutes(k8sClient)
 		testutil.CleanupVectorActivations(k8sClient)
+		testutil.CleanupVectorDeployments(k8sClient)
 	})
 
 	AfterEach(func() {
 		testutil.CleanupActivationTaskExecution(k8sClient, ActivationTaskExecution, Namespace)
 		testutil.CleanupHttpRoutes(k8sClient)
 		testutil.CleanupVectorActivations(k8sClient)
+		testutil.CleanupVectorDeployments(k8sClient)
 	})
 
 	Context("When reconciling a activationTaskExecution", func() {
@@ -80,26 +83,45 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				g.Expect(vectorActivation.Name).To(Equal(VectorActivation))
 			}, timeout, interval).Should(Succeed())
 
-			httpRouteConfigs := []landscape.HTTPRouteConfig{
-				{
-					HTTPRouteName: HttpRouteName1,
-					GatewayName:   GatewayName,
-					HostName:      HostName,
-					VectorID:      VectorId1,
-					ServiceName:   ServiceName1,
-					Port:          ServicePort1,
-				},
-				{
-					HTTPRouteName: HttpRouteName2,
-					GatewayName:   GatewayName,
-					HostName:      HostName,
-					VectorID:      VectorId2,
-					ServiceName:   ServiceName2,
-					Port:          ServicePort2,
+			testutil.CreateVectorDeployment(ctx, k8sClient, VectorDeployment, Namespace, Vector001)
+
+			// check that the vectorDeployment has been created and has valid properties
+			vectorDeployment := &landscape.VectorDeployment{}
+			vectorDeploymentLookupKey := types.NamespacedName{Name: VectorDeployment, Namespace: Namespace}
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, vectorDeploymentLookupKey, vectorDeployment)).To(Succeed())
+				g.Expect(vectorDeployment.Name).To(Equal(VectorDeployment))
+			}, timeout, interval).Should(Succeed())
+
+			// create deploymentResults
+			deploymentResults := make(map[string]landscape.DeploymentResult)
+			deploymentResults[ServiceName1] = landscape.DeploymentResult{
+				Name: ServiceName1,
+				Type: HttpActivationTaskExecutionType,
+				Spec: runtime.RawExtension{
+					Raw: []byte(fmt.Sprintf("{\"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}", HttpRouteName1, ServicePort1)),
 				},
 			}
 
-			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace, ActivationTaskExecutionType, ActivationTaskExecutionSpec, httpRouteConfigs, VectorActivation)
+			deploymentResults[ServiceName2] = landscape.DeploymentResult{
+				Name: ServiceName2,
+				Type: HttpActivationTaskExecutionType,
+				Spec: runtime.RawExtension{
+					Raw: []byte(fmt.Sprintf("{\"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}", HttpRouteName2, ServicePort2)),
+				},
+			}
+
+			// and update status
+			vectorDeployment.Status.DeploymentResults = deploymentResults
+			testutil.UpdateVectorDeploymentStatus(ctx, k8sClient, vectorDeployment)
+
+			// check that the status has actually been updated
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, vectorDeploymentLookupKey, vectorDeployment)).To(Succeed())
+				g.Expect(vectorDeployment.Status.DeploymentResults).To(HaveLen(2))
+			}, timeout, interval).Should(Succeed())
+
+			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace, ActivationTaskExecutionType, ActivationTaskExecutionSpec, VectorActivation)
 
 			// check that the activationTaskExecution has been created and has valid properties
 			activationTaskExecution := &landscape.ActivationTaskExecution{}
@@ -109,7 +131,6 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				g.Expect(activationTaskExecution.Name).To(Equal(ActivationTaskExecution))
 				g.Expect(activationTaskExecution.Spec.Type).To(Equal(ActivationTaskExecutionType))
 				g.Expect(activationTaskExecution.Spec.VectorActivation).To(Equal(VectorActivation))
-				g.Expect(activationTaskExecution.Spec.HTTPRouteConfigs).To(HaveLen(2))
 			}, timeout, interval).Should(Succeed())
 
 			// check that the httpRoutes have been created and have valid properties
@@ -122,12 +143,12 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				g.Expect(httpRoute1.Spec.CommonRouteSpec.ParentRefs).To(HaveLen(1))
 				g.Expect(httpRoute1.Spec.CommonRouteSpec.ParentRefs[0].Name).To(Equal(gwapiv1.ObjectName(GatewayName)))
 				g.Expect(httpRoute1.Spec.Hostnames).To(HaveLen(1))
-				g.Expect(httpRoute1.Spec.Hostnames[0]).To(Equal(gwapiv1.Hostname(HostName)))
+				g.Expect(httpRoute1.Spec.Hostnames[0]).To(Equal(gwapiv1.Hostname(HostName1)))
 				g.Expect(httpRoute1.Spec.Rules).To(HaveLen(1))
 				g.Expect(httpRoute1.Spec.Rules[0].Matches).To(HaveLen(1))
 				g.Expect(httpRoute1.Spec.Rules[0].Matches[0].Headers).To(HaveLen(1))
 				g.Expect(httpRoute1.Spec.Rules[0].Matches[0].Headers[0].Name).To(Equal(gwapiv1.HTTPHeaderName(XVectorId)))
-				g.Expect(httpRoute1.Spec.Rules[0].Matches[0].Headers[0].Value).To(Equal(VectorId1))
+				g.Expect(httpRoute1.Spec.Rules[0].Matches[0].Headers[0].Value).To(Equal(Vector001))
 				g.Expect(httpRoute1.Spec.Rules[0].Matches[0].Headers[0].Type).To(Equal(&headerMatchType))
 				g.Expect(httpRoute1.Spec.Rules[0].BackendRefs).To(HaveLen(1))
 				g.Expect(httpRoute1.Spec.Rules[0].BackendRefs[0].BackendRef.Name).To(Equal(gwapiv1.ObjectName(ServiceName1)))
@@ -147,12 +168,12 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				g.Expect(httpRoute2.Spec.CommonRouteSpec.ParentRefs).To(HaveLen(1))
 				g.Expect(httpRoute2.Spec.CommonRouteSpec.ParentRefs[0].Name).To(Equal(gwapiv1.ObjectName(GatewayName)))
 				g.Expect(httpRoute2.Spec.Hostnames).To(HaveLen(1))
-				g.Expect(httpRoute2.Spec.Hostnames[0]).To(Equal(gwapiv1.Hostname(HostName)))
+				g.Expect(httpRoute2.Spec.Hostnames[0]).To(Equal(gwapiv1.Hostname(HostName2)))
 				g.Expect(httpRoute2.Spec.Rules).To(HaveLen(1))
 				g.Expect(httpRoute2.Spec.Rules[0].Matches).To(HaveLen(1))
 				g.Expect(httpRoute2.Spec.Rules[0].Matches[0].Headers).To(HaveLen(1))
 				g.Expect(httpRoute2.Spec.Rules[0].Matches[0].Headers[0].Name).To(Equal(gwapiv1.HTTPHeaderName(XVectorId)))
-				g.Expect(httpRoute2.Spec.Rules[0].Matches[0].Headers[0].Value).To(Equal(VectorId2))
+				g.Expect(httpRoute2.Spec.Rules[0].Matches[0].Headers[0].Value).To(Equal(Vector001))
 				g.Expect(httpRoute2.Spec.Rules[0].Matches[0].Headers[0].Type).To(Equal(&headerMatchType))
 				g.Expect(httpRoute2.Spec.Rules[0].BackendRefs).To(HaveLen(1))
 				g.Expect(httpRoute2.Spec.Rules[0].BackendRefs[0].BackendRef.Name).To(Equal(gwapiv1.ObjectName(ServiceName2)))
