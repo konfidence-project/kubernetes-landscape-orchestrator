@@ -28,6 +28,8 @@ rules:
   - landscape.konfidence.cloud
   resources:
   - activationtaskexecutions
+  - vectoractivations
+  - vectordeployments
   verbs:
   - create
   - delete
@@ -40,6 +42,8 @@ rules:
   - landscape.konfidence.cloud
   resources:
   - activationtaskexecutions/status
+  - vectoractivations/status
+  - vectordeployments/status
   verbs:
   - get
   - patch
