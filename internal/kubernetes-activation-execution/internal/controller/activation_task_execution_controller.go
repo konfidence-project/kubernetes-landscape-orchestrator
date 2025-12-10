@@ -178,7 +178,6 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Con
 }
 
 func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *landscape.VectorActivation) (*gwapiv1.HTTPRoute, error) {
-	headerMatchType := gwapiv1.HeaderMatchExact
 	httpRoute := &gwapiv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      httpRouteConfig.HTTPRouteName,
@@ -197,13 +196,15 @@ func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request,
 			},
 			Rules: []gwapiv1.HTTPRouteRule{
 				{
-					Matches: []gwapiv1.HTTPRouteMatch{
+					Filters: []gwapiv1.HTTPRouteFilter{
 						{
-							Headers: []gwapiv1.HTTPHeaderMatch{
-								{
-									Type:  &headerMatchType,
-									Name:  XVectorId,
-									Value: httpRouteConfig.VectorID,
+							Type: gwapiv1.HTTPRouteFilterRequestHeaderModifier,
+							RequestHeaderModifier: &gwapiv1.HTTPHeaderFilter{
+								Add: []gwapiv1.HTTPHeader{
+									{
+										Name:  XVectorId,
+										Value: httpRouteConfig.VectorID,
+									},
 								},
 							},
 						},
