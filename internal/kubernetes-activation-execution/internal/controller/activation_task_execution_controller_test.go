@@ -38,10 +38,8 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		ActivationTaskExecutionType = HttpActivationTaskExecutionType
 		ActivationTaskExecutionSpec = "{}"
 		GatewayName                 = Gateway
-		HttpRouteName1              = "example-http-route-1"
 		ServiceName1                = "example-service-1"
 		ServicePort1                = 80
-		HttpRouteName2              = "example-http-route-2"
 		ServiceName2                = "example-service-2"
 		ServicePort2                = 81
 		Namespace                   = "default"
@@ -50,6 +48,8 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		VectorActivation            = "vector-activation-001"
 		Vector001                   = "https://registry.kdenv.lab/ocm/vector//common.konfidence.cloud/example/vector:0.0.1"
 		VectorDeployment            = "vector-deployment-001"
+		HttpRouteName1              = ServiceName1 + "-" + VectorDeployment + "-" + "activation"
+		HttpRouteName2              = ServiceName2 + "-" + VectorDeployment + "-" + "activation"
 		HostName1                   = ServiceName1 + "." + Stage + "." + Domain
 		HostName2                   = ServiceName2 + "." + Stage + "." + Domain
 		timeout                     = time.Second * 10
@@ -99,7 +99,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				Name: ServiceName1,
 				Type: HttpActivationTaskExecutionType,
 				Spec: runtime.RawExtension{
-					Raw: []byte(fmt.Sprintf("{\"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}", HttpRouteName1, ServicePort1)),
+					Raw: []byte(fmt.Sprintf("{\"K8sName\": \"%s\", \"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}", ServiceName1, HttpRouteName1, ServicePort1)),
 				},
 			}
 
@@ -107,7 +107,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				Name: ServiceName2,
 				Type: HttpActivationTaskExecutionType,
 				Spec: runtime.RawExtension{
-					Raw: []byte(fmt.Sprintf("{\"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}", HttpRouteName2, ServicePort2)),
+					Raw: []byte(fmt.Sprintf("{\"K8sName\": \"%s\", \"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}", ServiceName2, HttpRouteName2, ServicePort2)),
 				},
 			}
 
@@ -134,7 +134,6 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			// check that the httpRoutes have been created and have valid properties
-			headerMatchType := gwapiv1.HeaderMatchExact
 			port1 := int32(ServicePort1)
 			httpRoute1 := &gwapiv1.HTTPRoute{}
 			httpRouteLookupKey1 := types.NamespacedName{Name: HttpRouteName1, Namespace: Namespace}
@@ -145,11 +144,12 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				g.Expect(httpRoute1.Spec.Hostnames).To(HaveLen(1))
 				g.Expect(httpRoute1.Spec.Hostnames[0]).To(Equal(gwapiv1.Hostname(HostName1)))
 				g.Expect(httpRoute1.Spec.Rules).To(HaveLen(1))
-				g.Expect(httpRoute1.Spec.Rules[0].Matches).To(HaveLen(1))
-				g.Expect(httpRoute1.Spec.Rules[0].Matches[0].Headers).To(HaveLen(1))
-				g.Expect(httpRoute1.Spec.Rules[0].Matches[0].Headers[0].Name).To(Equal(gwapiv1.HTTPHeaderName(XVectorId)))
-				g.Expect(httpRoute1.Spec.Rules[0].Matches[0].Headers[0].Value).To(Equal(Vector001))
-				g.Expect(httpRoute1.Spec.Rules[0].Matches[0].Headers[0].Type).To(Equal(&headerMatchType))
+				g.Expect(httpRoute1.Spec.Rules[0].Filters).To(HaveLen(1))
+				g.Expect(httpRoute1.Spec.Rules[0].Filters[0].Type).To(Equal(gwapiv1.HTTPRouteFilterRequestHeaderModifier))
+				g.Expect(httpRoute1.Spec.Rules[0].Filters[0].RequestHeaderModifier).To(Not(BeNil()))
+				g.Expect(httpRoute1.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add).To(HaveLen(1))
+				g.Expect(httpRoute1.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Name).To(Equal(gwapiv1.HTTPHeaderName(XVectorId)))
+				g.Expect(httpRoute1.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Value).To(Equal(Vector001))
 				g.Expect(httpRoute1.Spec.Rules[0].BackendRefs).To(HaveLen(1))
 				g.Expect(httpRoute1.Spec.Rules[0].BackendRefs[0].BackendRef.Name).To(Equal(gwapiv1.ObjectName(ServiceName1)))
 				g.Expect(httpRoute1.Spec.Rules[0].BackendRefs[0].BackendRef.Port).To(Equal(&port1))
@@ -170,11 +170,12 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				g.Expect(httpRoute2.Spec.Hostnames).To(HaveLen(1))
 				g.Expect(httpRoute2.Spec.Hostnames[0]).To(Equal(gwapiv1.Hostname(HostName2)))
 				g.Expect(httpRoute2.Spec.Rules).To(HaveLen(1))
-				g.Expect(httpRoute2.Spec.Rules[0].Matches).To(HaveLen(1))
-				g.Expect(httpRoute2.Spec.Rules[0].Matches[0].Headers).To(HaveLen(1))
-				g.Expect(httpRoute2.Spec.Rules[0].Matches[0].Headers[0].Name).To(Equal(gwapiv1.HTTPHeaderName(XVectorId)))
-				g.Expect(httpRoute2.Spec.Rules[0].Matches[0].Headers[0].Value).To(Equal(Vector001))
-				g.Expect(httpRoute2.Spec.Rules[0].Matches[0].Headers[0].Type).To(Equal(&headerMatchType))
+				g.Expect(httpRoute2.Spec.Rules[0].Filters).To(HaveLen(1))
+				g.Expect(httpRoute2.Spec.Rules[0].Filters[0].Type).To(Equal(gwapiv1.HTTPRouteFilterRequestHeaderModifier))
+				g.Expect(httpRoute2.Spec.Rules[0].Filters[0].RequestHeaderModifier).To(Not(BeNil()))
+				g.Expect(httpRoute2.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add).To(HaveLen(1))
+				g.Expect(httpRoute2.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Name).To(Equal(gwapiv1.HTTPHeaderName(XVectorId)))
+				g.Expect(httpRoute2.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Value).To(Equal(Vector001))
 				g.Expect(httpRoute2.Spec.Rules[0].BackendRefs).To(HaveLen(1))
 				g.Expect(httpRoute2.Spec.Rules[0].BackendRefs[0].BackendRef.Name).To(Equal(gwapiv1.ObjectName(ServiceName2)))
 				g.Expect(httpRoute2.Spec.Rules[0].BackendRefs[0].BackendRef.Port).To(Equal(&port2))
