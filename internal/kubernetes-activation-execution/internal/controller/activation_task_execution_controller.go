@@ -23,6 +23,7 @@ import (
 	"reflect"
 
 	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,13 +62,8 @@ type HTTPRouteConfig struct {
 }
 
 type DeploymentSpec struct {
-	ServicePorts []ServicePort `json:"ServicePorts"`
-}
-
-type ServicePort struct {
-	Port       int32  `json:"port"`
-	Name       string `json:"name"`
-	TargetPort string `json:"targetPort"`
+	K8sName      string               `json:"K8sName"`
+	ServicePorts []corev1.ServicePort `json:"ServicePorts"`
 }
 
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=activationtaskexecutions,verbs=get;list;watch;create;update;patch;delete
@@ -167,7 +163,7 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Con
 		log.Info("No matching httpRoute found. Creating a new one...")
 
 		// create new httpRoute
-		httpRoute, err := r.constructHttpRoute(req, httpRouteConfig, vectorActivation)
+		httpRoute, err = r.constructHttpRoute(req, httpRouteConfig, vectorActivation)
 		if err != nil {
 			return nil, fmt.Errorf("unable to construct httpRoute: %w", err)
 		}
@@ -251,7 +247,7 @@ func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(ctx context.Context
 				return nil, fmt.Errorf("failed to unmarshal deploymentResult %s for the port property: %w", deploymentResult.Name, err)
 			}
 
-			serviceName := deploymentResult.Name
+			serviceName := deploymentSpec.K8sName
 			hostName := fmt.Sprintf("%s.%s.%s", serviceName, vectorActivation.Spec.Stage, Domain)
 			for _, servicePort := range deploymentSpec.ServicePorts {
 				// for now just use the first service port
