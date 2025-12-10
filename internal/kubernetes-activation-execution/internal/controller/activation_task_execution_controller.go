@@ -243,7 +243,6 @@ func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(ctx context.Context
 	}
 
 	for _, deploymentResult := range vectorDeployment.Status.DeploymentResults {
-		// TODO do we need the registration type instead?
 		if deploymentResult.Type == activationTaskExecution.Spec.Type {
 			var deploymentSpec DeploymentSpec
 
@@ -255,16 +254,16 @@ func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(ctx context.Context
 			serviceName := deploymentResult.Name
 			hostName := fmt.Sprintf("%s.%s.%s", serviceName, vectorActivation.Spec.Stage, Domain)
 			for _, servicePort := range deploymentSpec.ServicePorts {
-				if servicePort.TargetPort == "http" {
-					httpRouteConfigs = append(httpRouteConfigs, HTTPRouteConfig{
-						HTTPRouteName: servicePort.Name,
-						GatewayName:   Gateway,
-						HostName:      hostName,
-						VectorID:      vectorActivation.Spec.Vector,
-						ServiceName:   serviceName,
-						Port:          servicePort.Port,
-					})
-				}
+				// for now just use the first service port
+				httpRouteConfigs = append(httpRouteConfigs, HTTPRouteConfig{
+					HTTPRouteName: fmt.Sprintf("%s-%s-%s", serviceName, vectorDeployment.Name, "activation"),
+					GatewayName:   Gateway,
+					HostName:      hostName,
+					VectorID:      vectorActivation.Spec.Vector,
+					ServiceName:   serviceName,
+					Port:          servicePort.Port,
+				})
+				break
 			}
 		}
 	}
