@@ -23,6 +23,7 @@ import (
 	"reflect"
 
 	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,13 +62,8 @@ type HTTPRouteConfig struct {
 }
 
 type DeploymentSpec struct {
-	ServicePorts []ServicePort `json:"ServicePorts"`
-}
-
-type ServicePort struct {
-	Port       int32  `json:"port"`
-	Name       string `json:"name"`
-	TargetPort string `json:"targetPort"`
+	K8sName      string               `json:"K8sName"`
+	ServicePorts []corev1.ServicePort `json:"ServicePorts"`
 }
 
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=activationtaskexecutions,verbs=get;list;watch;create;update;patch;delete
@@ -167,7 +163,7 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Con
 		log.Info("No matching httpRoute found. Creating a new one...")
 
 		// create new httpRoute
-		httpRoute, err := r.constructHttpRoute(req, httpRouteConfig, vectorActivation)
+		httpRoute, err = r.constructHttpRoute(req, httpRouteConfig, vectorActivation)
 		if err != nil {
 			return nil, fmt.Errorf("unable to construct httpRoute: %w", err)
 		}
@@ -182,7 +178,6 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Con
 }
 
 func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *landscape.VectorActivation) (*gwapiv1.HTTPRoute, error) {
-	headerMatchType := gwapiv1.HeaderMatchExact
 	httpRoute := &gwapiv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      httpRouteConfig.HTTPRouteName,
@@ -201,13 +196,15 @@ func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request,
 			},
 			Rules: []gwapiv1.HTTPRouteRule{
 				{
-					Matches: []gwapiv1.HTTPRouteMatch{
+					Filters: []gwapiv1.HTTPRouteFilter{
 						{
-							Headers: []gwapiv1.HTTPHeaderMatch{
-								{
-									Type:  &headerMatchType,
-									Name:  XVectorId,
-									Value: httpRouteConfig.VectorID,
+							Type: gwapiv1.HTTPRouteFilterRequestHeaderModifier,
+							RequestHeaderModifier: &gwapiv1.HTTPHeaderFilter{
+								Add: []gwapiv1.HTTPHeader{
+									{
+										Name:  XVectorId,
+										Value: httpRouteConfig.VectorID,
+									},
 								},
 							},
 						},
@@ -243,7 +240,6 @@ func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(ctx context.Context
 	}
 
 	for _, deploymentResult := range vectorDeployment.Status.DeploymentResults {
-		// TODO do we need the registration type instead?
 		if deploymentResult.Type == activationTaskExecution.Spec.Type {
 			var deploymentSpec DeploymentSpec
 
@@ -252,19 +248,19 @@ func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(ctx context.Context
 				return nil, fmt.Errorf("failed to unmarshal deploymentResult %s for the port property: %w", deploymentResult.Name, err)
 			}
 
-			serviceName := deploymentResult.Name
+			serviceName := deploymentSpec.K8sName
 			hostName := fmt.Sprintf("%s.%s.%s", serviceName, vectorActivation.Spec.Stage, Domain)
 			for _, servicePort := range deploymentSpec.ServicePorts {
-				if servicePort.TargetPort == "http" {
-					httpRouteConfigs = append(httpRouteConfigs, HTTPRouteConfig{
-						HTTPRouteName: servicePort.Name,
-						GatewayName:   Gateway,
-						HostName:      hostName,
-						VectorID:      vectorActivation.Spec.Vector,
-						ServiceName:   serviceName,
-						Port:          servicePort.Port,
-					})
-				}
+				// for now just use the first service port
+				httpRouteConfigs = append(httpRouteConfigs, HTTPRouteConfig{
+					HTTPRouteName: fmt.Sprintf("%s-%s-%s", serviceName, vectorDeployment.Name, "activation"),
+					GatewayName:   Gateway,
+					HostName:      hostName,
+					VectorID:      vectorActivation.Spec.Vector,
+					ServiceName:   serviceName,
+					Port:          servicePort.Port,
+				})
+				break
 			}
 		}
 	}
