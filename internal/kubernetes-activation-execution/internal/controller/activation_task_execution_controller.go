@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 
 	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
@@ -48,7 +49,11 @@ const (
 	XVectorId                       = "x-vector-id"
 	HttpActivationTaskExecutionType = "http-k8s-service"
 	Gateway                         = "gateway"
-	Domain                          = "kden-showroom.msp03.shoot.gardener.cc-one.showroom.apeirora.eu"
+	DefaultDomain                   = "kden-showroom.msp03.shoot.gardener.cc-one.showroom.apeirora.eu"
+)
+
+var (
+	Domain = GetEnv("TARGET_CLUSTER_DOMAIN", DefaultDomain)
 )
 
 // HTTPRouteConfig defines necessary configuration parameters to construct GatewayAPI httpRoute resources
@@ -287,4 +292,12 @@ func (r *ActivationTaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) e
 		For(&landscape.ActivationTaskExecution{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(activationTaskExecutionFilter).
 		Named("activationTaskExecution").
 		Complete(r)
+}
+
+func GetEnv(key string, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+
+	return fallback
 }
