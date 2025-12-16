@@ -50,8 +50,8 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		VectorDeployment            = "vector-deployment-001"
 		HttpRouteName1              = ServiceName1 + "-" + VectorDeployment + "-" + "activation"
 		HttpRouteName2              = ServiceName2 + "-" + VectorDeployment + "-" + "activation"
-		HostName1                   = ServiceName1 + "." + Stage + "." + Domain
-		HostName2                   = ServiceName2 + "." + Stage + "." + Domain
+		HostName1                   = ServiceName1 + "." + Stage + "." + DefaultDomain
+		HostName2                   = ServiceName2 + "." + Stage + "." + DefaultDomain
 		timeout                     = time.Second * 10
 		interval                    = time.Millisecond * 250
 	)
