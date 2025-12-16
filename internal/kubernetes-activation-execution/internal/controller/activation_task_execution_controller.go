@@ -261,7 +261,7 @@ func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(ctx context.Context
 					HTTPRouteName: fmt.Sprintf("%s-%s-%s", serviceName, vectorDeployment.Name, "activation"),
 					GatewayName:   Gateway,
 					HostName:      hostName,
-					VectorID:      vectorActivation.Spec.Vector,
+					VectorID:      vectorDeployment.Name,
 					ServiceName:   serviceName,
 					Port:          servicePort.Port,
 				})
