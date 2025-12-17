@@ -49,6 +49,7 @@ const (
 	XVectorId                       = "x-vector-id"
 	HttpActivationTaskExecutionType = "http-k8s-service"
 	Gateway                         = "gateway"
+	GatewayNamespace                = "konfidence-system"
 	DefaultDomain                   = "kden-showroom.msp03.shoot.gardener.cc-one.showroom.apeirora.eu"
 )
 
@@ -183,6 +184,7 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Con
 }
 
 func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *landscape.VectorActivation) (*gwapiv1.HTTPRoute, error) {
+	gatewayNamespace := gwapiv1.Namespace(GatewayNamespace)
 	httpRoute := &gwapiv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      httpRouteConfig.HTTPRouteName,
@@ -192,7 +194,8 @@ func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request,
 			CommonRouteSpec: gwapiv1.CommonRouteSpec{
 				ParentRefs: []gwapiv1.ParentReference{
 					{
-						Name: gwapiv1.ObjectName(httpRouteConfig.GatewayName),
+						Name:      gwapiv1.ObjectName(httpRouteConfig.GatewayName),
+						Namespace: &gatewayNamespace,
 					},
 				},
 			},
