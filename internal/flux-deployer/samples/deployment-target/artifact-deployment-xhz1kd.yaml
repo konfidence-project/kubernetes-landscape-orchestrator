@@ -7,6 +7,7 @@ metadata:
     konfidence.cloud/stage: dev
     konfidence.cloud/vector-id: e4fc4f
     konfidence.cloud/vector-deployment-id: je263b
+    konfidence.cloud/registry-skip-auth: "true"
 spec:
   manifest:
     type: cloud.konfidence.flux.kustomize
@@ -18,5 +19,5 @@ spec:
         type: kustomize
         content:
           type: ociArtifact
-          imageReference: demo.goharbor.io/kden-test/kustomize/podinfo:v0.1.0
+          imageReference: ghcr.io/stefanprodan/manifests/podinfo:latest
   taskManifests: [ ]
