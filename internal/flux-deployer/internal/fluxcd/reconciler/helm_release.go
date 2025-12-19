@@ -61,7 +61,7 @@ func (r *HelmReleaseReconciler) Reconcile(
 		},
 	}
 
-	mutateFn := func() error { return r.mutateHelmRelease(deployment, helmChartResource, helmRelease) }
+	mutateFn := func() error { return r.mutateHelmRelease(ctx, deployment, helmChartResource, helmRelease) }
 
 	// create or update the HelmRelease resource
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, helmRelease, mutateFn); err != nil {
@@ -78,14 +78,18 @@ func (r *HelmReleaseReconciler) Reconcile(
 	return meta.IsStatusConditionTrue(helmRelease.Status.Conditions, conditionTypeReady), nil
 }
 
-func (r *HelmReleaseReconciler) mutateHelmRelease(
-	deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource, helmRelease *helmv2.HelmRelease) error {
+func (r *HelmReleaseReconciler) mutateHelmRelease(ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource, helmRelease *helmv2.HelmRelease) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if helmRelease.CreationTimestamp.IsZero() {
 		if err := controllerutil.SetControllerReference(deployment, helmRelease, r.Scheme); err != nil {
 			return fmt.Errorf("failed to set owner reference on HelmRelease: %w", err)
 		}
+	}
+
+	kubeConfig, err := r.ConfigProvider.GetKubeConfigRef(ctx, deployment.GetNamespace())
+	if err != nil {
+		return err
 	}
 
 	// update spec
@@ -102,7 +106,7 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 				Version: helmChartResource.Version,
 			},
 		},
-		KubeConfig:       r.ConfigProvider.GetKubeConfigRef(deployment.GetNamespace()),
+		KubeConfig:       kubeConfig,
 		TargetNamespace:  r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
 		StorageNamespace: r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
 		DriftDetection:   r.ConfigProvider.GetHelmDriftDetectionMode(deployment.GetNamespace()),

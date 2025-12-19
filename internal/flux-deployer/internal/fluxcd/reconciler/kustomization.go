@@ -20,12 +20,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
 
 	// see https://github.com/fluxcd/kustomize-controller/tree/main/api/v1
 	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
@@ -34,6 +35,7 @@ import (
 
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
 	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+
 	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
 )
 
@@ -59,7 +61,7 @@ func (r *KustomizationReconciler) Reconcile(
 			Name:      buildResourceName(deployment, &kustomizeResource.OCMResource),
 		},
 	}
-	mutateFn := func() error { return r.mutateKustomization(deployment, kustomizeResource, kustomization) }
+	mutateFn := func() error { return r.mutateKustomization(ctx, deployment, kustomizeResource, kustomization) }
 
 	// create or update the Kustomization resource
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, kustomization, mutateFn); err != nil {
@@ -72,14 +74,18 @@ func (r *KustomizationReconciler) Reconcile(
 	return meta.IsStatusConditionTrue(kustomization.Status.Conditions, conditionTypeReady), nil
 }
 
-func (r *KustomizationReconciler) mutateKustomization(
-	deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource, kustomization *kustomizev1.Kustomization) error {
+func (r *KustomizationReconciler) mutateKustomization(ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource, kustomization *kustomizev1.Kustomization) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if kustomization.CreationTimestamp.IsZero() {
 		if err := controllerutil.SetControllerReference(deployment, kustomization, r.Scheme); err != nil {
 			return fmt.Errorf("failed to set owner reference on Kustomization: %w", err)
 		}
+	}
+
+	kubeConfig, err := r.ConfigProvider.GetKubeConfigRef(ctx, deployment.GetNamespace())
+	if err != nil {
+		return err
 	}
 
 	// update spec
@@ -91,7 +97,7 @@ func (r *KustomizationReconciler) mutateKustomization(
 			Name:      buildResourceName(deployment, &kustomizeResource.OCMResource),
 		},
 		Path:            kustomizeResource.Path,
-		KubeConfig:      r.ConfigProvider.GetKubeConfigRef(deployment.GetNamespace()),
+		KubeConfig:      kubeConfig,
 		TargetNamespace: r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
 		NameSuffix:      "-" + deployment.Name[:6],
 		Prune:           true,

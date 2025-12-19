@@ -85,7 +85,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	configProvider := &controller.HardCodedConfigProvider{}
+	configProvider := &controller.ConfigProvider{Client: mgr.GetClient()}
 
 	if err := (&controller.HelmArtifactDeploymentReconciler{
 		Client:                        mgr.GetClient(),

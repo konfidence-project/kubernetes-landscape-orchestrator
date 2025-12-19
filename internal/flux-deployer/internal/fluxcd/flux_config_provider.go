@@ -17,6 +17,8 @@ limitations under the License.
 package fluxcd
 
 import (
+	"context"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
@@ -36,7 +38,7 @@ type FluxConfigProvider interface {
 	GetHelmDriftDetectionMode(landscape string) *helmv2.DriftDetection
 
 	// GetKubeConfigRef retrieves the kubeconfig for the target cluster of the landscape
-	GetKubeConfigRef(landscape string) *meta2.KubeConfigReference
+	GetKubeConfigRef(ctx context.Context, landscape string) (*meta2.KubeConfigReference, error)
 
 	// GetTargetNamespace retrieves the target namespace of the landscape
 	GetTargetNamespace(landscape string) string
