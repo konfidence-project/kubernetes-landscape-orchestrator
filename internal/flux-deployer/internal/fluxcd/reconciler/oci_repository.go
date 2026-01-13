@@ -56,7 +56,7 @@ func (r *OCIRepositoryReconciler) Reconcile(
 			Name:      buildResourceName(deployment, &kustomizeResource.OCMResource),
 		},
 	}
-	mutateFn := func() error { return r.mutateOCIRepository(deployment, kustomizeResource, ociRepository) }
+	mutateFn := func() error { return r.mutateOCIRepository(ctx, deployment, kustomizeResource, ociRepository) }
 
 	// create or update the OCIRepository resource
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, ociRepository, mutateFn); err != nil {
@@ -70,7 +70,7 @@ func (r *OCIRepositoryReconciler) Reconcile(
 }
 
 func (r *OCIRepositoryReconciler) mutateOCIRepository(
-	deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource, ociRepository *sourcev1.OCIRepository) error {
+	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource, ociRepository *sourcev1.OCIRepository) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if ociRepository.CreationTimestamp.IsZero() {
@@ -79,12 +79,17 @@ func (r *OCIRepositoryReconciler) mutateOCIRepository(
 		}
 	}
 
+	secretRef, err := getSecretRef(ctx, r.Client, deployment, kustomizeResource.Repository)
+	if err != nil {
+		return fmt.Errorf("failed to resolve secretRef for OCI Repository: %w", err)
+	}
+
 	// update spec
 	ociRepository.Spec = sourcev1.OCIRepositorySpec{
 		Interval:  r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
 		URL:       kustomizeResource.Repository,
 		Insecure:  isInsecure(deployment),
-		SecretRef: getSecretRef(deployment, kustomizeResource.Repository),
+		SecretRef: secretRef,
 		Reference: &sourcev1.OCIRepositoryRef{
 			Tag: kustomizeResource.Tag,
 		},
