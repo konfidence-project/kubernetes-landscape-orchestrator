@@ -57,7 +57,7 @@ func (r *HelmRepositoryReconciler) Reconcile(
 		},
 	}
 
-	mutateFn := func() error { return r.mutateHelmRepository(deployment, helmChartResource, helmRepository) }
+	mutateFn := func() error { return r.mutateHelmRepository(ctx, deployment, helmChartResource, helmRepository) }
 
 	// create or update the HelmRepository resource
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, helmRepository, mutateFn); err != nil {
@@ -70,7 +70,7 @@ func (r *HelmRepositoryReconciler) Reconcile(
 }
 
 func (r *HelmRepositoryReconciler) mutateHelmRepository(
-	deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource, helmRepository *sourcev1.HelmRepository) error {
+	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource, helmRepository *sourcev1.HelmRepository) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if helmRepository.CreationTimestamp.IsZero() {
@@ -79,12 +79,17 @@ func (r *HelmRepositoryReconciler) mutateHelmRepository(
 		}
 	}
 
+	secretRef, err := getSecretRef(ctx, r.Client, deployment, helmChartResource.Repository)
+	if err != nil {
+		return fmt.Errorf("failed to resolve secretRef for Helm Repository: %w", err)
+	}
+
 	// update spec
 	helmRepository.Spec = sourcev1.HelmRepositorySpec{
 		Interval:  r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
 		URL:       helmChartResource.Repository,
 		Insecure:  isInsecure(deployment),
-		SecretRef: getSecretRef(deployment, helmChartResource.Repository),
+		SecretRef: secretRef,
 	}
 
 	if strings.HasPrefix(helmRepository.Spec.URL, "oci://") {

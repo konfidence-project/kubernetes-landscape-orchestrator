@@ -17,15 +17,24 @@ limitations under the License.
 package reconciler
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
 	fluxcd "github.com/fluxcd/pkg/apis/meta"
 	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
 	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
+	"github.com/konfidence-project/pkg/sanitize"
+	secr "github.com/konfidence-project/pkg/secret"
+	"github.com/konfidence-project/pkg/url"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const conditionTypeReady = "Ready"
+const (
+	conditionTypeReady   = "Ready"
+	DefaultConfigMapName = "flux-deployer-configuration"
+)
 
 func buildHelmRepositoryResourceName(
 	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) string {
@@ -49,17 +58,38 @@ func isInsecure(deployment *landscapev1alpha1.ArtifactDeployment) bool {
 	return err == nil && isInsecure // true if insecure is true and no parsing error
 }
 
-func getSecretRef(deployment *landscapev1alpha1.ArtifactDeployment, repositoryString string) *fluxcd.LocalObjectReference {
-	// TODO (karsten/max # 2025-09-18) how to properly handle secrets? will be addressed with https://github.com/konfidence-project/konfidence-project/issues/259
-
+func getSecretRef(ctx context.Context, k8sClient client.Client, deployment *landscapev1alpha1.ArtifactDeployment, repositoryString string) (*fluxcd.LocalObjectReference, error) {
+	log := logf.FromContext(ctx)
 	label, labelErr := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-skip-auth")
 	skipAuth, parseErr := strconv.ParseBool(label)
 
 	if labelErr == nil && parseErr == nil && skipAuth { // nil if skipAuth is true and no parsing error
-		return nil
-	} else {
-		return &fluxcd.LocalObjectReference{
-			Name: utils.SanitizeK8sResourceName(utils.Must(utils.ParseHostnameWithPortFromURL(repositoryString))),
-		}
+		return nil, nil
 	}
+
+	// TODO this might not be a plain URL. Check again/possible refactor code
+	// TODO when OCM version 2 has been released
+	domain, err := url.ExtractHostname(repositoryString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract domain from registry url: %w", err)
+	}
+
+	if domain == "" {
+		log.Info(fmt.Sprintf("Could not extract domain from url %q", repositoryString))
+		return nil, nil
+	}
+
+	// first try to get via default configMap
+	secretNameByConfigMap, err := secr.GetSecretByConfigMap(ctx, k8sClient, DefaultConfigMapName, domain)
+	if err != nil {
+		return nil, err
+	}
+
+	secretName := secretNameByConfigMap
+	if secretName == "" {
+		// alternatively use the domain name as secret name
+		secretName = sanitize.DNSSubdomainName(domain)
+	}
+
+	return &fluxcd.LocalObjectReference{Name: secretName}, nil
 }
