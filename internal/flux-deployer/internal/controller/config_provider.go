@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/konfidence-project/landscape-flux-deployer/internal/config"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -78,7 +79,7 @@ func (r *ConfigProvider) GetKubeConfigRef(ctx context.Context, landscape string)
 // readKubeConfigReferenceFromConfigMap reads the deployment target for the landscape from the global ConfigMap in konfidence-system namespace
 func (r *ConfigProvider) readKubeConfigReferenceFromConfigMap(ctx context.Context, landscape string) (*fluxmeta.KubeConfigReference, error) {
 	cm := &corev1.ConfigMap{}
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: "konfidence-system", Name: "flux-deployer-configuration"}, cm)
+	err := r.Client.Get(ctx, types.NamespacedName{Namespace: "konfidence-system", Name: config.DefaultConfigMapName}, cm)
 	if err != nil {
 		return nil, client.IgnoreNotFound(err)
 	}

@@ -23,17 +23,17 @@ import (
 
 	fluxcd "github.com/fluxcd/pkg/apis/meta"
 	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	"github.com/konfidence-project/landscape-flux-deployer/internal/config"
 	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
 	"github.com/konfidence-project/pkg/sanitize"
-	secr "github.com/konfidence-project/pkg/secret"
+	pkgSecret "github.com/konfidence-project/pkg/secret"
 	"github.com/konfidence-project/pkg/url"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
-	conditionTypeReady   = "Ready"
-	DefaultConfigMapName = "flux-deployer-configuration"
+	conditionTypeReady = "Ready"
 )
 
 func buildHelmRepositoryResourceName(
@@ -80,7 +80,7 @@ func getSecretRef(ctx context.Context, k8sClient client.Client, deployment *land
 	}
 
 	// first try to get via default configMap
-	secretNameByConfigMap, err := secr.GetSecretByConfigMap(ctx, k8sClient, DefaultConfigMapName, domain)
+	secretNameByConfigMap, err := pkgSecret.GetSecretByConfigMap(ctx, k8sClient, config.DefaultConfigMapName, domain)
 	if err != nil {
 		return nil, err
 	}
