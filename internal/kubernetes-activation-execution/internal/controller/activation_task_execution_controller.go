@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,10 +40,13 @@ import (
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
+const ActivationTaskExecutionControllerName = "kubernetes-activation-task-execution-controller"
+
 // ActivationTaskExecutionReconciler reconciles an ActivationTaskExecution object
 type ActivationTaskExecutionReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 const (
@@ -138,7 +142,7 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(ctx
 
 	// create httpRoutes based on configurations
 	for _, httpRouteConfig := range httpRouteConfigs {
-		_, err := r.getOrCreateHttpRoute(ctx, req, httpRouteConfig, vectorActivation)
+		_, err := r.getOrCreateHttpRoute(ctx, req, httpRouteConfig, vectorActivation, activationTaskExecution)
 		if err != nil {
 			return err
 		}
@@ -153,7 +157,7 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(ctx
 	return nil
 }
 
-func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Context, req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *landscape.VectorActivation) (*gwapiv1.HTTPRoute, error) {
+func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Context, req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *landscape.VectorActivation, activationTaskExecution *landscape.ActivationTaskExecution) (*gwapiv1.HTTPRoute, error) {
 	log := logf.FromContext(ctx)
 
 	httpRoute := &gwapiv1.HTTPRoute{}
@@ -177,7 +181,9 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Con
 		if err := r.Create(ctx, httpRoute); err != nil {
 			return nil, fmt.Errorf("unable to create httpRoute: %w", err)
 		}
-		log.Info("Created httpRoute", "httpRoute", httpRoute)
+		msg := fmt.Sprintf("Created httpRoute %s", httpRoute.Name)
+		r.Recorder.Event(activationTaskExecution, corev1.EventTypeNormal, "Created", msg)
+		log.Info(msg)
 	}
 
 	return httpRoute, nil
