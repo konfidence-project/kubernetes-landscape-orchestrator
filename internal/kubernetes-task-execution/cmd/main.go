@@ -71,8 +71,9 @@ func main() {
 	}
 
 	if err := (&controller.TaskExecutionReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor(controller.TaskExecutionControllerName),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TaskExecution")
 		os.Exit(1)
