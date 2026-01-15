@@ -20,9 +20,11 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -44,10 +46,13 @@ import (
 // Flux API reference: https://fluxcd.io/flux/components/kustomize/api/v1/
 //
 
+const KustomizationControllerName = "flux-kustomization-controller"
+
 type KustomizationReconciler struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
+	Recorder       record.EventRecorder
 }
 
 var _ fluxcd.FluxKustomizeReconciler = (*KustomizationReconciler)(nil)
@@ -64,9 +69,11 @@ func (r *KustomizationReconciler) Reconcile(
 	mutateFn := func() error { return r.mutateKustomization(ctx, deployment, kustomizeResource, kustomization) }
 
 	// create or update the Kustomization resource
-	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, kustomization, mutateFn); err != nil {
+	operationResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, kustomization, mutateFn)
+	if err != nil {
 		return false, fmt.Errorf("failed to reconcile Kustomization: %w", err)
 	}
+	r.Recorder.Event(deployment, corev1.EventTypeNormal, "ReconciledKustomization", fmt.Sprintf("Kustomization %s %s", kustomization.Name, operationResult))
 
 	// map the status conditions of the Kustomization to the ArtifactDeployment
 	r.mapStatusConditions(deployment, kustomization)

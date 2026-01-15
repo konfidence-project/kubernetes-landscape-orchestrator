@@ -20,9 +20,11 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -39,10 +41,13 @@ import (
 // Flux API reference: https://fluxcd.io/flux/components/source/api/v1/#source.toolkit.fluxcd.io/v1.OCIRepository
 //
 
+const OCIRepositoryControllerName = "flux-oci-repository-reconciler"
+
 type OCIRepositoryReconciler struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
+	Recorder       record.EventRecorder
 }
 
 var _ fluxcd.FluxKustomizeReconciler = (*OCIRepositoryReconciler)(nil)
@@ -59,9 +64,11 @@ func (r *OCIRepositoryReconciler) Reconcile(
 	mutateFn := func() error { return r.mutateOCIRepository(ctx, deployment, kustomizeResource, ociRepository) }
 
 	// create or update the OCIRepository resource
-	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, ociRepository, mutateFn); err != nil {
+	operationResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, ociRepository, mutateFn)
+	if err != nil {
 		return false, fmt.Errorf("failed to reconcile OCIRepository: %w", err)
 	}
+	r.Recorder.Event(deployment, corev1.EventTypeNormal, "OCIRepositoryReconciled", fmt.Sprintf("OCIRepository %s %s", ociRepository.Name, operationResult))
 
 	// map the status conditions of the OCIRepository to the ArtifactDeployment
 	r.mapStatusConditions(deployment, ociRepository)
