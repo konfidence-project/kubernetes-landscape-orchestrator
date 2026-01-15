@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,10 +37,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+const TaskExecutionControllerName = "task-execution-controller"
+
 // TaskExecutionReconciler reconciles a TaskExecution object
 type TaskExecutionReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=taskexecutions,verbs=get;list;watch;create;update;patch;delete
@@ -120,7 +124,10 @@ func (r *TaskExecutionReconciler) createOrGetJob(ctx context.Context, taskExecut
 		if err = r.Create(ctx, newJob); err != nil {
 			return nil, fmt.Errorf("unable to create job: %w", err)
 		}
-		log.Info("Created job", "job", newJob)
+		msg := fmt.Sprintf("Created Job %s for TaskExecution %s", newJob.Name, taskExecution.Name)
+		r.Recorder.Event(taskExecution, corev1.EventTypeNormal, "JobCreated", msg)
+		log.Info(msg)
+
 		return newJob, nil
 	} else {
 		return &jobs.Items[0], nil
