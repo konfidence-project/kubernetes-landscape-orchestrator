@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -34,15 +36,16 @@ import (
 	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
 )
 
-//
 // Flux HelmRepository docs: https://fluxcd.io/flux/components/source/helmrepositories/
 // Flux API reference: https://fluxcd.io/flux/components/source/api/v1/#source.toolkit.fluxcd.io/v1.HelmRepository
-//
+
+const HelmRepositoryControllerName = "flux-helm-repository-controller"
 
 type HelmRepositoryReconciler struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
+	Recorder       record.EventRecorder
 }
 
 var _ fluxcd.FluxHelmReconciler = (*HelmRepositoryReconciler)(nil)
@@ -60,10 +63,11 @@ func (r *HelmRepositoryReconciler) Reconcile(
 	mutateFn := func() error { return r.mutateHelmRepository(ctx, deployment, helmChartResource, helmRepository) }
 
 	// create or update the HelmRepository resource
-	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, helmRepository, mutateFn); err != nil {
+	operationResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, helmRepository, mutateFn)
+	if err != nil {
 		return false, fmt.Errorf("failed to reconcile HelmRepository: %w", err)
 	}
-
+	r.Recorder.Event(deployment, corev1.EventTypeNormal, "HelmRepositoryReconciled", fmt.Sprintf("HelmRepository %s %s", helmRepository.Name, operationResult))
 	// HelmRepository itself has no status conditions; cannot map it to ArtifactDeployment status conditions
 
 	return true, nil

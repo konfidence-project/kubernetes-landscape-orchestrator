@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,9 +43,12 @@ var (
 	gatewayv1ServiceKind  gatewayv1.Kind  = "Service"
 )
 
+const VectorAssignmentControllerName = "flux-vector-assignment-controller"
+
 // VectorAssignmentReconciler reconciles VectorAssignment resources where manifest type is either 'cloud.konfidence.flux.kustomize' or 'cloud.konfidence.flux.helm'
 type VectorAssignmentReconciler struct {
 	client.Client
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=vectorassignments,verbs=get;list;watch
@@ -153,12 +157,14 @@ func (r *VectorAssignmentReconciler) ensureAppNameService(ctx context.Context, a
 
 		return nil
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, mutateFn)
+	operationResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, mutateFn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconcile appName service: %w", err)
 	}
 
-	logf.FromContext(ctx).Info(fmt.Sprintf("appName service %q reconciled successfully", route.Name))
+	msg := fmt.Sprintf("appName service %s %s", svc.Name, operationResult)
+	r.Recorder.Event(assignment, corev1.EventTypeNormal, "AppNameServiceReconciled", msg)
+	logf.FromContext(ctx).Info(msg)
 
 	return svc, nil
 }
@@ -215,12 +221,14 @@ func (r *VectorAssignmentReconciler) ensureHTTPRoute(ctx context.Context, assign
 		return controllerutil.SetControllerReference(assignment, httpRoute, r.Scheme())
 	}
 
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, httpRoute, mutateFn)
+	operationResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, httpRoute, mutateFn)
 	if err != nil {
 		return fmt.Errorf("failed to reconcile HTTPRoute: %w", err)
 	}
 
-	logf.FromContext(ctx).Info(fmt.Sprintf("HTTPRoute %q reconciled successfully", httpRoute.Name))
+	msg := fmt.Sprintf("HttpRoute %q %s,", httpRoute.Name, operationResult)
+	r.Recorder.Event(assignment, corev1.EventTypeNormal, "HttpRouteReconciled", msg)
+	logf.FromContext(ctx).Info(msg)
 
 	r.mapStatusConditions(assignment, httpRoute)
 
