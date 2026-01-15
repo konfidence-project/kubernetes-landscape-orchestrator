@@ -73,8 +73,9 @@ func main() {
 	}
 
 	if err := (&controller.ActivationTaskExecutionReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor(controller.ActivationTaskExecutionControllerName),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ActivationTaskExecution")
 		os.Exit(1)
