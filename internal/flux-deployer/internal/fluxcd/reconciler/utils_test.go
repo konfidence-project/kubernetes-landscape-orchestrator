@@ -40,8 +40,9 @@ var _ = Describe("util functions", func() {
 		KonfidenceSystemNamespace = "konfidence-system"
 		ConfigMapName             = "flux-deployer-configuration"
 		AuthConfigMapKey          = "authenticationSecretRefs"
-		SecretName                = "secret-123"
+		MappedSecretName          = "secret-123"
 		HostName                  = "test.registry.com"
+		SecretName                = "test-registry-com"
 		LabelName                 = "konfidence.cloud/registry-skip-auth"
 	)
 
@@ -58,7 +59,7 @@ var _ = Describe("util functions", func() {
 	Context("When resolving secret ref", func() {
 		It("should successfully extract secret from ConfigMap", func() {
 			configMap := &v1.ConfigMap{Data: map[string]string{
-				AuthConfigMapKey: HostName + ": " + SecretName,
+				AuthConfigMapKey: HostName + ": " + MappedSecretName,
 			}}
 			clientMock.EXPECT().Get(ctx, types.NamespacedName{
 				Namespace: KonfidenceSystemNamespace,
@@ -72,7 +73,7 @@ var _ = Describe("util functions", func() {
 			deployment := &landscapev1alpha1.ArtifactDeployment{}
 			secretRef, err := getSecretRef(ctx, clientMock, deployment, RegistryUrl)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			gomega.Expect(secretRef.Name).To(gomega.Equal(SecretName))
+			gomega.Expect(secretRef.Name).To(gomega.Equal(MappedSecretName))
 		})
 	})
 	It("should use domain name as secret name if config map has no matching entry", func() {
@@ -89,7 +90,7 @@ var _ = Describe("util functions", func() {
 		deployment := &landscapev1alpha1.ArtifactDeployment{}
 		secretRef, err := getSecretRef(ctx, clientMock, deployment, RegistryUrl)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
-		gomega.Expect(secretRef.Name).To(gomega.Equal(HostName))
+		gomega.Expect(secretRef.Name).To(gomega.Equal(SecretName))
 	})
 	It("should return nil secretRef if auth is disabled in deployment", func() {
 		deployment := &landscapev1alpha1.ArtifactDeployment{}

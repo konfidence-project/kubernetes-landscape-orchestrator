@@ -88,7 +88,7 @@ func getSecretRef(ctx context.Context, k8sClient client.Client, deployment *land
 	secretName := secretNameByConfigMap
 	if secretName == "" {
 		// alternatively use the domain name as secret name
-		secretName = sanitize.DNSSubdomainName(domain)
+		secretName = sanitize.ResourceName(domain)
 	}
 
 	return &fluxcd.LocalObjectReference{Name: secretName}, nil
