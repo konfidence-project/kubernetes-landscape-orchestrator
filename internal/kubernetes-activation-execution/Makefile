@@ -183,3 +183,13 @@ hermit: ## Check if Hermit is installed and its environment is activated.
 		echo "Hermit environment is not activated. Run 'source ./bin/activate-hermit' or 'eval \"$$(hermit env)\"'"; \
 		exit 1; \
 	}
+
+##@ Git Hooks
+
+.PHONY: install-git-hooks
+install-git-hooks: hermit ## Install git hooks using prek
+	@prek install
+
+.PHONY: uninstall-git-hooks
+uninstall-git-hooks: hermit ## Uninstall git hooks using prek
+	@prek uninstall
