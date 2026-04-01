@@ -149,9 +149,14 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(ctx
 	}
 
 	// mark activationTaskExecution as successful
-	meta.SetStatusCondition(&activationTaskExecution.Status.Conditions, metav1.Condition{Type: landscape.ActivationTaskExecutionSucceeded,
-		Status: metav1.ConditionTrue, Reason: landscape.ActivationTaskExecutionSucceeded,
-		Message: fmt.Sprintf("Successfully reconciled ActivationTaskExecution %s", activationTaskExecution.Name)})
+	meta.SetStatusCondition(&activationTaskExecution.Status.Conditions, metav1.Condition{
+		Type:               landscape.ActivationTaskExecutionSucceeded,
+		Status:             metav1.ConditionTrue,
+		Reason:             landscape.ActivationTaskExecutionSucceeded,
+		Message:            fmt.Sprintf("Successfully reconciled ActivationTaskExecution %s", activationTaskExecution.Name),
+		ObservedGeneration: activationTaskExecution.Generation,
+		LastTransitionTime: metav1.Now(),
+	})
 
 	log.Info("ActivationTaskExecution reconciled")
 	return nil
