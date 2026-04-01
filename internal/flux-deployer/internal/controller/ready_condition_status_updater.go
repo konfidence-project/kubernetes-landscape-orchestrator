@@ -31,10 +31,12 @@ type ReadyConditionStatusUpdater struct {
 func (r *ReadyConditionStatusUpdater) MutateStatus(_ context.Context, deployment *landscapev1alpha1.ArtifactDeployment) error {
 	if meta.IsStatusConditionTrue(deployment.Status.Conditions, landscapev1alpha1.AppHealthyCondition) && meta.IsStatusConditionTrue(deployment.Status.Conditions, landscapev1alpha1.DeploymentResultCreatedCondition) {
 		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-			Type:    landscapev1alpha1.ArtifactDeploymentReadyCondition,
-			Status:  metav1.ConditionTrue,
-			Reason:  landscapev1alpha1.ArtifactDeploymentReadyCondition,
-			Message: "Successfully reconciled ArtifactDeployment",
+			Type:               landscapev1alpha1.ArtifactDeploymentReadyCondition,
+			Status:             metav1.ConditionTrue,
+			Reason:             landscapev1alpha1.ArtifactDeploymentReadyCondition,
+			Message:            "Successfully reconciled ArtifactDeployment",
+			ObservedGeneration: deployment.Generation,
+			LastTransitionTime: metav1.Now(),
 		})
 	}
 	return nil

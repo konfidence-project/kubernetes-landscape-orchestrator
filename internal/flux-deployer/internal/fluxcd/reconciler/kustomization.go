@@ -125,10 +125,12 @@ func (r *KustomizationReconciler) mapStatusConditions(
 	for _, condition := range kustomization.Status.Conditions {
 		if conditionType := mapKustomizationConditionType(condition.Type); conditionType != "" {
 			meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-				Type:    conditionType,
-				Status:  condition.Status,
-				Reason:  condition.Reason,
-				Message: condition.Message,
+				Type:               conditionType,
+				Status:             condition.Status,
+				Reason:             condition.Reason,
+				Message:            condition.Message,
+				ObservedGeneration: deployment.Generation,
+				LastTransitionTime: metav1.Now(),
 			})
 		}
 	}
