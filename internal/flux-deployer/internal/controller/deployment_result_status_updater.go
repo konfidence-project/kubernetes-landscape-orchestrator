@@ -60,10 +60,12 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 	deployment.Status.DeploymentResults = deploymentResultServices
 
 	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-		Type:    landscapev1alpha1.DeploymentResultCreatedCondition,
-		Status:  metav1.ConditionTrue,
-		Reason:  landscapev1alpha1.DeploymentResultCreatedCondition,
-		Message: "Successfully created DeploymentResult",
+		Type:               landscapev1alpha1.DeploymentResultCreatedCondition,
+		Status:             metav1.ConditionTrue,
+		Reason:             landscapev1alpha1.DeploymentResultCreatedCondition,
+		Message:            "Successfully created DeploymentResult",
+		ObservedGeneration: deployment.Generation,
+		LastTransitionTime: metav1.Now(),
 	})
 
 	return nil

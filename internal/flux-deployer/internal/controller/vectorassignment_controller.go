@@ -245,17 +245,21 @@ func (r *VectorAssignmentReconciler) mapStatusConditions(
 		meta.IsStatusConditionTrue(route.Status.Parents[0].Conditions, string(gatewayv1.RouteConditionAccepted)) &&
 		meta.IsStatusConditionTrue(route.Status.Parents[0].Conditions, string(gatewayv1.RouteConditionResolvedRefs)) {
 		meta.SetStatusCondition(&assignment.Status.Conditions, metav1.Condition{
-			Type:    landscapev1alpha1.VectorAssignedCondition,
-			Status:  metav1.ConditionTrue,
-			Reason:  "AssignmentReady",
-			Message: "HTTPRoute has been accepted and all references resolved",
+			Type:               landscapev1alpha1.VectorAssignedCondition,
+			Status:             metav1.ConditionTrue,
+			Reason:             "AssignmentReady",
+			Message:            "HTTPRoute has been accepted and all references resolved",
+			ObservedGeneration: assignment.Generation,
+			LastTransitionTime: metav1.Now(),
 		})
 	} else {
 		meta.SetStatusCondition(&assignment.Status.Conditions, metav1.Condition{
-			Type:    landscapev1alpha1.VectorAssignedCondition,
-			Status:  metav1.ConditionFalse,
-			Reason:  "AssignmentNotReady",
-			Message: "HTTPRoute is either not accepted or has unresolved references",
+			Type:               landscapev1alpha1.VectorAssignedCondition,
+			Status:             metav1.ConditionFalse,
+			Reason:             "AssignmentNotReady",
+			Message:            "HTTPRoute is either not accepted or has unresolved references",
+			ObservedGeneration: assignment.Generation,
+			LastTransitionTime: metav1.Now(),
 		})
 	}
 }

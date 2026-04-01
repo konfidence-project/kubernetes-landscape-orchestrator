@@ -111,10 +111,12 @@ func (r *OCIRepositoryReconciler) mapStatusConditions(
 	for _, condition := range ociRepository.Status.Conditions {
 		if conditionType := mapOCIRepositoryConditionType(condition.Type); conditionType != "" {
 			meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-				Type:    conditionType,
-				Status:  condition.Status,
-				Reason:  condition.Reason,
-				Message: condition.Message,
+				Type:               conditionType,
+				Status:             condition.Status,
+				Reason:             condition.Reason,
+				Message:            condition.Message,
+				ObservedGeneration: deployment.Generation,
+				LastTransitionTime: metav1.Now(),
 			})
 		}
 	}

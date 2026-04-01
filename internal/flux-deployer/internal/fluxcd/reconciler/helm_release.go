@@ -143,10 +143,12 @@ func (r *HelmReleaseReconciler) mapStatusConditionsFromHelmChart(
 	for _, condition := range helmChart.Status.Conditions {
 		if conditionType := mapHelmChartConditionType(condition.Type); conditionType != "" {
 			meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-				Type:    conditionType,
-				Status:  condition.Status,
-				Reason:  condition.Reason,
-				Message: condition.Message,
+				Type:               conditionType,
+				Status:             condition.Status,
+				Reason:             condition.Reason,
+				Message:            condition.Message,
+				ObservedGeneration: deployment.Generation,
+				LastTransitionTime: metav1.Now(),
 			})
 		}
 	}
@@ -169,10 +171,12 @@ func (r *HelmReleaseReconciler) mapStatusConditionsFromHelmRelease(
 	for _, condition := range helmRelease.Status.Conditions {
 		if conditionType := mapHelmReleaseConditionType(condition.Type); conditionType != "" {
 			meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-				Type:    conditionType,
-				Status:  condition.Status,
-				Reason:  condition.Reason,
-				Message: condition.Message,
+				Type:               conditionType,
+				Status:             condition.Status,
+				Reason:             condition.Reason,
+				Message:            condition.Message,
+				ObservedGeneration: deployment.Generation,
+				LastTransitionTime: metav1.Now(),
 			})
 		}
 	}
