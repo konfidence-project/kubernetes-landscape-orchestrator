@@ -84,15 +84,25 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	switch jobResult {
 	case batchv1.JobFailed:
 		log.Info(fmt.Sprintf("Job %s failed", job.Name))
-		meta.SetStatusCondition(&taskExecution.Status.Conditions, metav1.Condition{Type: landscape.TaskFailed,
-			Status: metav1.ConditionTrue, Reason: landscape.TaskFailed,
-			Message: fmt.Sprintf("Reconciling TaskExecution %s failed", taskExecution.Name)})
+		meta.SetStatusCondition(&taskExecution.Status.Conditions, metav1.Condition{
+			Type:               landscape.TaskFailed,
+			Status:             metav1.ConditionTrue,
+			Reason:             landscape.TaskFailed,
+			Message:            fmt.Sprintf("Reconciling TaskExecution %s failed", taskExecution.Name),
+			ObservedGeneration: taskExecution.Generation,
+			LastTransitionTime: metav1.Now(),
+		})
 		log.Info("Task execution failed")
 	case batchv1.JobComplete:
 		log.Info(fmt.Sprintf("Job %s completed successfully", job.Name))
-		meta.SetStatusCondition(&taskExecution.Status.Conditions, metav1.Condition{Type: landscape.TaskSucceeded,
-			Status: metav1.ConditionTrue, Reason: landscape.TaskSucceeded,
-			Message: fmt.Sprintf("TaskExecution %s reconciled successfully", taskExecution.Name)})
+		meta.SetStatusCondition(&taskExecution.Status.Conditions, metav1.Condition{
+			Type:               landscape.TaskSucceeded,
+			Status:             metav1.ConditionTrue,
+			Reason:             landscape.TaskSucceeded,
+			Message:            fmt.Sprintf("TaskExecution %s reconciled successfully", taskExecution.Name),
+			ObservedGeneration: taskExecution.Generation,
+			LastTransitionTime: metav1.Now(),
+		})
 		log.Info("TaskExecution reconciled")
 	}
 
