@@ -92,7 +92,7 @@ func main() {
 		ReadyConditionStatusUpdater:   &controller.ReadyConditionStatusUpdater{},
 		DeploymentResultStatusUpdater: &controller.DeploymentResultStatusUpdater{Client: mgr.GetClient()},
 		HelmRepositoryReconciler: &reconciler.HelmRepositoryReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider,
-			Recorder: mgr.GetEventRecorderFor(reconciler.HelmRepositoryControllerName)},
+			Recorder: mgr.GetEventRecorder(reconciler.HelmRepositoryControllerName)},
 		HelmReleaseReconciler: &reconciler.HelmReleaseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create helm controller", "controller", "ArtifactDeployment")
@@ -103,16 +103,16 @@ func main() {
 		ReadyConditionStatusUpdater:   &controller.ReadyConditionStatusUpdater{},
 		DeploymentResultStatusUpdater: &controller.DeploymentResultStatusUpdater{Client: mgr.GetClient()},
 		OCIRepositoryReconciler: &reconciler.OCIRepositoryReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider,
-			Recorder: mgr.GetEventRecorderFor(reconciler.OCIRepositoryControllerName)},
+			Recorder: mgr.GetEventRecorder(reconciler.OCIRepositoryControllerName)},
 		KustomizationReconciler: &reconciler.KustomizationReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ConfigProvider: configProvider,
-			Recorder: mgr.GetEventRecorderFor(reconciler.KustomizationControllerName)},
+			Recorder: mgr.GetEventRecorder(reconciler.KustomizationControllerName)},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create kustomize controller", "controller", "ArtifactDeployment")
 		os.Exit(1)
 	}
 	if err := (&controller.VectorAssignmentReconciler{
 		Client:   mgr.GetClient(),
-		Recorder: mgr.GetEventRecorderFor(controller.VectorAssignmentControllerName),
+		Recorder: mgr.GetEventRecorder(controller.VectorAssignmentControllerName),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create vector assignment controller", "controller", "VectorAssignment")
 		os.Exit(1)

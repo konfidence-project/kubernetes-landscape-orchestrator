@@ -24,7 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -45,7 +45,7 @@ type HelmRepositoryReconciler struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
-	Recorder       record.EventRecorder
+	Recorder       events.EventRecorder
 }
 
 var _ fluxcd.FluxHelmReconciler = (*HelmRepositoryReconciler)(nil)
@@ -67,7 +67,7 @@ func (r *HelmRepositoryReconciler) Reconcile(
 	if err != nil {
 		return false, fmt.Errorf("failed to reconcile HelmRepository: %w", err)
 	}
-	r.Recorder.Event(deployment, corev1.EventTypeNormal, "HelmRepositoryReconciled", fmt.Sprintf("HelmRepository %s %s", helmRepository.Name, operationResult))
+	r.Recorder.Eventf(deployment, nil, corev1.EventTypeNormal, "HelmRepositoryReconciled", "HelmRepositoryReconciled", fmt.Sprintf("HelmRepository %s %s", helmRepository.Name, operationResult))
 	// HelmRepository itself has no status conditions; cannot map it to ArtifactDeployment status conditions
 
 	return true, nil

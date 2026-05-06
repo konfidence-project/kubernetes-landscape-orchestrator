@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -47,7 +47,7 @@ type OCIRepositoryReconciler struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
-	Recorder       record.EventRecorder
+	Recorder       events.EventRecorder
 }
 
 var _ fluxcd.FluxKustomizeReconciler = (*OCIRepositoryReconciler)(nil)
@@ -68,7 +68,7 @@ func (r *OCIRepositoryReconciler) Reconcile(
 	if err != nil {
 		return false, fmt.Errorf("failed to reconcile OCIRepository: %w", err)
 	}
-	r.Recorder.Event(deployment, corev1.EventTypeNormal, "OCIRepositoryReconciled", fmt.Sprintf("OCIRepository %s %s", ociRepository.Name, operationResult))
+	r.Recorder.Eventf(deployment, nil, corev1.EventTypeNormal, "OCIRepositoryReconciled", "OCIRepositoryReconciled", fmt.Sprintf("OCIRepository %s %s", ociRepository.Name, operationResult))
 
 	// map the status conditions of the OCIRepository to the ArtifactDeployment
 	r.mapStatusConditions(deployment, ociRepository)
