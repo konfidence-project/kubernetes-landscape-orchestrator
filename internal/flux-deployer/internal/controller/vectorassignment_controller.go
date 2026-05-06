@@ -28,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,7 +48,7 @@ const VectorAssignmentControllerName = "flux-vector-assignment-controller"
 // VectorAssignmentReconciler reconciles VectorAssignment resources where manifest type is either 'cloud.konfidence.flux.kustomize' or 'cloud.konfidence.flux.helm'
 type VectorAssignmentReconciler struct {
 	client.Client
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=vectorassignments,verbs=get;list;watch
@@ -163,7 +163,7 @@ func (r *VectorAssignmentReconciler) ensureAppNameService(ctx context.Context, a
 	}
 
 	msg := fmt.Sprintf("appName service %s %s", svc.Name, operationResult)
-	r.Recorder.Event(assignment, corev1.EventTypeNormal, "AppNameServiceReconciled", msg)
+	r.Recorder.Eventf(assignment, nil, corev1.EventTypeNormal, "AppNameServiceReconciled", "AppNameServiceReconciled", msg)
 	logf.FromContext(ctx).Info(msg)
 
 	return svc, nil
@@ -227,7 +227,7 @@ func (r *VectorAssignmentReconciler) ensureHTTPRoute(ctx context.Context, assign
 	}
 
 	msg := fmt.Sprintf("HttpRoute %q %s,", httpRoute.Name, operationResult)
-	r.Recorder.Event(assignment, corev1.EventTypeNormal, "HttpRouteReconciled", msg)
+	r.Recorder.Eventf(assignment, nil, corev1.EventTypeNormal, "HttpRouteReconciled", "HttpRouteReconciled", msg)
 	logf.FromContext(ctx).Info(msg)
 
 	r.mapStatusConditions(assignment, httpRoute)
@@ -245,7 +245,7 @@ func (r *VectorAssignmentReconciler) mapStatusConditions(
 		meta.IsStatusConditionTrue(route.Status.Parents[0].Conditions, string(gatewayv1.RouteConditionAccepted)) &&
 		meta.IsStatusConditionTrue(route.Status.Parents[0].Conditions, string(gatewayv1.RouteConditionResolvedRefs)) {
 		meta.SetStatusCondition(&assignment.Status.Conditions, metav1.Condition{
-			Type:               landscapev1alpha1.VectorAssignedCondition,
+			Type:               landscapev1alpha1.VectorAssignmentReadyCondition,
 			Status:             metav1.ConditionTrue,
 			Reason:             "AssignmentReady",
 			Message:            "HTTPRoute has been accepted and all references resolved",
@@ -254,7 +254,7 @@ func (r *VectorAssignmentReconciler) mapStatusConditions(
 		})
 	} else {
 		meta.SetStatusCondition(&assignment.Status.Conditions, metav1.Condition{
-			Type:               landscapev1alpha1.VectorAssignedCondition,
+			Type:               landscapev1alpha1.VectorAssignmentReadyCondition,
 			Status:             metav1.ConditionFalse,
 			Reason:             "AssignmentNotReady",
 			Message:            "HTTPRoute is either not accepted or has unresolved references",
