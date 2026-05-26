@@ -1,0 +1,33 @@
+apiVersion: landscape.konfidence.cloud/v1alpha1
+kind: ArtifactDeployment
+metadata:
+  name: podinfo-h3rz81
+  namespace: target-namespace
+  labels:
+    konfidence.cloud/stage: dev
+    konfidence.cloud/vector-id: e4fc4f
+    konfidence.cloud/vector-deployment-id: h3rz81
+spec:
+  manifest:
+    type: cloud.konfidence.flux.helm
+    allowReuse: true
+  component:
+    name: podinfo
+    resources:
+      - name: podinfo-helm
+        type: helmChart
+        content:
+          helmChart: podinfo:6.9.1
+          helmRepository: https://stefanprodan.github.io/podinfo
+          type: helm
+  taskManifests: []
+
+#---
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  name: stefanprodan-github-io
+#  namespace: target-namespace
+#type: kubernetes.io/dockerconfigjson
+#data:
+#  .dockerconfigjson:
