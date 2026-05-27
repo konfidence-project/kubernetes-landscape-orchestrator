@@ -33,17 +33,6 @@ linters:
   exclusions:
     generated: lax
     rules:
-      # Exclude generated files from all linters
-      - path: "zz_generated\\.deepcopy\\.go"
-        linters:
-          - unused
-          - ineffassign
-          - revive
-      # Exclude API types from certain linters (they're mostly struct definitions)
-      - path: "api/.*/.*types\\.go"
-        linters:
-          - revive
-          - unused
       - linters:
           - dupl
           - lll
