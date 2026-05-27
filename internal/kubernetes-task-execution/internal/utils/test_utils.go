@@ -4,7 +4,7 @@ package utils
 import (
 	"context"
 
-	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	landscape "github.com/konfidence-project/konfidence/api/star/v1alpha1"
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -17,7 +17,7 @@ import (
 func CreateTaskExecution(ctx context.Context, k8sClient client.Client, name string, namespace string, specName string, specType string, dependsOn []string, jobSpec string) {
 	taskExecution := &landscape.TaskExecution{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "landscape.konfidence.cloud/v1alpha1",
+			APIVersion: "star.konfidence.cloud/v1alpha1",
 			Kind:       "TaskExecution",
 		},
 		ObjectMeta: metav1.ObjectMeta{

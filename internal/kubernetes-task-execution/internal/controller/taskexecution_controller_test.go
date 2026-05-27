@@ -20,8 +20,8 @@ import (
 	"context"
 	"time"
 
-	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
-	testutil "github.com/konfidence-project/landscape-kubernetes-task-execution-controller/internal/utils"
+	landscape "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	testutil "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-task-execution/internal/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"

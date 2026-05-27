@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/konfidence-project/landscape-flux-deployer/internal/config"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/config"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	crlog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/fluxcd"
 )
 
 type ConfigProvider struct {

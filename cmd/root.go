@@ -25,7 +25,7 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
 	// konfidence CRDs
-	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"

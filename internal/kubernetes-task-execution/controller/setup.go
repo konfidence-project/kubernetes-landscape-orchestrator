@@ -18,7 +18,7 @@ package controller
 
 import (
 	"github.com/go-logr/logr"
-	internalcontroller "github.com/konfidence-project/landscape-kubernetes-task-execution-controller/internal/controller"
+	internalcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-task-execution/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 

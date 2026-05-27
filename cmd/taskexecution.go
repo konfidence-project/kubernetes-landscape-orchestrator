@@ -17,7 +17,7 @@ limitations under the License.
 package cmd
 
 import (
-	taskcontroller "github.com/konfidence-project/landscape-kubernetes-task-execution-controller/controller"
+	taskcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-task-execution/controller"
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"

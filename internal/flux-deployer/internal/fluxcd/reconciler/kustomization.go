@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/fluxcd/utils"
 
 	// see https://github.com/fluxcd/kustomize-controller/tree/main/api/v1
 	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
@@ -36,9 +36,9 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
-	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
 
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/fluxcd"
 )
 
 //

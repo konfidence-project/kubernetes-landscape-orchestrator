@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/fluxcd/utils"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,8 +34,8 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
-	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
+	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/fluxcd"
 )
 
 //

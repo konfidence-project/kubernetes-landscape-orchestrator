@@ -17,7 +17,7 @@ limitations under the License.
 package cmd
 
 import (
-	activationcontroller "github.com/konfidence-project/landscape-kubernetes-activation-execution-controller/controller"
+	activationcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-activation-execution/controller"
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"

@@ -18,8 +18,8 @@ package controller
 
 import (
 	"github.com/go-logr/logr"
-	internalcontroller "github.com/konfidence-project/landscape-flux-deployer/internal/controller"
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/reconciler"
+	internalcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/controller"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/fluxcd/reconciler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 

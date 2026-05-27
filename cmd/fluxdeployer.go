@@ -17,7 +17,7 @@ limitations under the License.
 package cmd
 
 import (
-	fluxcontroller "github.com/konfidence-project/landscape-flux-deployer/controller"
+	fluxcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/controller"
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"

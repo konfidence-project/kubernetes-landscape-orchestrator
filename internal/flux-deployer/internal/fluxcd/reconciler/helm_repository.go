@@ -32,8 +32,8 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
-	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
+	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/fluxcd"
 )
 
 // Flux HelmRepository docs: https://fluxcd.io/flux/components/source/helmrepositories/

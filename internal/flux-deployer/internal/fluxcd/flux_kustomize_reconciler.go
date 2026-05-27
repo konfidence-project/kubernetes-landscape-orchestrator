@@ -19,7 +19,7 @@ package fluxcd
 import (
 	"context"
 
-	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
 )
 
 // FluxKustomizeReconciler defines the interface for reconciling kustomize related types of Flux resources

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"reflect"
 
-	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -51,9 +51,9 @@ type VectorAssignmentReconciler struct {
 	Recorder events.EventRecorder
 }
 
-// +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=vectorassignments,verbs=get;list;watch
-// +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=vectorassignments/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch
+// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectorassignments,verbs=get;list;watch
+// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectorassignments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch
 

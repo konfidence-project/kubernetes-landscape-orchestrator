@@ -19,8 +19,8 @@ package reconciler
 import (
 	"context"
 
-	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
-	. "github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/reconciler/mocks"
+	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	. "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/fluxcd/reconciler/mocks"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"

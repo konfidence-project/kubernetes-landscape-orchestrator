@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"time"
 
-	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
-	testutil "github.com/konfidence-project/landscape-kubernetes-activation-execution-controller/internal/utils"
+	landscape "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	testutil "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-activation-execution/internal/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"reflect"
 
-	landscape "github.com/konfidence-project/crds/api/landscape/v1alpha1"
+	landscape "github.com/konfidence-project/konfidence/api/star/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -46,9 +46,9 @@ type TaskExecutionReconciler struct {
 	Recorder record.EventRecorder
 }
 
-// +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=taskexecutions,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=taskexecutions/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=taskexecutions/finalizers,verbs=update
+// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=taskexecutions,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=taskexecutions/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=taskexecutions/finalizers,verbs=update
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get
 

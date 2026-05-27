@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/konfidence-project/landscape-flux-deployer/test/utils"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/test/utils"
 )
 
 // namespace where the project is deployed in

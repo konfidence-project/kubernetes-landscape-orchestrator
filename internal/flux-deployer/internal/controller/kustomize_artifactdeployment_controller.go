@@ -34,8 +34,8 @@ import (
 	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
 
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
-	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd"
+	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/fluxcd"
 )
 
 // KustomizeArtifactDeploymentReconciler reconciles ArtifactDeployment objects where manifest type is 'Kustomize'
@@ -47,9 +47,9 @@ type KustomizeArtifactDeploymentReconciler struct {
 	KustomizationReconciler       fluxcd.FluxKustomizeReconciler
 }
 
-// +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=landscape.konfidence.cloud,resources=artifactdeployments/finalizers,verbs=update
+// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=artifactdeployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=artifactdeployments/finalizers,verbs=update
 // +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=ocirepositories,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=kustomize.toolkit.fluxcd.io,resources=kustomizations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch

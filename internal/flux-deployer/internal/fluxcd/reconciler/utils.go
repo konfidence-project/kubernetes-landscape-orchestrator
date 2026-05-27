@@ -22,9 +22,9 @@ import (
 	"strconv"
 
 	fluxcd "github.com/fluxcd/pkg/apis/meta"
-	landscapev1alpha1 "github.com/konfidence-project/crds/api/landscape/v1alpha1"
-	"github.com/konfidence-project/landscape-flux-deployer/internal/config"
-	"github.com/konfidence-project/landscape-flux-deployer/internal/fluxcd/utils"
+	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/config"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/fluxcd/utils"
 	"github.com/konfidence-project/pkg/sanitize"
 	pkgSecret "github.com/konfidence-project/pkg/secret"
 	"github.com/konfidence-project/pkg/url"

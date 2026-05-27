@@ -30,7 +30,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/konfidence-project/landscape-kubernetes-task-execution-controller/test/utils"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-task-execution/test/utils"
 )
 
 // namespace where the project is deployed in
