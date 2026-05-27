@@ -4,36 +4,40 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: stageversionusages.landscape.konfidence.cloud
+  name: stageversions.star.konfidence.cloud
 spec:
-  group: landscape.konfidence.cloud
+  group: star.konfidence.cloud
   names:
     categories:
     - konfidence
     - kden
-    kind: StageVersionUsage
-    listKind: StageVersionUsageList
-    plural: stageversionusages
-    singular: stageversionusage
+    kind: StageVersion
+    listKind: StageVersionList
+    plural: stageversions
+    singular: stageversion
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The referenced StageVersion
-      jsonPath: .spec.stageVersionRef.name
-      name: Stage-Version-Ref
+    - description: Name of the referenced Stage
+      jsonPath: .spec.stageRef.name
+      name: Stage
       type: string
-    - description: The label selector for the StageVersion
-      jsonPath: .spec.stageVersionSelector
-      name: Stage-Version-Selector
+    - description: The object generation of the stage
+      jsonPath: .spec.stageGeneration
+      name: Stage-Generation
+      type: integer
+    - description: The deployment vector for this stage
+      jsonPath: .spec.vector
+      name: Vector
       type: string
-    - description: The reason for this StageVersion usage
-      jsonPath: .spec.reason
-      name: Reason
-      type: string
+    - description: Time since creation of StageVersion
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: StageVersionUsage is the Schema for the stageversionusages API
+        description: StageVersion is the Schema for the stageversions API
         properties:
           apiVersion:
             description: |-
@@ -53,77 +57,40 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of StageVersionUsage
+            description: Spec defines the desired state of the StageVersion and is
+              immutable after it has been set
             properties:
-              reason:
-                description: Reason is human-readable description of why this StageVersion
-                  is in use, e.g. "executing vector migrations", "latest vector for
-                  stage xyz",
-                type: string
-              stageVersionRef:
-                description: StageVersionRef references a stageVersion
+              stageGeneration:
+                description: the object generation of the stage that created this
+                  stage version
+                format: int64
+                minimum: 1
+                type: integer
+              stageRef:
+                description: stageRef references the Stage this StageVersion belongs
+                  to
                 properties:
                   name:
-                    description: Name is the name of the StageVersion. Required.
+                    description: Name is the name of the Stage. Required.
                     type: string
                 required:
                 - name
                 type: object
-              stageVersionSelector:
-                description: StageVersionSelector is a label selector to find a StageVersion
-                  when name is not provided.
-                properties:
-                  matchExpressions:
-                    description: matchExpressions is a list of label selector requirements.
-                      The requirements are ANDed.
-                    items:
-                      description: |-
-                        A label selector requirement is a selector that contains values, a key, and an operator that
-                        relates the key and values.
-                      properties:
-                        key:
-                          description: key is the label key that the selector applies
-                            to.
-                          type: string
-                        operator:
-                          description: |-
-                            operator represents a key's relationship to a set of values.
-                            Valid operators are In, NotIn, Exists and DoesNotExist.
-                          type: string
-                        values:
-                          description: |-
-                            values is an array of string values. If the operator is In or NotIn,
-                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                            the values array must be empty. This array is replaced during a strategic
-                            merge patch.
-                          items:
-                            type: string
-                          type: array
-                          x-kubernetes-list-type: atomic
-                      required:
-                      - key
-                      - operator
-                      type: object
-                    type: array
-                    x-kubernetes-list-type: atomic
-                  matchLabels:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                      map is equivalent to an element of matchExpressions, whose key field is "key", the
-                      operator is "In", and the values array contains only "value". The requirements are ANDed.
-                    type: object
-                type: object
-                x-kubernetes-map-type: atomic
+              vector:
+                description: Vector points to the OCM component version that contains
+                  the deployment vector for this stage.
+                minLength: 1
+                type: string
+            required:
+            - stageGeneration
+            - stageRef
+            - vector
             type: object
             x-kubernetes-validations:
-            - message: exactly one of the fields in [stageVersionRef stageVersionSelector]
-                must be set
-              rule: '[has(self.stageVersionRef),has(self.stageVersionSelector)].filter(x,x==true).size()
-                == 1'
+            - message: StageVersion spec is immutable after it has been set
+              rule: self == oldSelf
           status:
-            description: status defines the observed state of StageVersionUsage
+            description: status defines the observed state of StageVersion
             properties:
               conditions:
                 items:
@@ -181,16 +148,11 @@ spec:
                   - type
                   type: object
                 type: array
-              resolvedStageVersions:
-                description: ResolvedStageVersions contains the names of all resolved
-                  stageVersion resources specified by either stageVersionRef or StageVersionSelector
-                items:
-                  type: string
-                type: array
             type: object
-        required:
-        - spec
         type: object
+        x-kubernetes-validations:
+        - message: Spec is required once set
+          rule: '!has(oldSelf.spec) || has(self.spec)'
     served: true
     storage: true
     subresources:

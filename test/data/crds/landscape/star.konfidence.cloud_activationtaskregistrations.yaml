@@ -4,40 +4,28 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: activationtaskexecutions.landscape.konfidence.cloud
+  name: activationtaskregistrations.star.konfidence.cloud
 spec:
-  group: landscape.konfidence.cloud
+  group: star.konfidence.cloud
   names:
     categories:
     - konfidence
     - kden
-    kind: ActivationTaskExecution
-    listKind: ActivationTaskExecutionList
-    plural: activationtaskexecutions
-    singular: activationtaskexecution
+    kind: ActivationTaskRegistration
+    listKind: ActivationTaskRegistrationList
+    plural: activationtaskregistrations
+    singular: activationtaskregistration
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The type of the task execution
+    - description: The type of registered activation task
       jsonPath: .spec.type
       name: Type
-      type: string
-    - description: The associated VectorActivation
-      jsonPath: .spec.vectorActivation
-      name: Vector-Activation
-      type: string
-    - description: The latest condition type
-      jsonPath: .status.conditions[-1:].type
-      name: Condition
-      type: string
-    - description: The latest condition status
-      jsonPath: .status.conditions[-1:].status
-      name: Condition-Status
       type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ActivationTaskExecution is the Schema for the ActivationTaskExecutions
+        description: ActivationTaskRegistration is the Schema for the activationtaskregistrations
           API
         properties:
           apiVersion:
@@ -58,26 +46,44 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of ActivationTaskExecution
+            description: spec defines the desired state of ActivationTaskRegistration
             properties:
+              precedes:
+                items:
+                  type: string
+                type: array
               spec:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
+              succeeds:
+                items:
+                  type: string
+                type: array
               type:
-                type: string
-              vectorActivation:
-                description: VectorActivation is a temporary field that contains the
-                  name of the associated vectorActivation
+                description: |-
+                  INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file
+                  The following markers will use OpenAPI v3 schema to validate the value
+                  More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
                 type: string
             required:
             - spec
             - type
-            - vectorActivation
             type: object
           status:
-            description: status defines the observed state of ActivationTaskExecution
+            description: status defines the observed state of ActivationTaskRegistration
             properties:
               conditions:
+                description: |-
+                  conditions represent the current state of the ActivationTaskRegistration resource.
+                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
+
+                  Standard condition types include:
+                  - "Available": the resource is fully functional
+                  - "Progressing": the resource is being created or updated
+                  - "Degraded": the resource failed to reach or maintain its desired state
+
+                  The status of each condition is one of True, False, or Unknown.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -133,6 +139,9 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
             type: object
         required:
         - spec

@@ -84,7 +84,7 @@ test: hermit generate-test-crds fmt vet setup-envtest ## Run all unit tests.
 
 .PHONY: generate-test-crds
 generate-test-crds: hermit ## Generate CRDs needed for controller tests.
-	$(CONTROLLER_GEN) crd paths="github.com/konfidence-project/crds/api/landscape/..." output:crd:artifacts:config=test/data/crds/landscape
+	$(CONTROLLER_GEN) crd paths="github.com/konfidence-project/konfidence/api/star/..." output:crd:artifacts:config=test/data/crds/landscape
 
 .PHONY: setup-envtest
 setup-envtest: hermit ## Download the envtest binaries for the configured Kubernetes version.

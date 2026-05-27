@@ -4,27 +4,23 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: vectormigrations.landscape.konfidence.cloud
+  name: taskexecutions.star.konfidence.cloud
 spec:
-  group: landscape.konfidence.cloud
+  group: star.konfidence.cloud
   names:
     categories:
     - konfidence
     - kden
-    kind: VectorMigration
-    listKind: VectorMigrationList
-    plural: vectormigrations
-    singular: vectormigration
+    kind: TaskExecution
+    listKind: TaskExecutionList
+    plural: taskexecutions
+    singular: taskexecution
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The stage version
-      jsonPath: .spec.stageVersion
-      name: Stage-Version
-      type: string
-    - description: The deployment vector
-      jsonPath: .spec.vector
-      name: Vector
+    - description: The type of the task execution
+      jsonPath: .spec.type
+      name: Type
       type: string
     - description: The latest condition type
       jsonPath: .status.conditions[-1:].type
@@ -37,7 +33,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: VectorMigration is the Schema for the vectormigrations API
+        description: TaskExecution is the Schema for the taskexecutions API
         properties:
           apiVersion:
             description: |-
@@ -57,20 +53,26 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of VectorMigration
+            description: spec defines the desired state of TaskExecution
             properties:
-              stageVersion:
+              dependsOn:
+                items:
+                  type: string
+                type: array
+              name:
                 type: string
-              vector:
-                description: Vector points to the OCM component version that contains
-                  the deployment vector for this stage.
+              spec:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              type:
                 type: string
             required:
-            - stageVersion
-            - vector
+            - name
+            - spec
+            - type
             type: object
           status:
-            description: status defines the observed state of VectorMigration
+            description: status defines the observed state of TaskExecution
             properties:
               conditions:
                 items:

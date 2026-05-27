@@ -4,29 +4,40 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: activationtaskregistrations.landscape.konfidence.cloud
+  name: vectormigrations.star.konfidence.cloud
 spec:
-  group: landscape.konfidence.cloud
+  group: star.konfidence.cloud
   names:
     categories:
     - konfidence
     - kden
-    kind: ActivationTaskRegistration
-    listKind: ActivationTaskRegistrationList
-    plural: activationtaskregistrations
-    singular: activationtaskregistration
+    kind: VectorMigration
+    listKind: VectorMigrationList
+    plural: vectormigrations
+    singular: vectormigration
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The type of registered activation task
-      jsonPath: .spec.type
-      name: Type
+    - description: The stage version
+      jsonPath: .spec.stageVersion
+      name: Stage-Version
+      type: string
+    - description: The deployment vector
+      jsonPath: .spec.vector
+      name: Vector
+      type: string
+    - description: The latest condition type
+      jsonPath: .status.conditions[-1:].type
+      name: Condition
+      type: string
+    - description: The latest condition status
+      jsonPath: .status.conditions[-1:].status
+      name: Condition-Status
       type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ActivationTaskRegistration is the Schema for the activationtaskregistrations
-          API
+        description: VectorMigration is the Schema for the vectormigrations API
         properties:
           apiVersion:
             description: |-
@@ -46,44 +57,22 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of ActivationTaskRegistration
+            description: spec defines the desired state of VectorMigration
             properties:
-              precedes:
-                items:
-                  type: string
-                type: array
-              spec:
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-              succeeds:
-                items:
-                  type: string
-                type: array
-              type:
-                description: |-
-                  INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "make" to regenerate code after modifying this file
-                  The following markers will use OpenAPI v3 schema to validate the value
-                  More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+              stageVersion:
+                type: string
+              vector:
+                description: Vector points to the OCM component version that contains
+                  the deployment vector for this stage.
                 type: string
             required:
-            - spec
-            - type
+            - stageVersion
+            - vector
             type: object
           status:
-            description: status defines the observed state of ActivationTaskRegistration
+            description: status defines the observed state of VectorMigration
             properties:
               conditions:
-                description: |-
-                  conditions represent the current state of the ActivationTaskRegistration resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -139,9 +128,6 @@ spec:
                   - type
                   type: object
                 type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
             type: object
         required:
         - spec
