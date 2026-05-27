@@ -46,6 +46,7 @@ var (
 	enableLeaderElection bool
 	probeAddr            string
 	controllersSpec      string
+	leaseID              string
 )
 
 var rootCmd = &cobra.Command{
@@ -86,4 +87,7 @@ func init() {
 		"Comma-separated glob expression selecting which controllers to enable. "+
 			"Examples: '*' (all), 'flux-deployer', '!flux-deployer,*' (all except), 'task-*'. "+
 			"Tokens are set-based and order-independent; '!' negates.")
+
+	rootCmd.Flags().StringVar(&leaseID, "lease-id", "orchestrator.konfidence.cloud",
+		"The ID used for leader election.")
 }

@@ -34,7 +34,7 @@ func startTaskExecution(cmd *cobra.Command, args []string) error {
 		Scheme:                 scheme,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "8b2567c7.konfidence.cloud",
+		LeaderElectionID:       leaseID,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -64,5 +64,7 @@ func startTaskExecution(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	taskExecutionCmd.Flags().StringVar(&leaseID, "lease-id", "task-execution.konfidence.cloud",
+		"The ID used for leader election.")
 	rootCmd.AddCommand(taskExecutionCmd)
 }

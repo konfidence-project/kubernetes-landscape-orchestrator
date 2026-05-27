@@ -31,7 +31,7 @@ func startOperator(cmd *cobra.Command, args []string) error {
 		Scheme:                 scheme,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "d4e7f091.konfidence.cloud",
+		LeaderElectionID:       leaseID,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

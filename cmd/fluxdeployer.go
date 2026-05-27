@@ -34,7 +34,7 @@ func startFluxDeployer(cmd *cobra.Command, args []string) error {
 		Scheme:                 scheme,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "8fd85f93.konfidence.cloud",
+		LeaderElectionID:       leaseID,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -64,5 +64,7 @@ func startFluxDeployer(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	fluxDeployerCmd.Flags().StringVar(&leaseID, "lease-id", "flux-deployer.konfidence.cloud",
+		"The ID used for leader election.")
 	rootCmd.AddCommand(fluxDeployerCmd)
 }
