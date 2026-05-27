@@ -17,6 +17,8 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
+
 	activationcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-activation-execution/controller"
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -55,7 +57,9 @@ func startActivationExecution(cmd *cobra.Command, args []string) error {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	signalContext, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	defer cancel()
+	if err := mgr.Start(signalContext); err != nil {
 		setupLog.Error(err, "problem running manager")
 		return err
 	}

@@ -17,6 +17,8 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
+
 	fluxcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/controller"
 	activationcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-activation-execution/controller"
 	taskcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-task-execution/controller"
@@ -80,7 +82,9 @@ func startOperator(cmd *cobra.Command, args []string) error {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	signalContext, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	defer cancel()
+	if err := mgr.Start(signalContext); err != nil {
 		setupLog.Error(err, "problem running manager")
 		return err
 	}
