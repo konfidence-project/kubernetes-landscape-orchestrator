@@ -35,7 +35,7 @@ import (
 	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
-	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
+	// see https://github.com/konfidence-project/konfidence/tree/main/api/star/v1alpha1
 	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
 
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/internal/fluxcd"
