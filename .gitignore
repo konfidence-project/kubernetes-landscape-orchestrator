@@ -27,9 +27,11 @@ go.work.sum
 *~
 .backup
 
-.hermit/*
+# Hermit local cache — not part of the repo
+.hermit/
 
-bin/galaxy
-bin/star
+# Built manager binary
+bin/manager
 
+# Envtest assets downloaded at test time
 bin/k8s/
