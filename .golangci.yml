@@ -33,10 +33,6 @@ linters:
   exclusions:
     generated: lax
     rules:
-      - linters:
-          - dupl
-          - lll
-        path: internal/*
       - path: "_test\\.go"
         text: "should not use dot imports"
     paths:

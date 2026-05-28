@@ -40,6 +40,9 @@ func startOperator(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	signalContext, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	defer cancel()
+
 	controllerSetups := map[string]func() error{
 		fluxcontroller.OperatorFlagName: func() error {
 			return fluxcontroller.SetupControllers(mgr, setupLog)
@@ -82,8 +85,6 @@ func startOperator(cmd *cobra.Command, args []string) error {
 	}
 
 	setupLog.Info("starting manager")
-	signalContext, cancel := context.WithCancel(ctrl.SetupSignalHandler())
-	defer cancel()
 	if err := mgr.Start(signalContext); err != nil {
 		setupLog.Error(err, "problem running manager")
 		return err
