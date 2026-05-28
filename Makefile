@@ -127,7 +127,7 @@ cleanup-test-e2e: hermit ## Tear down the Kind cluster used for e2e tests.
 
 .PHONY: build
 build: hermit fmt vet ## Build the manager binary.
-	go build -o bin/manager main.go
+	go build -o bin/kubernetes-landscape-orchestrator main.go
 
 .PHONY: run
 run: hermit fmt vet ## Run the operator from your host.
@@ -136,7 +136,7 @@ run: hermit fmt vet ## Run the operator from your host.
 # This target is only used for local environments (not in pipeline)
 .PHONY: docker-build
 docker-build: hermit ## Build the container image (local use only).
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/manager main.go
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/kubernetes-landscape-orchestrator main.go
 	$(CONTAINER_TOOL) build -t $(IMAGE) .
 
 .PHONY: docker-push

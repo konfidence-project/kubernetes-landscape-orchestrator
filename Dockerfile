@@ -26,12 +26,12 @@ COPY utils/ utils/
 COPY internal/ internal/
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -a -o manager main.go
+    go build -a -o kubernetes-landscape-orchestrator main.go
 
 # Run stage
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=builder /workspace/manager .
+COPY --from=builder /workspace/kubernetes-landscape-orchestrator .
 USER 65532:65532
 
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["/kubernetes-landscape-orchestrator"]
