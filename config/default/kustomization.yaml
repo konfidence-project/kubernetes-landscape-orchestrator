@@ -5,6 +5,6 @@ resources:
 - namespace.yaml
 - ../manager
 images:
-- name: konfidence-project/landscape-kubernetes-task-execution-controller
-  newName: registry.kdenv.lab/landscape-kubernetes-task-execution-controller
+- name: konfidence-project/kubernetes-landscape-orchestrator
+  newName: registry.kdenv.lab/kubernetes-landscape-orchestrator
   newTag: dev

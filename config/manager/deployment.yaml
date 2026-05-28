@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: landscape-kubernetes-task-execution-controller
+  name: landscape-orchestrator
   labels:
-    app.kubernetes.io/name: landscape-kubernetes-task-execution-controller
+    app.kubernetes.io/name: landscape-orchestrator
     app.kubernetes.io/managed-by: kustomize
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: landscape-kubernetes-task-execution-controller
+      app.kubernetes.io/name: landscape-orchestrator
   replicas: 1
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: manager
       labels:
-        app.kubernetes.io/name: landscape-kubernetes-task-execution-controller
+        app.kubernetes.io/name: landscape-orchestrator
         app.kubernetes.io/managed-by: kustomize
     spec:
       securityContext:
@@ -26,7 +26,7 @@ spec:
       - args:
           - --leader-elect
           - --health-probe-bind-address=:8081
-        image: konfidence-project/landscape-kubernetes-task-execution-controller:latest
+        image: konfidence-project/kubernetes-landscape-orchestrator:latest
         imagePullPolicy: Always
         name: manager
         ports: []
@@ -55,5 +55,5 @@ spec:
             memory: 64Mi
         volumeMounts: []
       volumes: []
-      serviceAccountName: landscape-kubernetes-task-execution-controller
+      serviceAccountName: landscape-orchestrator
       terminationGracePeriodSeconds: 10
