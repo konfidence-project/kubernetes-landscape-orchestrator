@@ -28,7 +28,7 @@ limitations under the License.
 // matching controllers to a union, negative tokens (prefixed with "!")
 // contribute matching controllers to an exclusion set, and the result is
 // (positives) minus (negatives). An empty spec or "*" enables all controllers.
-package cmd
+package cmd // TODO: This is redundant to the code in kondifence/pkg/cmd, once the api is available we can reuse it
 
 import (
 	"fmt"
