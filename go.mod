@@ -9,7 +9,7 @@ require (
 	github.com/fluxcd/pkg/apis/meta v1.23.0
 	github.com/fluxcd/source-controller/api v1.7.4
 	github.com/go-logr/logr v1.4.3
-	github.com/konfidence-project/konfidence v0.0.0-00010101000000-000000000000
+	github.com/konfidence-project/konfidence v0.0.1
 	github.com/konfidence-project/pkg v0.7.0
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
@@ -96,4 +96,4 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace github.com/konfidence-project/konfidence => ../konfidence
+
