@@ -14,23 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package taskexecution
 
 import (
 	"github.com/go-logr/logr"
-	internalcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-activation-execution/internal/controller"
+	internalcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-task-execution/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
-const OperatorFlagName = "activation-execution"
+const OperatorFlagName = "task-execution"
 
 func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
-	if err := (&internalcontroller.ActivationTaskExecutionReconciler{
+	if err := (&internalcontroller.TaskExecutionReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor(internalcontroller.ActivationTaskExecutionControllerName),
+		Recorder: mgr.GetEventRecorderFor(internalcontroller.TaskExecutionControllerName),
 	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create controller", "controller", "ActivationTaskExecution")
+		logger.Error(err, "unable to create controller", "controller", "TaskExecution")
 		return err
 	}
 

@@ -20,9 +20,9 @@ import (
 	"context"
 
 	utilscmd "github.com/konfidence-project/konfidence/pkg/cmd"
-	fluxcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/controller"
-	activationcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-activation-execution/controller"
-	taskcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-task-execution/controller"
+	fluxdeployer "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer"
+	activationexecution "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-activation-execution"
+	taskexecution "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-task-execution"
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -44,14 +44,14 @@ func startOperator(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	controllerSetups := map[string]func() error{
-		fluxcontroller.OperatorFlagName: func() error {
-			return fluxcontroller.SetupControllers(mgr, setupLog)
+		fluxdeployer.OperatorFlagName: func() error {
+			return fluxdeployer.SetupControllers(mgr, setupLog)
 		},
-		taskcontroller.OperatorFlagName: func() error {
-			return taskcontroller.SetupControllers(mgr, setupLog)
+		taskexecution.OperatorFlagName: func() error {
+			return taskexecution.SetupControllers(mgr, setupLog)
 		},
-		activationcontroller.OperatorFlagName: func() error {
-			return activationcontroller.SetupControllers(mgr, setupLog)
+		activationexecution.OperatorFlagName: func() error {
+			return activationexecution.SetupControllers(mgr, setupLog)
 		},
 	}
 
