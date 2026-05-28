@@ -36,7 +36,9 @@ KUSTOMIZE      ?= kustomize
 CONTROLLER_GEN ?= controller-gen
 ENVTEST        ?= setup-envtest
 GOLANGCI_LINT   = golangci-lint
-GINKGO         ?= ginkgo
+
+## Tool Binaries (Testing)
+GINKGO ?= $(LOCALBIN)/ginkgo
 
 ## Image name
 IMAGE = $(REGISTRY)/kubernetes-landscape-orchestrator:$(TAG)
@@ -75,7 +77,7 @@ lint-config: hermit ## Verify the golangci-lint configuration.
 ##@ Testing
 
 .PHONY: test
-test: hermit generate-test-crds fmt vet setup-envtest ## Run all unit tests.
+test: hermit generate-test-crds fmt vet setup-envtest ginkgo ## Run all unit tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
 		$(GINKGO) --coverprofile=cover.out -v \
 		./internal/flux-deployer/... \
@@ -84,7 +86,7 @@ test: hermit generate-test-crds fmt vet setup-envtest ## Run all unit tests.
 
 .PHONY: generate-test-crds
 generate-test-crds: hermit ## Generate CRDs needed for controller tests.
-	$(CONTROLLER_GEN) crd paths="github.com/konfidence-project/konfidence/api/star/..." output:crd:artifacts:config=test/data/crds/landscape
+	$(CONTROLLER_GEN) crd paths="github.com/konfidence-project/konfidence/api/star/..." output:crd:artifacts:config=test/data/crds/star
 
 .PHONY: setup-envtest
 setup-envtest: hermit ## Download the envtest binaries for the configured Kubernetes version.
@@ -93,6 +95,10 @@ setup-envtest: hermit ## Download the envtest binaries for the configured Kubern
 		echo "Error: Failed to set up envtest binaries for version $(ENVTEST_K8S_VERSION)."; \
 		exit 1; \
 	}
+
+.PHONY: ginkgo
+ginkgo: hermit ## Install ginkgo CLI to LOCALBIN.
+	go build -o $(LOCALBIN)/ginkgo github.com/onsi/ginkgo/v2/ginkgo
 
 ##@ Build
 
