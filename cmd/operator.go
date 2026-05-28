@@ -19,10 +19,10 @@ package cmd
 import (
 	"context"
 
+	utilscmd "github.com/konfidence-project/konfidence/pkg/cmd"
 	fluxcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/flux-deployer/controller"
 	activationcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-activation-execution/controller"
 	taskcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/kubernetes-task-execution/controller"
-	utilscmd "github.com/konfidence-project/kubernetes-landscape-orchestrator/utils/cmd"
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
