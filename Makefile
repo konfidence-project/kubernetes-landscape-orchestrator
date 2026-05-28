@@ -94,35 +94,6 @@ setup-envtest: hermit ## Download the envtest binaries for the configured Kubern
 		exit 1; \
 	}
 
-KIND_CLUSTER ?= kubernetes-landscape-orchestrator-test-e2e
-
-.PHONY: setup-test-e2e
-setup-test-e2e: hermit ## Set up a Kind cluster for e2e tests if it does not exist.
-	@command -v $(KIND) >/dev/null 2>&1 || { \
-		echo "Kind is not installed. Please install Kind manually."; \
-		exit 1; \
-	}
-	@case "$$($(KIND) get clusters)" in \
-		*"$(KIND_CLUSTER)"*) \
-			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
-		*) \
-			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
-	esac
-
-.PHONY: test-e2e
-test-e2e: hermit setup-test-e2e fmt vet ## Run e2e tests against a Kind cluster.
-	KIND_CLUSTER=$(KIND_CLUSTER) go test \
-		./internal/flux-deployer/test/e2e/ \
-		./internal/kubernetes-task-execution/test/e2e/ \
-		./internal/kubernetes-activation-execution/test/e2e/ \
-		-v -ginkgo.v
-	$(MAKE) cleanup-test-e2e
-
-.PHONY: cleanup-test-e2e
-cleanup-test-e2e: hermit ## Tear down the Kind cluster used for e2e tests.
-	@$(KIND) delete cluster --name $(KIND_CLUSTER)
-
 ##@ Build
 
 .PHONY: build
