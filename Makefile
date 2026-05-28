@@ -126,7 +126,7 @@ cleanup-test-e2e: hermit ## Tear down the Kind cluster used for e2e tests.
 ##@ Build
 
 .PHONY: build
-build: hermit fmt vet ## Build the manager binary.
+build: hermit fmt vet ## Build the operator binary.
 	go build -o bin/kubernetes-landscape-orchestrator main.go
 
 .PHONY: run

@@ -78,8 +78,8 @@ func init() {
 	}
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&loggerOpts)))
 
-	rootCmd.PersistentFlags().StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	rootCmd.PersistentFlags().BoolVar(&enableLeaderElection, "leader-elect", false,
+	rootCmd.Flags().StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	rootCmd.Flags().BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 

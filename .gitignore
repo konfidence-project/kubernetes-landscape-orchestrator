@@ -30,8 +30,8 @@ go.work.sum
 # Hermit local cache — not part of the repo
 .hermit/
 
-# Built manager binary
-bin/manager
+# Built operator binary
+bin/kubernetes-landscape-orchestrator
 
 # Envtest assets downloaded at test time
 bin/k8s/
