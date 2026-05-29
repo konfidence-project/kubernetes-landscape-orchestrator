@@ -84,6 +84,13 @@ test: hermit generate-test-crds fmt vet setup-envtest ginkgo ## Run all unit tes
 		./internal/taskexecution/... \
 		./internal/activationexecution/...
 
+.PHONY: verify-generated-test-crds
+verify-generated-test-crds: hermit generate-test-crds ## Verify generated test CRDs are committed.
+	@if ! git diff --exit-code -- test/data/crds; then \
+		echo "Generated test CRDs are out of date. Run 'make generate-test-crds' and commit the result."; \
+		exit 1; \
+	fi
+
 .PHONY: generate-test-crds
 generate-test-crds: hermit ## Generate CRDs needed for controller tests.
 	$(CONTROLLER_GEN) crd paths="github.com/konfidence-project/konfidence/api/star/..." output:crd:artifacts:config=test/data/crds/star
@@ -115,6 +122,10 @@ run: hermit fmt vet ## Run the operator from your host.
 docker-build: hermit ## Build the container image (local use only).
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/kubernetes-landscape-orchestrator main.go
 	$(CONTAINER_TOOL) build -t $(IMAGE) .
+
+.PHONY: docker-bake
+docker-bake: hermit ## Build the container image with docker buildx bake.
+	$(CONTAINER_TOOL) buildx bake --file docker-bake.hcl
 
 .PHONY: docker-push
 docker-push: ## Push the container image.
