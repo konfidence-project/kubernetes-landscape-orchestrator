@@ -52,7 +52,9 @@ func (r *OCIRepositoryReconciler) Reconcile(
 	if err != nil {
 		return false, fmt.Errorf("failed to reconcile OCIRepository: %w", err)
 	}
-	r.Recorder.Eventf(deployment, nil, corev1.EventTypeNormal, "OCIRepositoryReconciled", "OCIRepositoryReconciled", fmt.Sprintf("OCIRepository %s %s", ociRepository.Name, operationResult))
+	r.Recorder.Eventf(deployment, nil, corev1.EventTypeNormal,
+		"OCIRepositoryReconciled", "OCIRepositoryReconciled",
+		fmt.Sprintf("OCIRepository %s %s", ociRepository.Name, operationResult))
 
 	// map the status conditions of the OCIRepository to the ArtifactDeployment
 	r.mapStatusConditions(deployment, ociRepository)
@@ -61,7 +63,11 @@ func (r *OCIRepositoryReconciler) Reconcile(
 }
 
 func (r *OCIRepositoryReconciler) mutateOCIRepository(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource, ociRepository *sourcev1.OCIRepository) error {
+	ctx context.Context,
+	deployment *landscapev1alpha1.ArtifactDeployment,
+	kustomizeResource *fluxcd.KustomizeResource,
+	ociRepository *sourcev1.OCIRepository,
+) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if ociRepository.CreationTimestamp.IsZero() {
