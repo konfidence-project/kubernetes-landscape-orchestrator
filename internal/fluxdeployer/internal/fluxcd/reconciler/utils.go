@@ -42,7 +42,12 @@ func isInsecure(deployment *landscapev1alpha1.ArtifactDeployment) bool {
 	return err == nil && isInsecure // true if insecure is true and no parsing error
 }
 
-func getSecretRef(ctx context.Context, k8sClient client.Client, deployment *landscapev1alpha1.ArtifactDeployment, repositoryString string) (*fluxcd.LocalObjectReference, error) {
+func getSecretRef(
+	ctx context.Context,
+	k8sClient client.Client,
+	deployment *landscapev1alpha1.ArtifactDeployment,
+	repositoryString string,
+) (*fluxcd.LocalObjectReference, error) {
 	log := logf.FromContext(ctx)
 	label, labelErr := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-skip-auth")
 	skipAuth, parseErr := strconv.ParseBool(label)

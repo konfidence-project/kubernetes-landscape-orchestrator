@@ -29,7 +29,9 @@ var (
 
 const VectorAssignmentControllerName = "flux-vector-assignment-controller"
 
-// VectorAssignmentReconciler reconciles VectorAssignment resources where manifest type is either 'cloud.konfidence.flux.kustomize' or 'cloud.konfidence.flux.helm'
+// VectorAssignmentReconciler reconciles VectorAssignment resources where the
+// manifest type is either 'cloud.konfidence.flux.kustomize' or
+// 'cloud.konfidence.flux.helm'.
 type VectorAssignmentReconciler struct {
 	client.Client
 	Recorder events.EventRecorder
@@ -121,7 +123,11 @@ func (r *VectorAssignmentReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	return ctrl.Result{}, nil
 }
 
-func (r *VectorAssignmentReconciler) ensureAppNameService(ctx context.Context, assignment *landscapev1alpha1.VectorAssignment, route ServiceRouteResult) (*corev1.Service, error) {
+func (r *VectorAssignmentReconciler) ensureAppNameService(
+	ctx context.Context,
+	assignment *landscapev1alpha1.VectorAssignment,
+	route ServiceRouteResult,
+) (*corev1.Service, error) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      route.Name,
@@ -153,10 +159,20 @@ func (r *VectorAssignmentReconciler) ensureAppNameService(ctx context.Context, a
 	return svc, nil
 }
 
-func (r *VectorAssignmentReconciler) ensureHTTPRoute(ctx context.Context, assignment *landscapev1alpha1.VectorAssignment, svc *corev1.Service, route ServiceRouteResult) error {
+func (r *VectorAssignmentReconciler) ensureHTTPRoute(
+	ctx context.Context,
+	assignment *landscapev1alpha1.VectorAssignment,
+	svc *corev1.Service,
+	route ServiceRouteResult,
+) error {
 	httpRoute := &gatewayv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s-%s", route.Name, assignment.Spec.VectorDeploymentRef.Name, assignment.Spec.ArtifactDeploymentRef.Name),
+			Name: fmt.Sprintf(
+				"%s-%s-%s",
+				route.Name,
+				assignment.Spec.VectorDeploymentRef.Name,
+				assignment.Spec.ArtifactDeploymentRef.Name,
+			),
 			Namespace: route.Service.Namespace,
 		},
 	}
@@ -193,7 +209,9 @@ func (r *VectorAssignmentReconciler) ensureHTTPRoute(ctx context.Context, assign
 									Kind:      &gatewayv1ServiceKind,
 									Namespace: toNamespace(route.Service.Namespace),
 									Name:      gatewayv1.ObjectName(route.Service.K8sName),
-									Port:      toPort(route.Service.ServicePorts[0].Port), // TODO (karsten / 2025-12-04): support multiple ports? this needs one HTTPRoute per port then
+									// TODO (karsten / 2025-12-04): support multiple ports.
+									// This needs one HTTPRoute per port.
+									Port: toPort(route.Service.ServicePorts[0].Port),
 								},
 							},
 						},

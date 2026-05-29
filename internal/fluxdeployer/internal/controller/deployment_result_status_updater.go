@@ -55,14 +55,19 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 	return nil
 }
 
-func (s *DeploymentResultStatusUpdater) fetchExposableServices(ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment) (*corev1.ServiceList, error) {
+func (s *DeploymentResultStatusUpdater) fetchExposableServices(
+	ctx context.Context,
+	deployment *landscapev1alpha1.ArtifactDeployment,
+) (*corev1.ServiceList, error) {
 	serviceLabelSelector := &metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"konfidence.cloud/artifact-deployment": utils.SanitizeK8sResourceName(deployment.Name),
 		},
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
-				// TODO (sascha 05.12.25): konfidence specific label "konfidence.cloud/appname" in deployment-manifests (Helm-charts, kustomize) has to be removed. Solution comes with https://github.com/konfidence-project/konfidence-project/issues/299
+				// TODO (sascha 05.12.25): remove the konfidence-specific
+				// "konfidence.cloud/appname" label from deployment manifests.
+				// Solution comes with issue #299 in konfidence-project.
 				Key:      "konfidence.cloud/appname",
 				Operator: metav1.LabelSelectorOpExists,
 			},

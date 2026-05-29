@@ -51,14 +51,26 @@ func (r *HelmRepositoryReconciler) Reconcile(
 	if err != nil {
 		return false, fmt.Errorf("failed to reconcile HelmRepository: %w", err)
 	}
-	r.Recorder.Eventf(deployment, nil, corev1.EventTypeNormal, "HelmRepositoryReconciled", "HelmRepositoryReconciled", fmt.Sprintf("HelmRepository %s %s", helmRepository.Name, operationResult))
+	msg := fmt.Sprintf("HelmRepository %s %s", helmRepository.Name, operationResult)
+	r.Recorder.Eventf(
+		deployment,
+		nil,
+		corev1.EventTypeNormal,
+		"HelmRepositoryReconciled",
+		"HelmRepositoryReconciled",
+		msg,
+	)
 	// HelmRepository itself has no status conditions; cannot map it to ArtifactDeployment status conditions
 
 	return true, nil
 }
 
 func (r *HelmRepositoryReconciler) mutateHelmRepository(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource, helmRepository *sourcev1.HelmRepository) error {
+	ctx context.Context,
+	deployment *landscapev1alpha1.ArtifactDeployment,
+	helmChartResource *fluxcd.HelmChartResource,
+	helmRepository *sourcev1.HelmRepository,
+) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if helmRepository.CreationTimestamp.IsZero() {

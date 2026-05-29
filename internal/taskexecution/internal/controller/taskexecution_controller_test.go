@@ -20,10 +20,22 @@ var _ = Describe("TaskExecution Controller", func() {
 	const (
 		TaskExecution     = "task-execution-001"
 		TaskExecutionType = "k8s-job"
-		TaskExecutionSpec = "{\"template\": {\"spec\": {\"containers\": [ {\"name\": \"task-execution-001\",\"image\": \"busybox\",\"command\": [\"echo\",\"I am task 1 of service 1\"]}],\"restartPolicy\": \"Never\"}},\"backoffLimit\": 4}"
-		Namespace         = "default"
-		timeout           = time.Second * 10
-		interval          = time.Millisecond * 250
+		TaskExecutionSpec = `{
+			"template": {
+				"spec": {
+					"containers": [{
+						"name": "task-execution-001",
+						"image": "busybox",
+						"command": ["echo", "I am task 1 of service 1"]
+					}],
+					"restartPolicy": "Never"
+				}
+			},
+			"backoffLimit": 4
+		}`
+		Namespace = "default"
+		timeout   = time.Second * 10
+		interval  = time.Millisecond * 250
 	)
 
 	BeforeEach(func() {
