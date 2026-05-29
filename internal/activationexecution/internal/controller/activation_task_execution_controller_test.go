@@ -83,7 +83,10 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				Name: ServiceName1,
 				Type: HttpActivationTaskExecutionType,
 				Spec: runtime.RawExtension{
-					Raw: []byte(fmt.Sprintf("{\"K8sName\": \"%s\", \"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}", ServiceName1, HttpRouteName1, ServicePort1)),
+					Raw: []byte(fmt.Sprintf(
+						"{\"K8sName\": \"%s\", \"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}",
+						ServiceName1, HttpRouteName1, ServicePort1,
+					)),
 				},
 			}
 
@@ -91,7 +94,10 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				Name: ServiceName2,
 				Type: HttpActivationTaskExecutionType,
 				Spec: runtime.RawExtension{
-					Raw: []byte(fmt.Sprintf("{\"K8sName\": \"%s\", \"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}", ServiceName2, HttpRouteName2, ServicePort2)),
+					Raw: []byte(fmt.Sprintf(
+						"{\"K8sName\": \"%s\", \"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}",
+						ServiceName2, HttpRouteName2, ServicePort2,
+					)),
 				},
 			}
 
@@ -105,7 +111,10 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				g.Expect(vectorDeployment.Status.DeploymentResults).To(HaveLen(2))
 			}, timeout, interval).Should(Succeed())
 
-			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace, ActivationTaskExecutionType, ActivationTaskExecutionSpec, VectorActivation)
+			testutil.CreateActivationTaskExecution(
+				ctx, k8sClient, ActivationTaskExecution, Namespace,
+				ActivationTaskExecutionType, ActivationTaskExecutionSpec, VectorActivation,
+			)
 
 			// check that the activationTaskExecution has been created and has valid properties
 			activationTaskExecution := &landscape.ActivationTaskExecution{}
@@ -121,54 +130,12 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			port1 := int32(ServicePort1)
 			httpRoute1 := &gwapiv1.HTTPRoute{}
 			httpRouteLookupKey1 := types.NamespacedName{Name: HttpRouteName1, Namespace: Namespace}
-			Eventually(func(g Gomega) {
-				g.Expect(k8sClient.Get(ctx, httpRouteLookupKey1, httpRoute1)).To(Succeed())
-				g.Expect(httpRoute1.Spec.CommonRouteSpec.ParentRefs).To(HaveLen(1))
-				g.Expect(httpRoute1.Spec.CommonRouteSpec.ParentRefs[0].Name).To(Equal(gwapiv1.ObjectName(GatewayName)))
-				g.Expect(httpRoute1.Spec.Hostnames).To(HaveLen(1))
-				g.Expect(httpRoute1.Spec.Hostnames[0]).To(Equal(gwapiv1.Hostname(HostName1)))
-				g.Expect(httpRoute1.Spec.Rules).To(HaveLen(1))
-				g.Expect(httpRoute1.Spec.Rules[0].Filters).To(HaveLen(1))
-				g.Expect(httpRoute1.Spec.Rules[0].Filters[0].Type).To(Equal(gwapiv1.HTTPRouteFilterRequestHeaderModifier))
-				g.Expect(httpRoute1.Spec.Rules[0].Filters[0].RequestHeaderModifier).To(Not(BeNil()))
-				g.Expect(httpRoute1.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add).To(HaveLen(1))
-				g.Expect(httpRoute1.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Name).To(Equal(gwapiv1.HTTPHeaderName(XVectorId)))
-				g.Expect(httpRoute1.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Value).To(Equal(VectorDeployment))
-				g.Expect(httpRoute1.Spec.Rules[0].BackendRefs).To(HaveLen(1))
-				g.Expect(httpRoute1.Spec.Rules[0].BackendRefs[0].BackendRef.Name).To(Equal(gwapiv1.ObjectName(ServiceName1)))
-				g.Expect(httpRoute1.Spec.Rules[0].BackendRefs[0].BackendRef.Port).To(Equal(&port1))
-				g.Expect(httpRoute1.GetOwnerReferences()).To(HaveLen(1))
-				g.Expect(testutil.HasOwnerReference(httpRoute1.GetOwnerReferences(), metav1.OwnerReference{
-					Kind: landscape.VectorActivationKind,
-					Name: VectorActivation,
-				})).To(BeTrue())
-			}, timeout, interval).Should(Succeed())
+			verifyHTTPRoute(ctx, httpRouteLookupKey1, httpRoute1, GatewayName, HostName1, ServiceName1, VectorDeployment, VectorActivation, &port1, timeout, interval)
 
 			httpRoute2 := &gwapiv1.HTTPRoute{}
 			httpRouteLookupKey2 := types.NamespacedName{Name: HttpRouteName2, Namespace: Namespace}
 			port2 := int32(ServicePort2)
-			Eventually(func(g Gomega) {
-				g.Expect(k8sClient.Get(ctx, httpRouteLookupKey2, httpRoute2)).To(Succeed())
-				g.Expect(httpRoute2.Spec.CommonRouteSpec.ParentRefs).To(HaveLen(1))
-				g.Expect(httpRoute2.Spec.CommonRouteSpec.ParentRefs[0].Name).To(Equal(gwapiv1.ObjectName(GatewayName)))
-				g.Expect(httpRoute2.Spec.Hostnames).To(HaveLen(1))
-				g.Expect(httpRoute2.Spec.Hostnames[0]).To(Equal(gwapiv1.Hostname(HostName2)))
-				g.Expect(httpRoute2.Spec.Rules).To(HaveLen(1))
-				g.Expect(httpRoute2.Spec.Rules[0].Filters).To(HaveLen(1))
-				g.Expect(httpRoute2.Spec.Rules[0].Filters[0].Type).To(Equal(gwapiv1.HTTPRouteFilterRequestHeaderModifier))
-				g.Expect(httpRoute2.Spec.Rules[0].Filters[0].RequestHeaderModifier).To(Not(BeNil()))
-				g.Expect(httpRoute2.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add).To(HaveLen(1))
-				g.Expect(httpRoute2.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Name).To(Equal(gwapiv1.HTTPHeaderName(XVectorId)))
-				g.Expect(httpRoute2.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Value).To(Equal(VectorDeployment))
-				g.Expect(httpRoute2.Spec.Rules[0].BackendRefs).To(HaveLen(1))
-				g.Expect(httpRoute2.Spec.Rules[0].BackendRefs[0].BackendRef.Name).To(Equal(gwapiv1.ObjectName(ServiceName2)))
-				g.Expect(httpRoute2.Spec.Rules[0].BackendRefs[0].BackendRef.Port).To(Equal(&port2))
-				g.Expect(httpRoute2.GetOwnerReferences()).To(HaveLen(1))
-				g.Expect(testutil.HasOwnerReference(httpRoute2.GetOwnerReferences(), metav1.OwnerReference{
-					Kind: landscape.VectorActivationKind,
-					Name: VectorActivation,
-				})).To(BeTrue())
-			}, timeout, interval).Should(Succeed())
+			verifyHTTPRoute(ctx, httpRouteLookupKey2, httpRoute2, GatewayName, HostName2, ServiceName2, VectorDeployment, VectorActivation, &port2, timeout, interval)
 
 			// check that the activationTaskExecution has been marked as successful
 			Eventually(func(g Gomega) {
@@ -179,3 +146,40 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		})
 	})
 })
+
+func verifyHTTPRoute(
+	ctx context.Context,
+	lookupKey types.NamespacedName,
+	route *gwapiv1.HTTPRoute,
+	gatewayName string,
+	hostname string,
+	serviceName string,
+	vectorDeployment string,
+	vectorActivation string,
+	port *gwapiv1.PortNumber,
+	timeout time.Duration,
+	interval time.Duration,
+) {
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, lookupKey, route)).To(Succeed())
+		g.Expect(route.Spec.CommonRouteSpec.ParentRefs).To(HaveLen(1))
+		g.Expect(route.Spec.CommonRouteSpec.ParentRefs[0].Name).To(Equal(gwapiv1.ObjectName(gatewayName)))
+		g.Expect(route.Spec.Hostnames).To(HaveLen(1))
+		g.Expect(route.Spec.Hostnames[0]).To(Equal(gwapiv1.Hostname(hostname)))
+		g.Expect(route.Spec.Rules).To(HaveLen(1))
+		g.Expect(route.Spec.Rules[0].Filters).To(HaveLen(1))
+		g.Expect(route.Spec.Rules[0].Filters[0].Type).To(Equal(gwapiv1.HTTPRouteFilterRequestHeaderModifier))
+		g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier).To(Not(BeNil()))
+		g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add).To(HaveLen(1))
+		g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Name).To(Equal(gwapiv1.HTTPHeaderName(XVectorId)))
+		g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Value).To(Equal(vectorDeployment))
+		g.Expect(route.Spec.Rules[0].BackendRefs).To(HaveLen(1))
+		g.Expect(route.Spec.Rules[0].BackendRefs[0].BackendRef.Name).To(Equal(gwapiv1.ObjectName(serviceName)))
+		g.Expect(route.Spec.Rules[0].BackendRefs[0].BackendRef.Port).To(Equal(port))
+		g.Expect(route.GetOwnerReferences()).To(HaveLen(1))
+		g.Expect(testutil.HasOwnerReference(route.GetOwnerReferences(), metav1.OwnerReference{
+			Kind: landscape.VectorActivationKind,
+			Name: vectorActivation,
+		})).To(BeTrue())
+	}, timeout, interval).Should(Succeed())
+}

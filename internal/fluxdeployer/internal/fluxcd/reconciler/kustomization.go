@@ -57,7 +57,9 @@ func (r *KustomizationReconciler) Reconcile(
 	if err != nil {
 		return false, fmt.Errorf("failed to reconcile Kustomization: %w", err)
 	}
-	r.Recorder.Eventf(deployment, nil, corev1.EventTypeNormal, "ReconciledKustomization", "ReconciledKustomization", fmt.Sprintf("Kustomization %s %s", kustomization.Name, operationResult))
+	r.Recorder.Eventf(deployment, nil, corev1.EventTypeNormal,
+		"ReconciledKustomization", "ReconciledKustomization",
+		fmt.Sprintf("Kustomization %s %s", kustomization.Name, operationResult))
 
 	// map the status conditions of the Kustomization to the ArtifactDeployment
 	r.mapStatusConditions(deployment, kustomization)
@@ -65,7 +67,12 @@ func (r *KustomizationReconciler) Reconcile(
 	return meta.IsStatusConditionTrue(kustomization.Status.Conditions, conditionTypeReady), nil
 }
 
-func (r *KustomizationReconciler) mutateKustomization(ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource, kustomization *kustomizev1.Kustomization) error {
+func (r *KustomizationReconciler) mutateKustomization(
+	ctx context.Context,
+	deployment *landscapev1alpha1.ArtifactDeployment,
+	kustomizeResource *fluxcd.KustomizeResource,
+	kustomization *kustomizev1.Kustomization,
+) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if kustomization.CreationTimestamp.IsZero() {

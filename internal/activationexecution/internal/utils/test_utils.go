@@ -14,7 +14,10 @@ import (
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-func CreateActivationTaskExecution(ctx context.Context, k8sClient client.Client, name string, namespace string, specType string, executionSpec string, vectorActivation string) {
+func CreateActivationTaskExecution(
+	ctx context.Context, k8sClient client.Client,
+	name string, namespace string, specType string, executionSpec string, vectorActivation string,
+) {
 	activationTaskExecution := &landscape.ActivationTaskExecution{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "star.konfidence.cloud/v1alpha1",
@@ -85,7 +88,10 @@ func CleanupHttpRoutes(k8sClient client.Client) {
 	}
 }
 
-func CreateVectorActivation(ctx context.Context, k8sClient client.Client, name string, namespace string, stageName string, stageVersionName, vectorName string, vectorDeploymentName string) {
+func CreateVectorActivation(
+	ctx context.Context, k8sClient client.Client,
+	name string, namespace string, stageName string, stageVersionName, vectorName string, vectorDeploymentName string,
+) {
 	vectorActivation := &landscape.VectorActivation{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "common.konfidence.cloud/v1alpha1",

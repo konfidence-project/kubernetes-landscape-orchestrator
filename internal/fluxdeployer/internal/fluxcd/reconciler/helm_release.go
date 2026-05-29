@@ -62,7 +62,12 @@ func (r *HelmReleaseReconciler) Reconcile(
 	return meta.IsStatusConditionTrue(helmRelease.Status.Conditions, conditionTypeReady), nil
 }
 
-func (r *HelmReleaseReconciler) mutateHelmRelease(ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource, helmRelease *helmv2.HelmRelease) error {
+func (r *HelmReleaseReconciler) mutateHelmRelease(
+	ctx context.Context,
+	deployment *landscapev1alpha1.ArtifactDeployment,
+	helmChartResource *fluxcd.HelmChartResource,
+	helmRelease *helmv2.HelmRelease,
+) error {
 
 	// set owner reference (with controller:=true) if newly created
 	if helmRelease.CreationTimestamp.IsZero() {

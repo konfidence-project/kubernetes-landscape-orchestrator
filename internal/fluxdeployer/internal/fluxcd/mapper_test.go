@@ -10,13 +10,22 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 )
 
+const (
+	helmChartType     = "helmChart"
+	kustomizeType     = "kustomize"
+	ociArtifactType   = "ociArtifact"
+	imageReferenceKey = "imageReference"
+	podinfoHelmName   = "podinfo-helm"
+	contentTypeKey    = "type"
+)
+
 func TestToHelm_OCIArtifact(t *testing.T) {
 	res := v1alpha1.OCMResource{
-		Name: "podinfo-helm",
-		Type: "helmChart",
+		Name: podinfoHelmName,
+		Type: helmChartType,
 		Content: rawJSON(t, map[string]interface{}{
-			"type":           "ociArtifact",
-			"imageReference": "host.docker.internal:5000/helm-charts/podinfo:6.9.1",
+			contentTypeKey:    ociArtifactType,
+			imageReferenceKey: "host.docker.internal:5000/helm-charts/podinfo:6.9.1",
 		}),
 	}
 
@@ -30,10 +39,10 @@ func TestToHelm_OCIArtifact(t *testing.T) {
 
 func TestToHelm_HelmRepository(t *testing.T) {
 	res := v1alpha1.OCMResource{
-		Name: "podinfo-helm",
-		Type: "helmChart",
+		Name: podinfoHelmName,
+		Type: helmChartType,
 		Content: rawJSON(t, map[string]interface{}{
-			"type":           "helm",
+			contentTypeKey:   "helm",
 			"helmChart":      "podinfo:6.9.1",
 			"helmRepository": "https://stefanprodan.github.io/podinfo",
 		}),
@@ -49,10 +58,10 @@ func TestToHelm_HelmRepository(t *testing.T) {
 
 func TestToHelm_HelmRepository_SeparateFields(t *testing.T) {
 	res := v1alpha1.OCMResource{
-		Name: "podinfo-helm",
-		Type: "helmChart",
+		Name: podinfoHelmName,
+		Type: helmChartType,
 		Content: rawJSON(t, map[string]interface{}{
-			"type":           "helm",
+			contentTypeKey:   "helm",
 			"helmChart":      "podinfo",
 			"version":        "6.9.1",
 			"helmRepository": "https://repo",
@@ -68,7 +77,7 @@ func TestToHelm_HelmRepository_SeparateFields(t *testing.T) {
 
 func TestToHelm_InvalidType(t *testing.T) {
 	res := v1alpha1.OCMResource{
-		Type: "kustomize",
+		Type: kustomizeType,
 	}
 
 	_, err := fluxcd.Map(res).ToHelm()
@@ -77,10 +86,10 @@ func TestToHelm_InvalidType(t *testing.T) {
 
 func TestToHelm_InvalidOCIReference(t *testing.T) {
 	res := v1alpha1.OCMResource{
-		Type: "helmChart",
+		Type: helmChartType,
 		Content: rawJSON(t, map[string]interface{}{
-			"type":           "ociArtifact",
-			"imageReference": "not-a-valid-ref",
+			contentTypeKey:    ociArtifactType,
+			imageReferenceKey: "not-a-valid-ref",
 		}),
 	}
 
@@ -91,10 +100,10 @@ func TestToHelm_InvalidOCIReference(t *testing.T) {
 func TestToKustomize_OCIArtifact(t *testing.T) {
 	res := v1alpha1.OCMResource{
 		Name: "podinfo-kustomize",
-		Type: "kustomize",
+		Type: kustomizeType,
 		Content: rawJSON(t, map[string]interface{}{
-			"type":           "ociArtifact",
-			"imageReference": "demo.goharbor.io/kden-test/kustomize/podinfo:v0.1.0",
+			contentTypeKey:    ociArtifactType,
+			imageReferenceKey: "demo.goharbor.io/kden-test/kustomize/podinfo:v0.1.0",
 		}),
 	}
 
@@ -108,7 +117,7 @@ func TestToKustomize_OCIArtifact(t *testing.T) {
 
 func TestToKustomize_InvalidType(t *testing.T) {
 	res := v1alpha1.OCMResource{
-		Type: "helmChart",
+		Type: helmChartType,
 	}
 
 	_, err := fluxcd.Map(res).ToKustomize()
@@ -117,10 +126,10 @@ func TestToKustomize_InvalidType(t *testing.T) {
 
 func TestToKustomize_InvalidOCIReference(t *testing.T) {
 	res := v1alpha1.OCMResource{
-		Type: "kustomize",
+		Type: kustomizeType,
 		Content: rawJSON(t, map[string]interface{}{
-			"type":           "ociArtifact",
-			"imageReference": "invalid-ref",
+			contentTypeKey:    ociArtifactType,
+			imageReferenceKey: "invalid-ref",
 		}),
 	}
 

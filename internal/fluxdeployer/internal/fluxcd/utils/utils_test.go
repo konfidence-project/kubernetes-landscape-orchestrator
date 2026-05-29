@@ -6,6 +6,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	myResource            = "my-resource"
+	exampleComWithPort    = "example.com:8080"
+	exampleCom            = "example.com"
+	konfidenceDeployLabel = "konfidence.cloud/deployment"
+	deploymentLabel       = "deployment"
+	myDeployment          = "my-deployment"
+)
+
 func TestSanitizeK8sResourceName(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -14,8 +23,8 @@ func TestSanitizeK8sResourceName(t *testing.T) {
 	}{
 		{
 			name:     "simple valid name",
-			input:    "my-resource",
-			expected: "my-resource",
+			input:    myResource,
+			expected: myResource,
 		},
 		{
 			name:     "uppercase letters",
@@ -30,7 +39,7 @@ func TestSanitizeK8sResourceName(t *testing.T) {
 		{
 			name:     "leading and trailing invalid chars",
 			input:    "_my-resource_",
-			expected: "my-resource",
+			expected: myResource,
 		},
 		{
 			name:     "name too long",
@@ -78,22 +87,22 @@ func TestParseHostnameWithPortFromURL(t *testing.T) {
 		{
 			name:     "hostname with port and path",
 			input:    "example.com:8080/path/to/resource",
-			expected: "example.com:8080",
+			expected: exampleComWithPort,
 		},
 		{
 			name:     "hostname without port",
 			input:    "example.com/path/to/resource",
-			expected: "example.com",
+			expected: exampleCom,
 		},
 		{
 			name:     "hostname with port only",
-			input:    "example.com:8080",
-			expected: "example.com:8080",
+			input:    exampleComWithPort,
+			expected: exampleComWithPort,
 		},
 		{
 			name:     "hostname only",
-			input:    "example.com",
-			expected: "example.com",
+			input:    exampleCom,
+			expected: exampleCom,
 		},
 		{
 			name:     "localhost with port",
@@ -123,18 +132,18 @@ func TestGetKonfidenceLabel(t *testing.T) {
 			name: "valid label exists",
 			input: &metav1.ObjectMeta{
 				Labels: map[string]string{
-					"konfidence.cloud/deployment": "my-deployment",
-					"konfidence.cloud/version":    "v1.0.0",
+					konfidenceDeployLabel:      myDeployment,
+					"konfidence.cloud/version": "v1.0.0",
 				},
 			},
-			label:    "deployment",
-			expected: "my-deployment",
+			label:    deploymentLabel,
+			expected: myDeployment,
 		},
 		{
 			name: "label does not exist",
 			input: &metav1.ObjectMeta{
 				Labels: map[string]string{
-					"konfidence.cloud/deployment": "my-deployment",
+					konfidenceDeployLabel: myDeployment,
 				},
 			},
 			label:    "environment",
@@ -145,23 +154,23 @@ func TestGetKonfidenceLabel(t *testing.T) {
 			input: &metav1.ObjectMeta{
 				Labels: map[string]string{},
 			},
-			label:    "deployment",
+			label:    deploymentLabel,
 			expected: "",
 		},
 		{
 			name:     "nil labels map",
 			input:    &metav1.ObjectMeta{},
-			label:    "deployment",
+			label:    deploymentLabel,
 			expected: "",
 		},
 		{
 			name: "label exists but is empty string",
 			input: &metav1.ObjectMeta{
 				Labels: map[string]string{
-					"konfidence.cloud/deployment": "",
+					konfidenceDeployLabel: "",
 				},
 			},
-			label:    "deployment",
+			label:    deploymentLabel,
 			expected: "",
 		},
 		{
@@ -189,10 +198,10 @@ func TestGetKonfidenceLabel(t *testing.T) {
 			name: "case sensitive label matching",
 			input: &metav1.ObjectMeta{
 				Labels: map[string]string{
-					"konfidence.cloud/Deployment": "my-deployment",
+					"konfidence.cloud/Deployment": myDeployment,
 				},
 			},
-			label:    "deployment",
+			label:    deploymentLabel,
 			expected: "",
 		},
 		{
