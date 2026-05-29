@@ -14,7 +14,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func CreateTaskExecution(ctx context.Context, k8sClient client.Client, name string, namespace string, specName string, specType string, dependsOn []string, jobSpec string) {
+func CreateTaskExecution(
+	ctx context.Context, k8sClient client.Client,
+	name string, namespace string, specName string, specType string, dependsOn []string, jobSpec string,
+) {
 	taskExecution := &landscape.TaskExecution{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "star.konfidence.cloud/v1alpha1",

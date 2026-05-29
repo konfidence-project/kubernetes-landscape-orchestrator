@@ -104,7 +104,9 @@ func (r *ActivationTaskExecutionReconciler) Reconcile(ctx context.Context, req c
 	return ctrl.Result{}, err
 }
 
-func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(ctx context.Context, req ctrl.Request, activationTaskExecution *landscape.ActivationTaskExecution) error {
+func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
+	ctx context.Context, req ctrl.Request, activationTaskExecution *landscape.ActivationTaskExecution,
+) error {
 	log := logf.FromContext(ctx)
 	log.Info("Reconciling activationTaskExecution")
 
@@ -146,7 +148,13 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(ctx
 	return nil
 }
 
-func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Context, req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *landscape.VectorActivation, activationTaskExecution *landscape.ActivationTaskExecution) (*gwapiv1.HTTPRoute, error) {
+func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(
+	ctx context.Context,
+	req ctrl.Request,
+	httpRouteConfig HTTPRouteConfig,
+	vectorActivation *landscape.VectorActivation,
+	activationTaskExecution *landscape.ActivationTaskExecution,
+) (*gwapiv1.HTTPRoute, error) {
 	log := logf.FromContext(ctx)
 
 	httpRoute := &gwapiv1.HTTPRoute{}
@@ -178,7 +186,9 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(ctx context.Con
 	return httpRoute, nil
 }
 
-func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *landscape.VectorActivation) (*gwapiv1.HTTPRoute, error) {
+func (r *ActivationTaskExecutionReconciler) constructHttpRoute(
+	req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *landscape.VectorActivation,
+) (*gwapiv1.HTTPRoute, error) {
 	gatewayNamespace := gwapiv1.Namespace(GatewayNamespace)
 	httpRoute := &gwapiv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
@@ -235,7 +245,12 @@ func (r *ActivationTaskExecutionReconciler) constructHttpRoute(req ctrl.Request,
 	return httpRoute, nil
 }
 
-func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(ctx context.Context, req ctrl.Request, activationTaskExecution *landscape.ActivationTaskExecution, vectorActivation *landscape.VectorActivation) ([]HTTPRouteConfig, error) {
+func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(
+	ctx context.Context,
+	req ctrl.Request,
+	activationTaskExecution *landscape.ActivationTaskExecution,
+	vectorActivation *landscape.VectorActivation,
+) ([]HTTPRouteConfig, error) {
 	var httpRouteConfigs []HTTPRouteConfig
 	vectorDeployment := &landscape.VectorDeployment{}
 	if err := r.Get(ctx, types.NamespacedName{Name: vectorActivation.Spec.VectorDeployment, Namespace: req.Namespace}, vectorDeployment); err != nil {
