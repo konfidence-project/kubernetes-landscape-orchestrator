@@ -70,11 +70,11 @@ kubernetes-landscape-orchestrator [--controllers <expr>] [--leader-elect] [--hea
 
 ### Available Controllers
 
-| Name | Description |
+| Flag name | Description |
 |---|---|
-| `flux-deployer` | Deploys Helm charts and Kustomize manifests via FluxCD primitives. |
-| `task-execution` | Reconciles `TaskExecution` resources. |
-| `activation-execution` | Reconciles `ActivationTaskExecution` resources. |
+| `FluxDeployer` | Deploys Helm charts and Kustomize manifests via FluxCD primitives. |
+| `TaskExecution` | Reconciles `TaskExecution` resources. |
+| `ActivationExecution` | Reconciles `ActivationTaskExecution` resources. |
 
 ### `--controllers` Examples
 
