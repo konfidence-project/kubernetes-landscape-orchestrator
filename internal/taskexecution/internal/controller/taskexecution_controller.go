@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,7 +27,7 @@ const TaskExecutionControllerName = "task-execution-controller"
 type TaskExecutionReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=star.konfidence.cloud,resources=taskexecutions,verbs=get;list;watch;create;update;patch;delete
@@ -119,7 +119,14 @@ func (r *TaskExecutionReconciler) createOrGetJob(ctx context.Context, taskExecut
 			return nil, fmt.Errorf("unable to create job: %w", err)
 		}
 		msg := fmt.Sprintf("Created Job %s for TaskExecution %s", newJob.Name, taskExecution.Name)
-		r.Recorder.Event(taskExecution, corev1.EventTypeNormal, "JobCreated", msg)
+		r.Recorder.Eventf(
+			taskExecution,
+			nil,
+			corev1.EventTypeNormal,
+			"JobCreated",
+			"JobCreated",
+			msg,
+		)
 		log.Info(msg)
 
 		return newJob, nil

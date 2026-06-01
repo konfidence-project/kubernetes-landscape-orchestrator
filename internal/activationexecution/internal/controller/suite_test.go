@@ -89,7 +89,7 @@ var _ = BeforeSuite(func() {
 	err = (&ActivationTaskExecutionReconciler{
 		Client:   k8sManager.GetClient(),
 		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor(ActivationTaskExecutionControllerName),
+		Recorder: k8sManager.GetEventRecorder(ActivationTaskExecutionControllerName),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 

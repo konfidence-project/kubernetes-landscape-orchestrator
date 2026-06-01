@@ -14,7 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,7 +30,7 @@ const ActivationTaskExecutionControllerName = "kubernetes-activation-task-execut
 type ActivationTaskExecutionReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 const (
@@ -179,7 +179,14 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(
 			return nil, fmt.Errorf("unable to create httpRoute: %w", err)
 		}
 		msg := fmt.Sprintf("Created httpRoute %s", httpRoute.Name)
-		r.Recorder.Event(activationTaskExecution, corev1.EventTypeNormal, "Created", msg)
+		r.Recorder.Eventf(
+			activationTaskExecution,
+			nil,
+			corev1.EventTypeNormal,
+			"Created",
+			"Created",
+			msg,
+		)
 		log.Info(msg)
 	}
 
