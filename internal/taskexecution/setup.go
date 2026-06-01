@@ -12,7 +12,7 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 	if err := (&internalcontroller.TaskExecutionReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor(internalcontroller.TaskExecutionControllerName),
+		Recorder: mgr.GetEventRecorder(internalcontroller.TaskExecutionControllerName),
 	}).SetupWithManager(mgr); err != nil {
 		logger.Error(err, "unable to create controller", "controller", "TaskExecution")
 		return err

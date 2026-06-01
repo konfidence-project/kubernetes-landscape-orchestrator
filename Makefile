@@ -116,6 +116,10 @@ docker-build: hermit ## Build the container image (local use only).
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/kubernetes-landscape-orchestrator main.go
 	$(CONTAINER_TOOL) build -t $(IMAGE) .
 
+.PHONY: docker-bake
+docker-bake: hermit ## Build the container image with docker buildx bake.
+	$(CONTAINER_TOOL) buildx bake --file docker-bake.hcl
+
 .PHONY: docker-push
 docker-push: ## Push the container image.
 	$(CONTAINER_TOOL) push $(IMAGE)

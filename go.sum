@@ -106,7 +106,7 @@ github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnr
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
 github.com/klauspost/compress v1.18.5 h1:/h1gH5Ce+VWNLSWqPzOVn6XBO+vJbCNGvjoaGBFW2IE=
 github.com/klauspost/compress v1.18.5/go.mod h1:cwPg85FWrGar70rWktvGQj8/hthj3wpl0PGDogxkrSQ=
-github.com/konfidence-project/konfidence v0.0.1 h1:vUBoVpZV5zWwu7xosDd+sqQfkXdkJvvcNOapmwZlbBM=
+github.com/konfidence-project/konfidence v0.0.1 h1:UgTTE4UHb+jusVy8Zm28EWniF7XiVDnMMdEg1B/hJKg=
 github.com/konfidence-project/konfidence v0.0.1/go.mod h1:PRu3DCE8B5qF0EHT/oKHa293j/NIGIpioYUrRbGg9KA=
 github.com/konfidence-project/pkg v0.7.0 h1:BTIJvb5e0adL6gmY9KqzZflDAo4NbMZMKE4OXg+93C8=
 github.com/konfidence-project/pkg v0.7.0/go.mod h1:UwoJoe/bJW5P3zNzEdtnOYjqdQcElzvYefpGU6PocIQ=
