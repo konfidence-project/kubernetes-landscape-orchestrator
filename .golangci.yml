@@ -33,6 +33,12 @@ linters:
   exclusions:
     generated: lax
     rules:
+      # Exclude generated files from all linters
+      - path: "zz_generated\\.deepcopy\\.go"
+        linters:
+          - unused
+          - ineffassign
+          - revive
       - path: "_test\\.go"
         text: "should not use dot imports"
     paths:
