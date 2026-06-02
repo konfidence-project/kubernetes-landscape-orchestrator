@@ -30,12 +30,9 @@ go.work.sum
 # Hermit local cache — not part of the repo
 .hermit/
 
-# Built operator binary
-bin/kubernetes-landscape-orchestrator
-
-# Envtest assets downloaded at test time
-bin/k8s/
-
-# Other binaries
+# bin/ contains tracked Hermit bootstrap links (for example bin/hermit and bin/*.pkg)
+# plus ignored local build outputs and runtime-generated directories (for example bin/ginkgo, bin/manager or bin/k8s/).
+bin/*/
 bin/manager
+bin/kubernetes-landscape-orchestrator
 bin/ginkgo
