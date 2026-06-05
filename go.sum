@@ -108,8 +108,6 @@ github.com/klauspost/compress v1.18.5 h1:/h1gH5Ce+VWNLSWqPzOVn6XBO+vJbCNGvjoaGBF
 github.com/klauspost/compress v1.18.5/go.mod h1:cwPg85FWrGar70rWktvGQj8/hthj3wpl0PGDogxkrSQ=
 github.com/konfidence-project/konfidence v0.0.1 h1:UgTTE4UHb+jusVy8Zm28EWniF7XiVDnMMdEg1B/hJKg=
 github.com/konfidence-project/konfidence v0.0.1/go.mod h1:PRu3DCE8B5qF0EHT/oKHa293j/NIGIpioYUrRbGg9KA=
-github.com/konfidence-project/pkg v0.7.0 h1:BTIJvb5e0adL6gmY9KqzZflDAo4NbMZMKE4OXg+93C8=
-github.com/konfidence-project/pkg v0.7.0/go.mod h1:UwoJoe/bJW5P3zNzEdtnOYjqdQcElzvYefpGU6PocIQ=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
