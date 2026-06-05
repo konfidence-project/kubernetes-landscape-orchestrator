@@ -7,11 +7,11 @@ import (
 
 	fluxcd "github.com/fluxcd/pkg/apis/meta"
 	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	"github.com/konfidence-project/konfidence/pkg/sanitize"
+	"github.com/konfidence-project/konfidence/pkg/secret"
+	"github.com/konfidence-project/konfidence/pkg/url"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/config"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
-	"github.com/konfidence-project/pkg/sanitize"
-	pkgSecret "github.com/konfidence-project/pkg/secret"
-	"github.com/konfidence-project/pkg/url"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -66,7 +66,7 @@ func getSecretRef(
 	}
 
 	// first try to get via default configMap
-	secretNameByConfigMap, err := pkgSecret.GetSecretByConfigMap(ctx, k8sClient, config.DefaultConfigMapName, domain)
+	secretNameByConfigMap, err := secret.GetSecretByConfigMap(ctx, k8sClient, config.DefaultConfigMapName, domain)
 	if err != nil {
 		return nil, err
 	}
