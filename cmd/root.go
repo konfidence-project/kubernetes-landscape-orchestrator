@@ -29,6 +29,7 @@ var (
 var (
 	enableLeaderElection bool
 	probeAddr            string
+	metricsAddr          string
 	controllersSpec      string
 	leaseID              string
 )
@@ -66,6 +67,9 @@ func init() {
 	rootCmd.Flags().BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+
+	rootCmd.Flags().StringVar(&metricsAddr, "metrics-bind-address", ":8080",
+		"The address the metrics endpoint binds to. Set to '0' to disable.")
 
 	rootCmd.Flags().StringVar(&controllersSpec, "controllers", "*",
 		"Comma-separated glob expression selecting which controllers to enable. "+

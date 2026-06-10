@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 func startOperator(cmd *cobra.Command, args []string) error {
@@ -18,6 +19,7 @@ func startOperator(cmd *cobra.Command, args []string) error {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       leaseID,
+		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
