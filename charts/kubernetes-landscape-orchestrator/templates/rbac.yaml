@@ -1,0 +1,78 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "kubernetes-landscape-orchestrator.fullname" . }}-manager
+  labels:
+    {{- include "kubernetes-landscape-orchestrator.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, secrets]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [create, get, list, patch, update, watch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [batch]
+    resources: [jobs/status]
+    verbs: [get]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [httproutes]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [httproutes/status]
+    verbs: [get, patch, update]
+  - apiGroups: [source.toolkit.fluxcd.io]
+    resources: [helmcharts, helmrepositories, ocirepositories]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [helm.toolkit.fluxcd.io]
+    resources: [helmreleases]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [kustomize.toolkit.fluxcd.io]
+    resources: [kustomizations]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [star.konfidence.cloud]
+    resources:
+      - activationtaskexecutions
+      - artifactdeployments
+      - taskexecutions
+      - vectoractivations
+      - vectorassignments
+      - vectordeployments
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [star.konfidence.cloud]
+    resources:
+      - activationtaskexecutions/status
+      - artifactdeployments/status
+      - taskexecutions/status
+      - vectoractivations/status
+      - vectorassignments/status
+      - vectordeployments/status
+    verbs: [get, patch, update]
+  - apiGroups: [star.konfidence.cloud]
+    resources:
+      - artifactdeployments/finalizers
+      - taskexecutions/finalizers
+    verbs: [update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "kubernetes-landscape-orchestrator.fullname" . }}-manager
+  labels:
+    {{- include "kubernetes-landscape-orchestrator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "kubernetes-landscape-orchestrator.fullname" . }}-manager
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "kubernetes-landscape-orchestrator.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
