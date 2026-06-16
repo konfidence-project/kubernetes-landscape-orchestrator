@@ -2,8 +2,12 @@ variable "TAG" {
   default = "dev"
 }
 
+variable "COMMIT_SHA" {
+  default = ""
+}
+
 variable "REGISTRY" {
-  default = "ghcr.io/konfidence-project"
+  default = "ghcr.io"
 }
 
 group "default" {
@@ -14,7 +18,10 @@ target "kubernetes-landscape-orchestrator" {
   context    = "."
   dockerfile = "Dockerfile"
   platforms  = ["linux/amd64", "linux/arm64"]
-  tags       = ["${REGISTRY}/kubernetes-landscape-orchestrator:${TAG}"]
+  tags       = concat(
+    ["${REGISTRY}/konfidence-project/kubernetes-landscape-orchestrator:${TAG}"],
+    COMMIT_SHA != "" ? ["${REGISTRY}/konfidence-project/kubernetes-landscape-orchestrator:${COMMIT_SHA}"] : [],
+  )
 
   secret = ["id=gh_token,env=GH_TOKEN"]
 }
