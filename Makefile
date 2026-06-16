@@ -56,6 +56,13 @@ help: ## Display this help.
 
 ##@ Development
 
+.PHONY: rbac
+rbac: hermit ## generate ClusterRole and include it in Helm chart
+	$(CONTROLLER_GEN) rbac:roleName=landscape-orchestrator-manager crd webhook \
+		paths="./internal/..." \
+		output:rbac:artifacts:config=config/rbac
+		charts/patch-clusterrole.sh kubernetes-landscape-orchestrator "config/rbac/role.yaml" "charts/kubernetes-landscape-orchestrator/templates/clusterrole.yaml"
+
 .PHONY: fmt
 fmt: hermit ## Run go fmt against the entire codebase.
 	go fmt ./...

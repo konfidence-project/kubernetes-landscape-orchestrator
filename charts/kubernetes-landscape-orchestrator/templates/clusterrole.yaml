@@ -2,7 +2,9 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: landscape-orchestrator-manager
+  labels:
+{{- include "kubernetes-landscape-orchestrator.labels" . | nindent 4 }}
+  name: {{ include "kubernetes-landscape-orchestrator.fullname" . }}-manager
 rules:
 - apiGroups:
   - ""
@@ -43,6 +45,33 @@ rules:
   verbs:
   - get
 - apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
   - gateway.networking.k8s.io
   resources:
   - httproutes
@@ -62,20 +91,6 @@ rules:
   - get
   - patch
   - update
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
-  - helmcharts
-  - helmrepositories
-  - ocirepositories
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - helm.toolkit.fluxcd.io
   resources:
@@ -101,13 +116,26 @@ rules:
   - update
   - watch
 - apiGroups:
+  - source.toolkit.fluxcd.io
+  resources:
+  - helmcharts
+  - helmrepositories
+  - ocirepositories
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - star.konfidence.cloud
   resources:
   - activationtaskexecutions
   - artifactdeployments
   - taskexecutions
   - vectoractivations
-  - vectorassignments
   - vectordeployments
   verbs:
   - create
@@ -137,3 +165,11 @@ rules:
   - taskexecutions/finalizers
   verbs:
   - update
+- apiGroups:
+  - star.konfidence.cloud
+  resources:
+  - vectorassignments
+  verbs:
+  - get
+  - list
+  - watch
