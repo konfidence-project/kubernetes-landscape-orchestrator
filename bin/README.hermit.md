@@ -1,4 +1,4 @@
-# Hermit environment
+REA# Hermit environment
 
 This is a [Hermit](https://github.com/cashapp/hermit) bin directory.
 

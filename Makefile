@@ -36,6 +36,8 @@ KUSTOMIZE      ?= kustomize
 CONTROLLER_GEN ?= controller-gen
 ENVTEST        ?= setup-envtest
 GOLANGCI_LINT   = golangci-lint
+HELM           ?= helm
+HELM_DOCS      ?= helm-docs
 
 ## Tool Binaries (Testing)
 GINKGO ?= $(LOCALBIN)/ginkgo
@@ -147,3 +149,17 @@ install-git-hooks: hermit ## Install git hooks via prek.
 uninstall-git-hooks: hermit ## Uninstall git hooks via prek.
 	@echo "Uninstalling prek (pre-commit) git hooks..."
 	prek uninstall
+
+##@ Helm
+
+.PHONY: helm-install
+helm-install: hermit ## Install the landscape-orchestrator chart into the current cluster.
+	$(HELM) upgrade --install kubernetes-landscape-orchestrator charts/kubernetes-landscape-orchestrator
+
+.PHONY: helm-uninstall
+helm-uninstall: hermit ## Uninstall the landscape-orchestrator helm release.
+	$(HELM) uninstall kubernetes-landscape-orchestrator --ignore-not-found
+
+.PHONY: helm-docs
+helm-docs: hermit ## Generate Helm chart documentation (charts/*/README.md).
+	$(HELM_DOCS) --chart-search-root charts

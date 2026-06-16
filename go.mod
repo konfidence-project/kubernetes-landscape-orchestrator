@@ -9,8 +9,8 @@ require (
 	github.com/fluxcd/pkg/apis/meta v1.29.0
 	github.com/fluxcd/source-controller/api v1.8.5
 	github.com/go-logr/logr v1.4.3
-	github.com/konfidence-project/konfidence v0.0.0-20260611083340-6980cfab00e6
-	github.com/onsi/ginkgo/v2 v2.29.0
+	github.com/konfidence-project/konfidence v0.0.0-20260612104600-2cf825c231b5
+    github.com/onsi/ginkgo/v2 v2.29.0
 	github.com/onsi/gomega v1.41.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1

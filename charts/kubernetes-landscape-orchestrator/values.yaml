@@ -1,0 +1,117 @@
+# -- Forwarded as flags to the operator binary.
+controller:
+  # -- Comma-separated list of sub-controllers, or `*` for all.
+  # Examples: `"FluxDeployer"`, `"!FluxDeployer,*"` (all except), `"Task*"`.
+  controllers: "*"
+  # -- Enable leader election for the controller.
+  leaderElection: true
+  # -- Lease ID used for leader election.
+  leaseId: "orchestrator.konfidence.cloud"
+  # -- Bind address for the health probe endpoint.
+  healthProbeBindAddress: ":8081"
+  # -- Bind address for the Prometheus `/metrics` endpoint. Set to `"0"` to
+  # disable the metrics server entirely (also suppresses the metrics
+  # container port, Service, and ServiceMonitor).
+  metricsBindAddress: ":8080"
+
+# -- Override the chart name used in resource names.
+nameOverride: ""
+# -- Override the fully-qualified app name used in resource names.
+fullnameOverride: ""
+
+# -- Prometheus Operator ServiceMonitor for the controller's `/metrics`
+# endpoint. Requires the `monitoring.coreos.com` CRDs to be installed in
+# the cluster; off by default.
+serviceMonitor:
+  # -- Enable the ServiceMonitor resource.
+  enabled: false
+  # -- Namespace to create the ServiceMonitor in. Defaults to the release
+  # namespace. Override when your Prometheus instance only watches a
+  # specific namespace.
+  namespace: ""
+  # -- Extra labels merged onto the ServiceMonitor — typically the label
+  # selector your Prometheus instance uses (e.g. `release: kube-prometheus`).
+  labels: {}
+  # -- Scrape interval.
+  interval: 30s
+  # -- Scrape timeout.
+  scrapeTimeout: 10s
+  # -- Relabeling rules applied to scraped samples before ingestion.
+  relabelings: []
+  # -- Metric relabeling rules applied after scraping.
+  metricRelabelings: []
+
+image:
+  # -- Image repository.
+  repository: ghcr.io/konfidence-project/kubernetes-landscape-orchestrator
+  # -- Image tag. Defaults to `.Chart.AppVersion` when empty.
+  tag: ""
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets for private registries.
+imagePullSecrets: []
+
+# -- Number of controller replicas. Use `>= 2` with `controller.leaderElection: true` for HA.
+replicas: 1
+
+# -- PodDisruptionBudget for the controller. Only meaningful when running
+# `replicas >= 2` (with leader election a single active replica handles
+# reconciliation; the others stand by). Disabled by default to match the
+# default `replicas: 1`.
+podDisruptionBudget:
+  # -- Enable the PodDisruptionBudget.
+  enabled: false
+  # -- Minimum number of pods that must be available. Set exactly one of
+  # `minAvailable` or `maxUnavailable`. Accepts an integer or percentage string (e.g. `"50%"`).
+  minAvailable: ~
+  # -- Maximum number of pods that may be unavailable. Accepts an integer or percentage string (e.g. `"50%"`).
+  maxUnavailable: 1
+
+# -- Resource requests and limits for the controller container.
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+serviceAccount:
+  # -- Create a ServiceAccount for the controller.
+  create: true
+  # -- Name of the ServiceAccount to use. Defaults to the fully-qualified app name when empty.
+  name: ""
+  # -- Annotations to add to the ServiceAccount.
+  annotations: {}
+
+# -- Annotations to add to the controller Pod.
+podAnnotations: {}
+# -- Labels to add to the controller Pod.
+podLabels: {}
+
+# -- Additional environment variables to set on the controller container.
+env: []
+# -- Additional command-line arguments to pass to the controller binary.
+extraArgs: []
+
+# -- Pod-level security context.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container-level security context.
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+# -- Node selector for the controller Pod.
+nodeSelector: {}
+# -- Tolerations for the controller Pod.
+tolerations: []
+# -- Affinity rules for the controller Pod.
+affinity: {}
