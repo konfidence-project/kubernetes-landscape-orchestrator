@@ -6,11 +6,11 @@
 # metadata block carries the chart labels, and whose document is wrapped
 # in a `controller.install` guard.
 #
-# Usage: patch-rbac.sh <chart-name> <src.yaml> <dst.yaml>
+# Usage: patch-clusterrole.sh <chart-name> <src.yaml> <dst.yaml>
 #
-# Example (regenerate the star ClusterRole after `make manifests-star`):
-#   charts/patch-rbac.sh star "config/rbac/star/role.yaml" \
-#       "charts/star/templates/role.yaml"
+# Example (regenerate the ClusterRole):
+#   charts/patch-clusterrole.sh kubernetes-landscape-orchestrator "config/rbac/role.yaml" \
+#       "charts/templates/clusterrole.yaml"
 
 set -euo pipefail
 
