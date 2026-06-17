@@ -1,0 +1,91 @@
+version: 2
+
+project_name: kubernetes-landscape-orchestrator
+
+retry:
+  # Set max retry count.
+  # Setting to 1 disables retries (single attempt).
+  #
+  # Default: 10
+  attempts: 5
+
+  # Set delay between retry
+  #
+  # Default: 10s
+  delay: 10s
+
+  # Default: 5m
+  max_delay: 3m
+
+snapshot:
+  version_template: '{{ .Env.GORELEASER_CURRENT_TAG }}'
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: kubernetes-landscape-orchestrator
+    binary: kubernetes-landscape-orchestrator
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: amd64
+    ldflags:
+      - -s -w -X github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/build.Version={{.Version}} -X github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/build.GitCommit={{.Commit}}
+
+archives:
+  - id: kubernetes-landscape-orchestrator
+    ids: [kubernetes-landscape-orchestrator]
+    formats: [none]
+
+checksum:
+  name_template: checksums.txt
+
+dockers_v2:
+  - id: kubernetes-landscape-orchestrator
+    ids: [kubernetes-landscape-orchestrator]
+    dockerfile: Dockerfile
+    images:
+      - ghcr.io/konfidence-project/kubernetes-landscape-orchestrator
+    tags:
+      - "{{ .Version }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: "Features"
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "Bug Fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: "Performance Improvements"
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: "Maintenance"
+      regexp: '^.*?chore(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: "Other Changes"
+      order: 999
+  filters:
+    exclude:
+      - '^.*?chore\(release\):.+$'
+      - "^docs:"
+      - "^test:"
+      - '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+      - '^.*?build(\([[:word:]]+\))??!?:.+$'
+      - '^.*?style(\([[:word:]]+\))??!?:.+$'
+      - '^.*?ci(\([[:word:]]+\))??!?:.+$'
