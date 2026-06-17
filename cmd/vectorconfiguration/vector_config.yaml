@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector1
+  namespace: default
+data:
+  features.json: |
+    {
+      "enableBeta": true,
+      "maxUsers": 150,
+      "ratio": 4.6,
+      "title": "TestLabel"  
+    }
+  authored.json: |
+    {
+      "database": {
+        "host": "mysql-service",
+        "port": 3306
+      }    
+    }
+  deploymentResults.orders-db.json: |
+    {
+      "result": "something"
+    }

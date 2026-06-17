@@ -91,7 +91,8 @@ test: hermit generate-test-crds fmt vet setup-envtest ginkgo ## Run all unit tes
 		$(GINKGO) --coverprofile=cover.out -v \
 		./internal/fluxdeployer/... \
 		./internal/taskexecution/... \
-		./internal/activationexecution/...
+		./internal/activationexecution/... \
+		./cmd/vectorconfiguration/...
 
 .PHONY: generate-test-crds
 generate-test-crds: hermit ## Generate CRDs needed for controller tests.
