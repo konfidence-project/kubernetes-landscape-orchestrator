@@ -21,8 +21,11 @@
 # What it does (tag <value>):
 #   1. Validates the working tree is clean.
 #   2. Validates the tag value matches X.Y.Z-<suffix> (e.g. 1.0.0-rc.1).
-#   3. Creates an annotated git tag — no Chart.yaml changes, no commit.
-#   4. Runs `git push origin refs/tags/<value>`.
+#   3. Updates both `appVersion` and `version` to the tag value in
+#      charts/kubernetes-landscape-orchestrator/Chart.yaml.
+#   4. Creates a conventional commit: chore(release): X.Y.Z-<suffix>.
+#   5. Creates an annotated git tag X.Y.Z-<suffix>.
+#   6. Runs `git push` and `git push origin refs/tags/<value>`.
 #
 # Prerequisites:
 #   - Hermit environment active (source ./bin/activate-hermit)
@@ -42,8 +45,8 @@ usage() {
   echo "  major          Bump the major version component (X.0.0)"
   echo "  minor          Bump the minor version component (x.Y.0)"
   echo "  patch          Bump the patch version component (x.y.Z)"
-  echo "  tag <value>    Create a pre-release tag (e.g. 1.0.0-rc.1) without"
-  echo "                 modifying Chart.yaml or creating a commit"
+  echo "  tag <value>    Create a pre-release tag (e.g. 1.0.0-rc.1), updating"
+  echo "                 Chart.yaml, committing, tagging, and pushing"
   echo ""
   echo "  --yes          Skip confirmation prompts (non-interactive / CI use)"
   echo "  --dry-run      Print what would happen without modifying anything"
@@ -86,6 +89,9 @@ bump_version() {
 
   # Strip leading 'v' if present
   current="${current#v}"
+
+  # Strip pre-release suffix (e.g. -rc.1, -ci-test-2) before splitting
+  current="${current%%-*}"
 
   local maj min pat
   IFS='.' read -r maj min pat <<< "${current}"
@@ -179,37 +185,56 @@ check_branch
 if [[ "${MODE}" == "tag" ]]; then
   validate_custom_tag "${CUSTOM_TAG}"
   assert_tag_does_not_exist "${CUSTOM_TAG}"
+  check_yq
 
-  info "Tag    : ${CUSTOM_TAG}"
-  info "Commit : $(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
-  info "No Chart.yaml changes. No commit."
+  info "Tag            : ${CUSTOM_TAG}"
+  info "Commit         : $(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
+  info "Chart affected :"
+  info "  ${CHART}"
   echo ""
 
   if [[ "${DRY_RUN}" == true ]]; then
     info "DRY RUN — would execute:"
+    info "  yq -i \".version = \\\"${CUSTOM_TAG}\\\"\"    ${CHART}"
+    info "  yq -i \".appVersion = \\\"${CUSTOM_TAG}\\\"\" ${CHART}"
+    info "  git add ${CHART}"
+    info "  git commit -m \"chore(release): ${CUSTOM_TAG}\""
     info "  git tag -a ${CUSTOM_TAG} -m \"Release ${CUSTOM_TAG}\""
+    info "  git push"
     info "  git push origin \"refs/tags/${CUSTOM_TAG}\""
     info "No changes made."
     exit 0
   fi
 
   if [[ "${YES}" != true ]]; then
-    read -r -p "[release] Create tag ${CUSTOM_TAG}? [y/N] " confirm
+    read -r -p "[release] Proceed? [y/N] " confirm
     case "${confirm}" in
       y|Y|yes|YES) ;;
       *) info "Aborted."; exit 0 ;;
     esac
   fi
 
+  info "Updating chart version..."
+  yq -i ".version = \"${CUSTOM_TAG}\"" "${CHART}"
+  yq -i ".appVersion = \"${CUSTOM_TAG}\"" "${CHART}"
+
+  info "Committing..."
+  git -C "${REPO_ROOT}" add "${CHART}"
+  git -C "${REPO_ROOT}" commit -m "chore(release): ${CUSTOM_TAG}"
+
   info "Creating annotated tag ${CUSTOM_TAG}..."
   git -C "${REPO_ROOT}" tag -a "${CUSTOM_TAG}" -m "Release ${CUSTOM_TAG}"
 
+  COMMIT_SHA="$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
   echo ""
-  info "Tag ${CUSTOM_TAG} created locally."
+  info "Commit ${COMMIT_SHA} and tag ${CUSTOM_TAG} created locally."
 
   if [[ "${YES}" != true ]]; then
-    confirm_push "git push origin \"refs/tags/${CUSTOM_TAG}\""
+    confirm_push "git push && git push origin \"refs/tags/${CUSTOM_TAG}\""
   fi
+
+  info "Pushing commits..."
+  git -C "${REPO_ROOT}" push
 
   info "Pushing tags..."
   git -C "${REPO_ROOT}" push origin "refs/tags/${CUSTOM_TAG}"
