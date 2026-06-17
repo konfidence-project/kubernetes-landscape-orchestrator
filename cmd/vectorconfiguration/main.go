@@ -37,15 +37,12 @@ func main() {
 	slog.Info("Initializing k8s api client...")
 	k8sClient := createClientSet(config)
 
-	slog.Info("Initializing k8s watcher client...")
-	watcherClient := createClientSet(config)
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	errChan := make(chan error, 2)
 
 	cache := &InMemoryCache{store: make(map[string]string)}
-	NewInformer(cache, namespace).setupAndStart(ctx, watcherClient, errChan)
+	NewInformer(cache, namespace).setupAndStart(ctx, k8sClient, errChan)
 	server := NewConfigurationService(k8sClient, cache, namespace, port).Start(errChan)
 
 	select {

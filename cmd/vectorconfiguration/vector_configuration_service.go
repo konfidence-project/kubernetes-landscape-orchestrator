@@ -260,7 +260,7 @@ func (v *VectorConfigurationService) getConfiguration(vectorId string) (string, 
 				continue
 			}
 
-			if startsWithPrefix(key, DeploymentResultsPrefix) {
+			if strings.HasPrefix(key, DeploymentResultsPrefix) {
 				deploymentName := strings.TrimSpace(key[DeploymentResultPrefixLength:])
 				if endsWithSuffix(deploymentName, JsonSuffix) {
 					deploymentName = deploymentName[:len(deploymentName)-len(JsonSuffix)]
@@ -344,7 +344,7 @@ func (v *VectorConfigurationService) getAllFeatures(config string) (map[string]a
 	return features, nil
 }
 
-// getAllFeatures parses a flag value. Supported types are int, float64, bool, string and json.
+// parseFlagValue parses a flag value. Supported types are int, float64, bool, string and json.
 // Returns nil if the flag value uses an unsupported type.
 func (v *VectorConfigurationService) parseFlagValue(val any) any {
 	switch v := val.(type) {
@@ -452,14 +452,6 @@ func (v *VectorConfigurationService) writeResponseWithEtag(w http.ResponseWriter
 
 func (v *VectorConfigurationService) notModifiedResponse(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNotModified)
-}
-
-func startsWithPrefix(str, prefix string) bool {
-	if len(str) < len(prefix) {
-		return false
-	}
-
-	return strings.EqualFold(str[:len(prefix)], prefix)
 }
 
 func endsWithSuffix(str, suffix string) bool {

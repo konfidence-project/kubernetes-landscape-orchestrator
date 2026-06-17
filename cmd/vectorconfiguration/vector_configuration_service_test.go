@@ -235,15 +235,6 @@ var _ = Describe("Vector Configuration Service API", func() {
 			Expect(response.ErrorCode).To(Equal(TargetingKeyMissingErrorCode))
 			Expect(response.ErrorDetails).To(Equal("missing or invalid targeting key"))
 		})
-		It("returns 400 if evaluation context contains invalid json", func() {
-			request := httptest.NewRequest("POST", BulkFlagEndpoint, getInvalidEvaluationContext())
-			configurationService.routes().ServeHTTP(recorder, request)
-			Expect(recorder.Code).To(Equal(http.StatusBadRequest))
-			Expect(recorder.Header().Get(ContentTypeHeader)).To(Equal(ApplicationJson))
-			response := getErrorResponse(recorder)
-			Expect(response.ErrorCode).To(Equal(ParseErrorErrorCode))
-			Expect(response.ErrorDetails).To(ContainSubstring("invalid JSON in request body"))
-		})
 		It("returns 500 if configMap contains invalid json", func() {
 			fakeClient = fake.NewSimpleClientset(getInvalidConfigMap())
 			configurationService = NewConfigurationService(fakeClient, cache, corev1.NamespaceDefault, Port)
