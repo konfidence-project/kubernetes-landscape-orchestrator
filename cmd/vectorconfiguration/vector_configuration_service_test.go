@@ -283,7 +283,7 @@ func getConfigMapWithInvalidFeatures() *corev1.ConfigMap {
 func getConfigMap(features string, authored string, deploymentResults string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      VectorId,
+			Name:      ConfigMapPrefix + VectorId,
 			Namespace: corev1.NamespaceDefault,
 		},
 		Data: map[string]string{

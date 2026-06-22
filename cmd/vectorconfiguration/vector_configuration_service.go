@@ -35,6 +35,7 @@ const (
 	ParseErrorErrorCode          = "PARSE_ERROR"
 	TargetingKeyMissingErrorCode = "TARGETING_KEY_MISSING"
 	IfNoneMatchHeader            = "If-None-Match"
+	ConfigMapPrefix              = "vector-data-"
 )
 
 type VectorConfigurationService struct {
@@ -235,7 +236,7 @@ func (v *VectorConfigurationService) getConfiguration(vectorId string) (string, 
 	// cache miss => use singleflight to bundle multiple requests
 	config, err, _ := v.sfGroup.Do(vectorId, func() (any, error) {
 		slog.Info(fmt.Sprintf("[Singleflight] Fetching configuration for vectorId %s", vectorId))
-		cm, err := v.Client.CoreV1().ConfigMaps(v.Namespace).Get(context.Background(), vectorId, metav1.GetOptions{})
+		cm, err := v.Client.CoreV1().ConfigMaps(v.Namespace).Get(context.Background(), ConfigMapPrefix+vectorId, metav1.GetOptions{})
 
 		if err != nil {
 			if statusError, ok := errors.AsType[*apierrors.StatusError](err); ok {
