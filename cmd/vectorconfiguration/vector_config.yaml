@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: vector1
+  name: vector-data-vector1
   namespace: default
 data:
   features.json: |
