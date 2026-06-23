@@ -7,6 +7,7 @@ import (
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/activationexecution"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/taskexecution"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/vectordata"
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -38,6 +39,9 @@ func startOperator(cmd *cobra.Command, args []string) error {
 		},
 		activationexecution.OperatorFlagName: func() error {
 			return activationexecution.SetupControllers(mgr, setupLog)
+		},
+		vectordata.OperatorFlagName: func() error {
+			return vectordata.SetupControllers(mgr, setupLog)
 		},
 	}
 

@@ -10,6 +10,15 @@ rules:
   - ""
   resources:
   - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - get
@@ -154,6 +163,7 @@ rules:
   - taskexecutions/status
   - vectoractivations/status
   - vectorassignments/status
+  - vectordata/status
   - vectordeployments/status
   verbs:
   - get
@@ -164,6 +174,7 @@ rules:
   resources:
   - artifactdeployments/finalizers
   - taskexecutions/finalizers
+  - vectordata/finalizers
   verbs:
   - update
 - apiGroups:
@@ -173,4 +184,14 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - star.konfidence.cloud
+  resources:
+  - vectordata
+  verbs:
+  - get
+  - list
+  - patch
+  - update
   - watch
