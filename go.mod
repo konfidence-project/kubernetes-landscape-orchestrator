@@ -9,7 +9,7 @@ require (
 	github.com/fluxcd/pkg/apis/meta v1.29.0
 	github.com/fluxcd/source-controller/api v1.8.5
 	github.com/go-logr/logr v1.4.3
-	github.com/konfidence-project/konfidence v0.0.0-20260623104846-c027e3219ed3
+	github.com/konfidence-project/konfidence v0.0.0-20260623121223-b995034dec6b
 	github.com/onsi/ginkgo/v2 v2.29.0
 	github.com/onsi/gomega v1.41.0
 	github.com/spf13/cobra v1.10.2
@@ -102,8 +102,7 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-// TEMPORARY: pin against konfidence-project/konfidence#35 (`feat/vector-config-configmap`)
-// which introduces the VectorData CRD this controller depends on. Drop this `replace`
-// and bump the require above to a github-resolvable pseudo-version (or a tagged release)
-// once #35 merges into konfidence-project/konfidence main.
-replace github.com/konfidence-project/konfidence => ../konfidence
+// NOTE: github.com/konfidence-project/konfidence above is pinned to a pseudo-version on the
+// `feat/vector-config-configmap` branch of konfidence-project/konfidence (PR #35) which
+// introduces the VectorData CRD this controller depends on. Once #35 merges, bump to a
+// commit on main.
