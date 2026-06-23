@@ -1,5 +1,11 @@
-// Package controller implements the Kubernetes-runtime reconciler for the VectorData CRD. See the parent package
-// doc-comment in ../setup.go for the architectural context and the ConfigMap data layout.
+// Package controller is the Kubernetes-runtime implementor of the VectorData CRD. It writes a per-vector ConfigMap
+// the in-process vector configuration service consumes (cmd/vectorconfiguration).
+//
+// INVARIANT: this controller MUST NOT delete a ConfigMap in order to recreate it. The ConfigMap is consumed by the
+// vector configuration service and (indirectly) by application pods; deletion implies downtime. The ConfigMap is
+// written exactly once per VectorData and is Immutable=true. The only ConfigMap delete path is the explicit cleanup
+// during VectorData teardown (handleDeletion); a finalizer guarantees that runs even when the landscape lives on a
+// different K8s cluster than the LCP (ownerRef cascade does not work cross-cluster).
 package controller
 
 import (
@@ -26,43 +32,28 @@ import (
 )
 
 const (
-	// VectorDataControllerName is the controller name registered with the manager. Reused as the recorder source.
 	VectorDataControllerName = "vector-data-controller"
 
-	// VectorDataFinalizer drives explicit cleanup of the materialised ConfigMap on VectorData deletion (in addition
-	// to the owner-reference cascade Kubernetes performs in the background).
+	// VectorDataFinalizer ensures the orchestrator can clean up its ConfigMap before VectorData is finalised.
+	// Required because the landscape may run on a different K8s cluster than the LCP, where ownerRef cascade does
+	// not propagate. Star itself does NOT add finalizers — the two layers stay decoupled.
 	VectorDataFinalizer = "konfidence.cloud/vector-data-configmap-cleanup"
 
-	// ConfigMapPrefix is the fixed prefix expected by the in-process vector configuration service
-	// (see cmd/vectorconfiguration/vector_configuration_service.go: `ConfigMapPrefix`). Keeping both sides in sync
-	// is a hard requirement; any change here must be made simultaneously on both sides.
-	ConfigMapPrefix = "vector-data-"
-
-	// Data-key layout consumed by the vector configuration service. Mirrors the same constants in
-	// cmd/vectorconfiguration/vector_configuration_service.go.
+	// ConfigMap data layout consumed by cmd/vectorconfiguration/vector_configuration_service.go. Keep both sides
+	// of the constant in sync.
+	ConfigMapPrefix         = "vector-data-"
 	FeaturesConfigKey       = "features.json"
 	AuthoredConfigKey       = "authored.json"
 	DeploymentResultsPrefix = "deploymentResults."
 	JSONSuffix              = ".json"
 
-	// Top-level keys of the OCM-authored configuration envelope produced by the galaxy assembly side
-	// (api/galaxy/v1alpha1/vector_config_types.go: `Features`, `Authored`).
-	envelopeFeaturesKey = "features"
-	envelopeAuthoredKey = "authored"
-
-	// jsonNullLiteral is the JSON literal used for missing-but-present fields in the rendered ConfigMap, so the data
-	// layout is shape-stable for consumers regardless of which subsets the vector author declared.
-	jsonNullLiteral = "null"
-
-	// labelManagedBy / labelVectorDataName / labelVectorDataUID record provenance on the materialised ConfigMap so
-	// operators (and the in-cluster vector configuration service informer) can correlate it with the source
-	// VectorData object.
 	labelManagedBy      = "konfidence.cloud/managed-by"
 	labelVectorDataName = "konfidence.cloud/vector-data-name"
 	labelVectorDataUID  = "konfidence.cloud/vector-data-uid"
+
+	jsonNullLiteral = "null"
 )
 
-// VectorDataReconciler reconciles a VectorData object by materialising it as a Kubernetes ConfigMap.
 type VectorDataReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
@@ -74,126 +65,93 @@ type VectorDataReconciler struct {
 // +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectordata/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;delete
 
-// Reconcile materialises a VectorData object as an immutable ConfigMap in the same namespace, then reports back by
-// flipping VectorData.Status.Ready=True. On VectorData deletion the finalizer ensures the ConfigMap is removed
-// explicitly before the API server completes finalisation.
 func (r *VectorDataReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	vectorData := &star.VectorData{}
-	if err := r.Get(ctx, req.NamespacedName, vectorData); err != nil {
+	vd := &star.VectorData{}
+	if err := r.Get(ctx, req.NamespacedName, vd); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if !vectorData.DeletionTimestamp.IsZero() {
-		return r.handleDeletion(ctx, vectorData, log)
+	if !vd.DeletionTimestamp.IsZero() {
+		return r.handleDeletion(ctx, vd, log)
 	}
 
-	// Add the finalizer on first reconcile so deletion cleanup is guaranteed to run.
-	if !controllerutil.ContainsFinalizer(vectorData, VectorDataFinalizer) {
-		patch := client.MergeFrom(vectorData.DeepCopy())
-		controllerutil.AddFinalizer(vectorData, VectorDataFinalizer)
-		if err := r.Patch(ctx, vectorData, patch); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to add finalizer to VectorData %s/%s: %w", vectorData.Namespace, vectorData.Name, err)
+	if !controllerutil.ContainsFinalizer(vd, VectorDataFinalizer) {
+		patch := client.MergeFrom(vd.DeepCopy())
+		controllerutil.AddFinalizer(vd, VectorDataFinalizer)
+		if err := r.Patch(ctx, vd, patch); err != nil {
+			return ctrl.Result{}, fmt.Errorf("add finalizer to VectorData %s/%s: %w", vd.Namespace, vd.Name, err)
 		}
 	}
 
-	data, err := renderConfigMapData(vectorData)
+	data, err := renderData(vd)
 	if err != nil {
-		if condErr := r.setReadyCondition(ctx, vectorData, metav1.ConditionFalse, "PayloadBuildFailed", err.Error()); condErr != nil {
+		if condErr := r.setReady(ctx, vd, metav1.ConditionFalse, "RenderFailed", err.Error()); condErr != nil {
 			return ctrl.Result{}, condErr
 		}
 		return ctrl.Result{}, err
 	}
 
-	cmName := ConfigMapPrefix + vectorData.Name
-	cmKey := types.NamespacedName{Namespace: vectorData.Namespace, Name: cmName}
-
+	cmName := ConfigMapPrefix + vd.Name
+	cmKey := types.NamespacedName{Namespace: vd.Namespace, Name: cmName}
 	existing := &corev1.ConfigMap{}
 	switch err := r.Get(ctx, cmKey, existing); {
 	case err == nil:
-		// VectorData.Spec is immutable upstream, so the ConfigMap we wrote earlier is the source of truth. The CM
-		// itself is also Immutable=true. Just flip Ready=True idempotently.
-		if condErr := r.setReadyCondition(ctx, vectorData, metav1.ConditionTrue, star.VectorDataReasonMaterialized,
-			fmt.Sprintf("ConfigMap %s already present", cmName)); condErr != nil {
-			return ctrl.Result{}, condErr
-		}
-		return ctrl.Result{}, nil
+		// ConfigMap already present. Spec is immutable upstream and the CM is Immutable=true — do not touch it.
+		return ctrl.Result{}, r.setReady(ctx, vd, metav1.ConditionTrue, star.VectorDataReasonMaterialized,
+			fmt.Sprintf("ConfigMap %s already present", cmName))
 	case !apierrors.IsNotFound(err):
-		_ = r.setReadyCondition(ctx, vectorData, metav1.ConditionFalse, "ConfigMapGetFailed", err.Error())
-		return ctrl.Result{}, fmt.Errorf("failed to get ConfigMap %s: %w", cmKey, err)
+		_ = r.setReady(ctx, vd, metav1.ConditionFalse, "ConfigMapGetFailed", err.Error())
+		return ctrl.Result{}, fmt.Errorf("get ConfigMap %s: %w", cmKey, err)
 	}
 
 	immutable := true
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cmName,
-			Namespace: vectorData.Namespace,
+			Namespace: vd.Namespace,
 			Labels: map[string]string{
 				labelManagedBy:      VectorDataControllerName,
-				labelVectorDataName: vectorData.Name,
-				labelVectorDataUID:  string(vectorData.UID),
+				labelVectorDataName: vd.Name,
+				labelVectorDataUID:  string(vd.UID),
 			},
 		},
 		Immutable: &immutable,
 		Data:      data,
 	}
-
-	if err := controllerutil.SetControllerReference(vectorData, cm, r.Scheme); err != nil {
-		_ = r.setReadyCondition(ctx, vectorData, metav1.ConditionFalse, "OwnerRefFailed", err.Error())
-		return ctrl.Result{}, fmt.Errorf("failed to set controller reference on ConfigMap %s: %w", cmKey, err)
+	if err := controllerutil.SetControllerReference(vd, cm, r.Scheme); err != nil {
+		_ = r.setReady(ctx, vd, metav1.ConditionFalse, "OwnerRefFailed", err.Error())
+		return ctrl.Result{}, fmt.Errorf("set controller reference on ConfigMap %s: %w", cmKey, err)
 	}
-
 	if err := r.Create(ctx, cm); err != nil {
-		_ = r.setReadyCondition(ctx, vectorData, metav1.ConditionFalse, "ConfigMapCreateFailed", err.Error())
-		return ctrl.Result{}, fmt.Errorf("failed to create ConfigMap %s: %w", cmKey, err)
+		_ = r.setReady(ctx, vd, metav1.ConditionFalse, "ConfigMapCreateFailed", err.Error())
+		return ctrl.Result{}, fmt.Errorf("create ConfigMap %s: %w", cmKey, err)
 	}
 
-	if condErr := r.setReadyCondition(ctx, vectorData, metav1.ConditionTrue, star.VectorDataReasonMaterialized,
-		fmt.Sprintf("ConfigMap %s materialized", cmName)); condErr != nil {
-		return ctrl.Result{}, condErr
+	if err := r.setReady(ctx, vd, metav1.ConditionTrue, star.VectorDataReasonMaterialized,
+		fmt.Sprintf("ConfigMap %s materialized", cmName)); err != nil {
+		return ctrl.Result{}, err
 	}
-	r.Recorder.Eventf(vectorData, nil, corev1.EventTypeNormal,
-		"VectorDataMaterialized", "VectorDataMaterialized",
-		fmt.Sprintf("Materialized ConfigMap %s in namespace %s", cmName, vectorData.Namespace))
+	r.Recorder.Eventf(vd, nil, corev1.EventTypeNormal, "VectorDataMaterialized", "VectorDataMaterialized",
+		fmt.Sprintf("Materialized ConfigMap %s in namespace %s", cmName, vd.Namespace))
 	log.Info("VectorData materialized", "configMap", cmKey.String())
 	return ctrl.Result{}, nil
 }
 
-// renderConfigMapData converts the runtime-agnostic VectorData.Spec into the data layout consumed by the
-// in-process vector configuration service (features.json, authored.json, deploymentResults.<basename>.json).
-//
-// Spec.Config is expected to be a JSON object with optional top-level "features" and "authored" keys (matching the
-// envelope produced by the galaxy assembly side, api/galaxy/v1alpha1/vector_config_types.go). Each subset is
-// extracted and serialised as its own ConfigMap key; missing subsets are materialised as JSON null so the layout is
-// shape-stable for consumers.
-//
-// Spec.DeploymentResults is fanned out: one key per artifact, named
-// `deploymentResults.<componentBasename>.json`, where the basename is the last `/`-segment of the component name
-// (Kubernetes ConfigMap data keys may not contain `/`). The value is the DeploymentResult.Spec JSON, forwarded
-// verbatim — consumers (e.g. the wire-protocol service) treat it as opaque payload.
-func renderConfigMapData(vd *star.VectorData) (map[string]string, error) {
-	features, authored, err := splitConfigEnvelope(vd.Spec.Config)
-	if err != nil {
-		return nil, err
-	}
-
+// renderData maps the runtime-agnostic VectorData.Spec to the data layout the vector configuration service consumes.
+// Star pre-splits the OCM envelope into Spec.Features/Spec.Authored (verbatim RawExtension); we just forward them.
+// DeploymentResults are fanned out per artifact basename, value = the deployer-emitted Spec JSON verbatim.
+func renderData(vd *star.VectorData) (map[string]string, error) {
 	data := map[string]string{
-		FeaturesConfigKey: features,
-		AuthoredConfigKey: authored,
+		FeaturesConfigKey: rawOrNull(vd.Spec.Features),
+		AuthoredConfigKey: rawOrNull(vd.Spec.Authored),
 	}
-
-	// Fan out the aggregated DeploymentResults into one key per artifact. We key on the last `/`-segment of the
-	// component name; this matches what the vector configuration service tests assume (e.g. "orders-db" for a
-	// component named "<repo>/orders-db") and keeps the data-key charset DNS-1123 compatible.
 	for compoundKey, result := range vd.Spec.DeploymentResults {
 		basename := componentBasename(compoundKey)
 		if basename == "" {
 			continue
 		}
-		// The wire-protocol service serves the DeploymentResult.Spec JSON verbatim. Forward only that, not the
-		// surrounding {name,type,spec} envelope, so consumers see what they would have seen had they written the
-		// payload themselves.
 		specBytes := result.Spec.Raw
 		if len(specBytes) == 0 {
 			specBytes = []byte(jsonNullLiteral)
@@ -206,76 +164,47 @@ func renderConfigMapData(vd *star.VectorData) (map[string]string, error) {
 	return data, nil
 }
 
-// splitConfigEnvelope extracts the "features" and "authored" sub-objects of the OCM envelope. When the input is empty
-// (no authored config on the vector at all), both outputs are the JSON literal "null" — the same shape the consumer
-// would see when an envelope was present but did not declare the respective sub-object.
-//
-// We intentionally use a partial decode (RawMessage map) rather than a typed struct so unknown sibling fields on the
-// envelope are tolerated and the controller stays decoupled from the galaxy-side struct evolution.
-func splitConfigEnvelope(envelope []byte) (string, string, error) {
-	if len(envelope) == 0 {
-		return jsonNullLiteral, jsonNullLiteral, nil
+func rawOrNull(r *runtime.RawExtension) string {
+	if r == nil || len(r.Raw) == 0 {
+		return jsonNullLiteral
 	}
-	var asMap map[string]json.RawMessage
-	if err := json.Unmarshal(envelope, &asMap); err != nil {
-		return "", "", fmt.Errorf("VectorData.Spec.Config is not a JSON object: %w", err)
-	}
-	features := jsonNullLiteral
-	if raw, ok := asMap[envelopeFeaturesKey]; ok && len(raw) > 0 {
-		features = string(raw)
-	}
-	authored := jsonNullLiteral
-	if raw, ok := asMap[envelopeAuthoredKey]; ok && len(raw) > 0 {
-		authored = string(raw)
-	}
-	return features, authored, nil
+	return string(r.Raw)
 }
 
-// componentBasename returns the last `/`-segment of a compound deployment-result key (typically `<component>/<result>`
-// emitted by the Star vector-deployment-controller). The deployment result map is keyed `componentName/resultName`,
-// so we take the segment immediately before the final `/`; if the format is different we fall back to the whole key.
+// componentBasename: result keys are "<component>/<result>"; take the basename of the component for the CM key
+// (K8s data keys disallow `/`).
 func componentBasename(compoundKey string) string {
-	// The Star side keys results "<componentName>/<resultName>". Split that first.
-	slash := strings.LastIndex(compoundKey, "/")
-	componentName := compoundKey
-	if slash >= 0 {
-		componentName = compoundKey[:slash]
+	component := compoundKey
+	if slash := strings.LastIndex(component, "/"); slash >= 0 {
+		component = compoundKey[:slash]
 	}
-	// componentName itself may be a slash-rich OCM component identifier (e.g. github.com/org/repo/svc). Take its
-	// basename for the ConfigMap data key.
-	componentName = strings.TrimSpace(componentName)
-	if componentName == "" {
-		return ""
+	if idx := strings.LastIndex(component, "/"); idx >= 0 && idx < len(component)-1 {
+		return component[idx+1:]
 	}
-	if idx := strings.LastIndex(componentName, "/"); idx >= 0 && idx < len(componentName)-1 {
-		return componentName[idx+1:]
-	}
-	return componentName
+	return component
 }
 
-// handleDeletion deletes the materialised ConfigMap explicitly and clears the finalizer.
-func (r *VectorDataReconciler) handleDeletion(ctx context.Context, vectorData *star.VectorData, log logr.Logger) (ctrl.Result, error) {
-	if !controllerutil.ContainsFinalizer(vectorData, VectorDataFinalizer) {
+func (r *VectorDataReconciler) handleDeletion(ctx context.Context, vd *star.VectorData, log logr.Logger) (ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(vd, VectorDataFinalizer) {
 		return ctrl.Result{}, nil
 	}
-	cmName := ConfigMapPrefix + vectorData.Name
-	cmKey := types.NamespacedName{Namespace: vectorData.Namespace, Name: cmName}
-	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: cmName, Namespace: vectorData.Namespace}}
+	cmName := ConfigMapPrefix + vd.Name
+	cmKey := types.NamespacedName{Namespace: vd.Namespace, Name: cmName}
+	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: cmName, Namespace: vd.Namespace}}
 	if err := r.Delete(ctx, cm); err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, fmt.Errorf("failed to delete ConfigMap %s during VectorData teardown: %w", cmKey, err)
+		return ctrl.Result{}, fmt.Errorf("delete ConfigMap %s during teardown: %w", cmKey, err)
 	}
 	log.Info("ConfigMap removed during VectorData teardown", "configMap", cmKey.String())
 
-	patch := client.MergeFrom(vectorData.DeepCopy())
-	controllerutil.RemoveFinalizer(vectorData, VectorDataFinalizer)
-	if err := r.Patch(ctx, vectorData, patch); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from VectorData %s/%s: %w", vectorData.Namespace, vectorData.Name, err)
+	patch := client.MergeFrom(vd.DeepCopy())
+	controllerutil.RemoveFinalizer(vd, VectorDataFinalizer)
+	if err := r.Patch(ctx, vd, patch); err != nil {
+		return ctrl.Result{}, fmt.Errorf("remove finalizer from VectorData %s/%s: %w", vd.Namespace, vd.Name, err)
 	}
 	return ctrl.Result{}, nil
 }
 
-// setReadyCondition writes the VectorData Ready condition idempotently with a status subresource patch.
-func (r *VectorDataReconciler) setReadyCondition(ctx context.Context, vd *star.VectorData, status metav1.ConditionStatus, reason, message string) error {
+func (r *VectorDataReconciler) setReady(ctx context.Context, vd *star.VectorData, status metav1.ConditionStatus, reason, message string) error {
 	patch := client.MergeFrom(vd.DeepCopy())
 	meta.SetStatusCondition(&vd.Status.Conditions, metav1.Condition{
 		Type:               star.VectorDataReadyCondition,
@@ -286,12 +215,11 @@ func (r *VectorDataReconciler) setReadyCondition(ctx context.Context, vd *star.V
 		LastTransitionTime: metav1.Now(),
 	})
 	if err := r.Status().Patch(ctx, vd, patch); err != nil {
-		return fmt.Errorf("failed to patch VectorData status: %w", err)
+		return fmt.Errorf("patch VectorData status: %w", err)
 	}
 	return nil
 }
 
-// SetupWithManager wires the reconciler into the manager.
 func (r *VectorDataReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&star.VectorData{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
