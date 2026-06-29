@@ -1,11 +1,9 @@
-// Package controller is the Kubernetes-runtime implementor of the VectorData CRD. It writes a per-vector ConfigMap
-// the in-process vector configuration service consumes (cmd/vectorconfiguration).
+// Package controller materialises a VectorData CR into an Immutable ConfigMap consumed by the vector
+// configuration service (cmd/vectorconfiguration).
 //
-// INVARIANT: this controller MUST NOT delete a ConfigMap in order to recreate it. The ConfigMap is consumed by the
-// vector configuration service and (indirectly) by application pods; deletion implies downtime. The ConfigMap is
-// written exactly once per VectorData and is Immutable=true. The only ConfigMap delete path is the explicit cleanup
-// during VectorData teardown (handleDeletion); a finalizer guarantees that runs even when the landscape lives on a
-// different K8s cluster than the LCP (ownerRef cascade does not work cross-cluster).
+// The ConfigMap is written exactly once per VectorData and has no owner-reference (the VectorData may live
+// on a different apiserver). Its single delete path is `handleDeletion`, guarded by the finalizer
+// `konfidence.cloud/vector-data-configmap-cleanup`.
 package controller
 
 import (
@@ -120,10 +118,7 @@ func (r *VectorDataReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		Immutable: &immutable,
 		Data:      data,
 	}
-	if err := controllerutil.SetControllerReference(vd, cm, r.Scheme); err != nil {
-		_ = r.setReady(ctx, vd, metav1.ConditionFalse, "OwnerRefFailed", err.Error())
-		return ctrl.Result{}, fmt.Errorf("set controller reference on ConfigMap %s: %w", cmKey, err)
-	}
+	// No owner-ref: VectorData may live on a different apiserver. Cleanup is the finalizer's job.
 	if err := r.Create(ctx, cm); err != nil {
 		_ = r.setReady(ctx, vd, metav1.ConditionFalse, "ConfigMapCreateFailed", err.Error())
 		return ctrl.Result{}, fmt.Errorf("create ConfigMap %s: %w", cmKey, err)
