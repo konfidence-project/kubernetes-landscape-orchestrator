@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -216,9 +217,15 @@ func (r *VectorDataReconciler) setReady(ctx context.Context, vd *star.VectorData
 }
 
 func (r *VectorDataReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Reconcile on spec changes and on deletion-timestamp transitions so the finalizer path
+	// runs independent of whether the API server bumps generation on the deletion write.
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&star.VectorData{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Owns(&corev1.ConfigMap{}).
+		For(&star.VectorData{}, builder.WithPredicates(predicate.Or(
+			predicate.GenerationChangedPredicate{},
+			predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) bool {
+				return e.ObjectOld.GetDeletionTimestamp() != e.ObjectNew.GetDeletionTimestamp()
+			}},
+		))).
 		Named(VectorDataControllerName).
 		Complete(r)
 }
