@@ -18,6 +18,8 @@ jobs:
     name: Lint
     uses: konfidence-project/.github/.github/workflows/golang-lint.yaml@v4
     secrets: inherit
+    with:
+      codegen-cmd: fmt vet
 
   test:
     name: Test
