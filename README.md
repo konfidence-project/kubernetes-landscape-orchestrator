@@ -1,98 +1,32 @@
 [![REUSE status](https://api.reuse.software/badge/github.com/konfidence-project/kubernetes-landscape-orchestrator)](https://api.reuse.software/info/github.com/konfidence-project/kubernetes-landscape-orchestrator)
 
-# kubernetes-landscape-orchestrator
+# Kubernetes Landscape Orchestrator
 
-## About this project
+## Description
 
-`kubernetes-landscape-orchestrator` is the Kubernetes deployment implementation for the [Konfidence](https://github.com/konfidence-project/konfidence) platform. It handles the three phases of a vector rollout on a Star cluster: deploying artifacts via Flux, running post-deployment migrations (tasks) and executing activations to cut over traffic to the new version.
+The Kubernetes Landscape Orchestrator is a reference implementation of a Konfidence deployer, specifically designed for Kubernetes-native deployments. 
+In the Konfidence architecture, deployers are pluggable components responsible for translating abstract artifact definitions into concrete runtime deployments on target platforms. 
+While this orchestrator implementation focuses on Kubernetes, the deployer interface allows teams to create custom implementations for other target runtimes.
 
-## Requirements and Setup
+For comprehensive documentation, architecture details, and getting started guides, visit [konfidence.cloud](https://konfidence.cloud).
 
-The following prerequisites must be installed in the cluster before running the operator. For local development, [Kind](https://kind.sigs.k8s.io/) can be used (`kind create cluster`).
+> **Warning**: This project is in early development. The APIs and features are subject to change.
+> We do not give any guarantees regarding compatibility or stability at this stage.
+> Please reach out to us if you are interested in early adoption or collaboration.
 
-**1. Install Flux CRDs**
+## Installation
 
-Required by the `flux-deployer` controller, which creates and manages `HelmRelease`, `HelmRepository`, `OCIRepository`, and `Kustomization` objects:
-
-```sh
-flux install
-```
-
-**2. Install Gateway API CRDs**
-
-Required by the `flux-deployer` and `activation-execution` controllers, which create `HTTPRoute` objects:
-
-```sh
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
-```
-
-**3. Install Konfidence CRDs**
-
-The operator watches resource types from the `star.konfidence.cloud` API group, defined in the [`konfidence-project/konfidence`](https://github.com/konfidence-project/konfidence) repository:
-
-```sh
-git clone https://github.com/konfidence-project/konfidence
-cd konfidence
-make install-star
-```
-
-> To install the full Konfidence CRD suite (including `galaxy.konfidence.cloud`), use `make install` instead.
-
-## CLI Usage
-
-The operator is a single command with no subcommands. It starts all selected controllers and runs until terminated.
-
-**Build and run:**
-
-```sh
-# Run directly
-go run main.go [flags]
-
-# Or build first
-make build
-./bin/kubernetes-landscape-orchestrator [flags]
-```
-
-**Synopsis:**
-
-```
-kubernetes-landscape-orchestrator [--controllers <expr>] [--leader-elect] [--health-probe-bind-address <addr>] [--lease-id <id>]
-```
-
-### Flags
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--controllers` | `string` | `*` | Comma-separated glob expression selecting which controllers to enable. |
-| `--health-probe-bind-address` | `string` | `:8081` | The address the health probe endpoint binds to. |
-| `--leader-elect` | `bool` | `false` | Enable leader election to ensure only one active controller manager at a time. |
-| `--lease-id` | `string` | `orchestrator.konfidence.cloud` | The ID used for leader election. |
-
-### Available Controllers
-
-| Flag name | Description |
-|---|---|
-| `FluxDeployer` | Deploys Helm charts and Kustomize manifests via FluxCD primitives. |
-| `TaskExecution` | Reconciles `TaskExecution` resources. |
-| `ActivationExecution` | Reconciles `ActivationTaskExecution` resources. |
-
-### `--controllers` Examples
-
-The `--controllers` flag accepts a comma-separated list of glob tokens. A leading `!` negates a token. Evaluation is set-based and order-independent.
-
-| Expression                          | Effect |
-|-------------------------------------|---|
-| `*`                                 | Enable all controllers (default) |
-| `FluxDeployer`                      | Enable only the `flux-deployer` controller |
-| `TaskExecution,ActivationExecution` | Enable only `task-execution` and `activation-execution` |
-| `!FluxDeployer,*`                   | Enable all controllers except `flux-deployer` |
+For detailed setup instructions, see the [Installation Guide](https://konfidence.cloud/docs/deploy-operate/installation.html).
 
 ## Support, Feedback, Contributing
 
-This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/konfidence-project/<your-project>/issues). Contribution and feedback are encouraged and always welcome. For more information about how to contribute, the project structure, as well as additional contribution information, see our [Contribution Guidelines](CONTRIBUTING.md).
+This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/issues).
+Contribution and feedback are encouraged and always welcome.
+For more information about how to contribute see our [Contribution Guidelines](https://github.com/konfidence-project/.github/blob/main/CONTRIBUTING.md).
 
 ## Security / Disclosure
-If you find any bug that may be a security problem, please follow our instructions at [in our security policy](https://github.com/konfidence-project/<your-project>/security/policy) on how to report it. Please do not create GitHub issues for security-related doubts or problems.
+
+If you find any bug that may be a security problem, please follow our instructions at [in our security policy](https://github.com/konfidence-project/.github/blob/main/SECURITY.md) on how to report it. Please do not create GitHub issues for security-related doubts or problems.
 
 ## Code of Conduct
 
@@ -100,4 +34,6 @@ We as members, contributors, and leaders pledge to make participation in our com
 
 ## Licensing
 
-Copyright 2026 SAP SE or an SAP affiliate company and kubernetes-landscape-orchestrator contributors. Please see our [LICENSE](LICENSE) for copyright and license information. Detailed information including third-party components and their licensing/copyright information is available [via the REUSE tool](https://api.reuse.software/info/github.com/konfidence-project/<your-project>).
+Copyright 2026 SAP SE or an SAP affiliate company and konfidence-project contributors.
+Please see our [LICENSES](LICENSES) for copyright and license information.
+Detailed information including third-party components and their licensing/copyright information is available [via the REUSE tool](https://api.reuse.software/info/github.com/konfidence-project/kubernetes-landscape-orchestrator).
