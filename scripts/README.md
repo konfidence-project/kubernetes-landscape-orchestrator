@@ -44,6 +44,7 @@ scripts/release.sh tag 1.0.0-rc.1 --dry-run
 4. Computes the next version according to [Semantic Versioning](https://semver.org/).
 5. Writes the new version to both `version` and `appVersion` in:
    - `charts/kubernetes-landscape-orchestrator/Chart.yaml`
+   - `charts/vector-data-service/Chart.yaml`
 6. Creates a commit: `chore(release): X.Y.Z`
 7. Creates an annotated git tag `X.Y.Z`.
 8. Runs `git push` and `git push origin refs/tags/X.Y.Z`.

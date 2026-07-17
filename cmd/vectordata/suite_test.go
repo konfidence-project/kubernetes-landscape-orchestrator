@@ -9,5 +9,5 @@ import (
 
 func TestMainSuite(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Configuration Service Suite")
+	RunSpecs(t, "Vector Data Service Suite")
 }

@@ -1,5 +1,5 @@
-// Package controller materialises a VectorData CR into an Immutable ConfigMap consumed by the vector
-// configuration service (cmd/vectorconfiguration).
+// Package controller materialises a VectorData CR into an Immutable ConfigMap consumed by the vector-data
+// service (cmd/vectordata).
 //
 // The ConfigMap is written exactly once per VectorData and has no owner-reference (the VectorData may live
 // on a different apiserver). Its single delete path is `handleDeletion`, guarded by the finalizer
@@ -38,7 +38,7 @@ const (
 	// not propagate. Star itself does NOT add finalizers — the two layers stay decoupled.
 	VectorDataFinalizer = "konfidence.cloud/vector-data-configmap-cleanup"
 
-	// ConfigMap data layout consumed by cmd/vectorconfiguration/vector_configuration_service.go. Keep both sides
+	// ConfigMap data layout consumed by cmd/vectordata/vector_data_service.go. Keep both sides
 	// of the constant in sync.
 	ConfigMapPrefix         = "vector-data-"
 	FeaturesConfigKey       = "features.json"

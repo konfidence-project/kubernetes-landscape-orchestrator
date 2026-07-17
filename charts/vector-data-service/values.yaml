@@ -1,0 +1,91 @@
+# -- Port the vector-data service listens on (OFREP + health endpoints).
+port: 4000
+
+# -- Namespace whose `vector-data-<vectorId>` ConfigMaps the service reads.
+# Defaults to the release namespace when empty. The service runs in and watches
+# this single namespace, so the chart creates a namespaced Role + RoleBinding
+# for it here.
+watchNamespace: ""
+
+# -- Override the chart name used in resource names.
+nameOverride: ""
+# -- Override the fully-qualified app name used in resource names.
+fullnameOverride: ""
+
+image:
+  # -- Image repository.
+  repository: ghcr.io/konfidence-project/vector-data-service
+  # -- Image tag. Defaults to `.Chart.AppVersion` when empty.
+  tag: ""
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets for private registries.
+imagePullSecrets: []
+
+# -- Number of service replicas. The service is stateless (in-memory cache
+# rebuilt from ConfigMaps via an informer), so it scales horizontally.
+replicas: 1
+
+# -- PodDisruptionBudget for the service. Only meaningful when running
+# `replicas >= 2`. Disabled by default to match the default `replicas: 1`.
+podDisruptionBudget:
+  # -- Enable the PodDisruptionBudget.
+  enabled: false
+  # -- Minimum number of pods that must be available. Set exactly one of
+  # `minAvailable` or `maxUnavailable`. Accepts an integer or percentage string (e.g. `"50%"`).
+  minAvailable: ~
+  # -- Maximum number of pods that may be unavailable. Accepts an integer or percentage string (e.g. `"50%"`).
+  maxUnavailable: 1
+
+# -- Resource requests and limits for the service container.
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+serviceAccount:
+  # -- Create a ServiceAccount for the service.
+  create: true
+  # -- Name of the ServiceAccount to use. Defaults to the fully-qualified app name when empty.
+  name: ""
+  # -- Annotations to add to the ServiceAccount.
+  annotations: {}
+
+service:
+  # -- Kubernetes Service type.
+  type: ClusterIP
+  # -- Annotations to add to the Service.
+  annotations: {}
+
+# -- Annotations to add to the service Pod.
+podAnnotations: {}
+# -- Labels to add to the service Pod.
+podLabels: {}
+
+# -- Additional environment variables to set on the service container.
+env: []
+
+# -- Pod-level security context.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container-level security context.
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+# -- Node selector for the service Pod.
+nodeSelector: {}
+# -- Tolerations for the service Pod.
+tolerations: []
+# -- Affinity rules for the service Pod.
+affinity: {}

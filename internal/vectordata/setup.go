@@ -2,7 +2,7 @@
 // `github.com/konfidence-project/konfidence/api/star/v1alpha1`. The Star vector-deployment-controller emits a
 // runtime-agnostic VectorData CR (with the OCM-resolved authored bytes and aggregated DeploymentResults). This
 // package watches those CRs and materialises them as a Kubernetes ConfigMap in the same (landscape) namespace,
-// using the data layout the in-process `cmd/vectorconfiguration` service consumes:
+// using the data layout the in-process `cmd/vectordata` service consumes:
 //
 //   - features.json                                — the authored "features" subset of the OCM envelope.
 //   - authored.json                                — the authored "authored" subset of the OCM envelope.

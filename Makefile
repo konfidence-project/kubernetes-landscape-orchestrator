@@ -92,7 +92,7 @@ test: hermit generate-test-crds fmt vet setup-envtest ginkgo ## Run all unit tes
 		./internal/fluxdeployer/... \
 		./internal/taskexecution/... \
 		./internal/activationexecution/... \
-		./cmd/vectorconfiguration/...
+		./cmd/vectordata/...
 
 .PHONY: generate-test-crds
 generate-test-crds: hermit ## Generate CRDs needed for controller tests.
@@ -115,6 +115,10 @@ ginkgo: hermit ## Install ginkgo CLI to LOCALBIN.
 .PHONY: build
 build: hermit fmt vet ## Build the operator binary.
 	go build -o bin/kubernetes-landscape-orchestrator main.go
+
+.PHONY: build-vector-data
+build-vector-data: hermit fmt vet ## Build the vector-data service binary.
+	go build -o bin/vector-data-service ./cmd/vectordata
 
 .PHONY: run
 run: hermit fmt vet ## Run the operator from your host.
@@ -163,9 +167,17 @@ uninstall-git-hooks: hermit ## Uninstall git hooks via prek.
 helm-install: hermit ## Install the landscape-orchestrator chart into the current cluster.
 	$(HELM) upgrade --install kubernetes-landscape-orchestrator charts/kubernetes-landscape-orchestrator
 
+.PHONY: helm-install-vector-data
+helm-install-vector-data: hermit ## Install the vector-data-service chart into the current cluster.
+	$(HELM) upgrade --install vector-data-service charts/vector-data-service
+
 .PHONY: helm-uninstall
 helm-uninstall: hermit ## Uninstall the landscape-orchestrator helm release.
 	$(HELM) uninstall kubernetes-landscape-orchestrator --ignore-not-found
+
+.PHONY: helm-uninstall-vector-data
+helm-uninstall-vector-data: hermit ## Uninstall the vector-data-service helm release.
+	$(HELM) uninstall vector-data-service --ignore-not-found
 
 .PHONY: helm-docs
 helm-docs: hermit ## Generate Helm chart documentation (charts/*/README.md).

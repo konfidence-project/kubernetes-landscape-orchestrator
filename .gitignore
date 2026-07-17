@@ -35,6 +35,7 @@ go.work.sum
 bin/*/
 bin/manager
 bin/kubernetes-landscape-orchestrator
+bin/vector-data-service
 bin/ginkgo
 
 # Generated ClusterRole manifests fed to charts/patch-clusterrole.sh

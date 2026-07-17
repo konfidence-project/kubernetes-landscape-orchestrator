@@ -38,18 +38,24 @@ const (
 	ConfigMapPrefix              = "vector-data-"
 )
 
-type VectorConfigurationService struct {
+type VectorDataService struct {
 	Client    kubernetes.Interface
 	Cache     Cache
 	Namespace string
 	Port      int
-	sfGroup   singleflight.Group // prevent multiple k8s requests
+	// ready reports whether the service is ready to serve traffic (e.g. the
+	// ConfigMap informer cache has synced). When nil, the service is always
+	// considered ready.
+	ready   func() bool
+	sfGroup singleflight.Group // prevent multiple k8s requests
 
 }
 
-// NewConfigurationService returns an initialized configuration service instance
-func NewConfigurationService(client kubernetes.Interface, cache Cache, namespace string, port int) *VectorConfigurationService {
-	return &VectorConfigurationService{Client: client, Cache: cache, Namespace: namespace, Port: port}
+// NewVectorDataService returns an initialized vector-data service instance. The
+// ready callback reports whether the service is ready to serve traffic (e.g. the
+// ConfigMap informer cache has synced); pass nil to always report ready.
+func NewVectorDataService(client kubernetes.Interface, cache Cache, namespace string, port int, ready func() bool) *VectorDataService {
+	return &VectorDataService{Client: client, Cache: cache, Namespace: namespace, Port: port, ready: ready}
 }
 
 // --- OFREP API Types ---
@@ -87,14 +93,35 @@ type BulkResponse struct {
 }
 
 // Routes sets up the HTTP multiplexer and paths
-func (v *VectorConfigurationService) routes() http.Handler {
+func (v *VectorDataService) routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", v.handleHealthz)
+	mux.HandleFunc("GET /readyz", v.handleReadyz)
 	mux.HandleFunc("POST /ofrep/v1/evaluate/flags/{key}", v.handleEvaluateSingle)
 	mux.HandleFunc("POST /ofrep/v1/evaluate/flags", v.handleEvaluateBulk)
 	return mux
 }
 
-func (v *VectorConfigurationService) Start(errChan chan error) *http.Server {
+// handleHealthz is a liveness probe: it returns 200 as long as the HTTP server
+// is able to serve requests.
+func (v *VectorDataService) handleHealthz(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
+}
+
+// handleReadyz is a readiness probe: it returns 200 once the service is ready
+// to serve traffic (informer cache synced), otherwise 503.
+func (v *VectorDataService) handleReadyz(w http.ResponseWriter, _ *http.Request) {
+	if v.ready != nil && !v.ready() {
+		http.Error(w, "not ready", http.StatusServiceUnavailable)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
+}
+
+func (v *VectorDataService) Start(errChan chan error) *http.Server {
 	server := &http.Server{Addr: ":" + strconv.Itoa(v.Port), Handler: v.routes()}
 	go func() {
 		slog.Info(fmt.Sprintf("Starting http server on %d", v.Port))
@@ -109,7 +136,7 @@ func (v *VectorConfigurationService) Start(errChan chan error) *http.Server {
 // handleEvaluateSingle is the handler function that evaluates a single feature flag for a given vectorId.
 //
 // POST /ofrep/v1/evaluate/flags/{key}
-func (v *VectorConfigurationService) handleEvaluateSingle(w http.ResponseWriter, r *http.Request) {
+func (v *VectorDataService) handleEvaluateSingle(w http.ResponseWriter, r *http.Request) {
 	flagKey := r.PathValue("key")
 	req, err := v.getEvaluationContext(r)
 	if err != nil {
@@ -159,7 +186,7 @@ func (v *VectorConfigurationService) handleEvaluateSingle(w http.ResponseWriter,
 // It generates an Etag for the response.
 //
 // POST /ofrep/v1/evaluate/flags
-func (v *VectorConfigurationService) handleEvaluateBulk(w http.ResponseWriter, r *http.Request) {
+func (v *VectorDataService) handleEvaluateBulk(w http.ResponseWriter, r *http.Request) {
 	req, err := v.getEvaluationContext(r)
 	if err != nil {
 		v.bulkErrorResponse(w, http.StatusBadRequest, ParseErrorErrorCode, err.Error())
@@ -227,7 +254,7 @@ func (v *VectorConfigurationService) handleEvaluateBulk(w http.ResponseWriter, r
 
 // getConfiguration tries to resolve the vector configuration for the given vectorId either from the cache or from loading
 // the associated configMap using the kubernetes client.
-func (v *VectorConfigurationService) getConfiguration(vectorId string) (string, error) {
+func (v *VectorDataService) getConfiguration(vectorId string) (string, error) {
 	// first check if the value is stored in the cache
 	if cachedConfig, ok := v.Cache.Get(vectorId); ok {
 		return cachedConfig, nil
@@ -304,7 +331,7 @@ func (v *VectorConfigurationService) getConfiguration(vectorId string) (string, 
 
 // getFlagValueOrConfiguration returns either the full vector configuration for the given vectorId
 // or the flag value for the given flagKey and vectorId.
-func (v *VectorConfigurationService) getFlagValueOrConfiguration(vectorId string, flagKey string, config string) (any, error) {
+func (v *VectorDataService) getFlagValueOrConfiguration(vectorId string, flagKey string, config string) (any, error) {
 	// if the flagKey matches the vectorId return the full configuration
 	if strings.EqualFold(flagKey, vectorId) {
 		return v.parseFlagValue(config), nil
@@ -319,7 +346,7 @@ func (v *VectorConfigurationService) getFlagValueOrConfiguration(vectorId string
 }
 
 // getAllFeatures extracts the features map from the vector configuration.
-func (v *VectorConfigurationService) getAllFeatures(config string) (map[string]any, error) {
+func (v *VectorDataService) getAllFeatures(config string) (map[string]any, error) {
 	// try to parse json to map
 	var resultMap map[string]any
 
@@ -347,7 +374,7 @@ func (v *VectorConfigurationService) getAllFeatures(config string) (map[string]a
 
 // parseFlagValue parses a flag value. Supported types are int, float64, bool, string and json.
 // Returns nil if the flag value uses an unsupported type.
-func (v *VectorConfigurationService) parseFlagValue(val any) any {
+func (v *VectorDataService) parseFlagValue(val any) any {
 	switch v := val.(type) {
 	case json.Number:
 		if intVal, err := v.Int64(); err == nil {
@@ -374,7 +401,7 @@ func (v *VectorConfigurationService) parseFlagValue(val any) any {
 }
 
 // getEvaluationContext parses the evaluation context from the request body.
-func (v *VectorConfigurationService) getEvaluationContext(r *http.Request) (*EvaluationRequest, error) {
+func (v *VectorDataService) getEvaluationContext(r *http.Request) (*EvaluationRequest, error) {
 	var req EvaluationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		if jsonErr, ok := errors.AsType[*json.SyntaxError](err); ok {
@@ -388,7 +415,7 @@ func (v *VectorConfigurationService) getEvaluationContext(r *http.Request) (*Eva
 }
 
 // generateEtag generates a sha-1 etag for the given response body.
-func (v *VectorConfigurationService) generateEtag(responseBody any) (string, error) {
+func (v *VectorDataService) generateEtag(responseBody any) (string, error) {
 	body, err := json.Marshal(responseBody)
 	if err != nil {
 		return "", err
@@ -398,19 +425,19 @@ func (v *VectorConfigurationService) generateEtag(responseBody any) (string, err
 	return fmt.Sprintf(`"%x"`, hash), nil
 }
 
-func (v *VectorConfigurationService) okResponse(w http.ResponseWriter, result any) {
+func (v *VectorDataService) okResponse(w http.ResponseWriter, result any) {
 	v.writeResponse(w, http.StatusOK, result)
 }
 
-func (v *VectorConfigurationService) okResponseWithEtag(w http.ResponseWriter, result any, etag *string) {
+func (v *VectorDataService) okResponseWithEtag(w http.ResponseWriter, result any, etag *string) {
 	v.writeResponseWithEtag(w, http.StatusOK, result, etag)
 }
 
-func (v *VectorConfigurationService) notFoundResponse(w http.ResponseWriter, flagKey string, msg string) {
+func (v *VectorDataService) notFoundResponse(w http.ResponseWriter, flagKey string, msg string) {
 	v.errorResponse(w, http.StatusNotFound, flagKey, FlagNotFoundErrorCode, msg)
 }
 
-func (v *VectorConfigurationService) errorResponse(w http.ResponseWriter, statusCode int, flagKey string, errorCode string, msg string) {
+func (v *VectorDataService) errorResponse(w http.ResponseWriter, statusCode int, flagKey string, errorCode string, msg string) {
 	v.writeResponse(w, statusCode, ErrorResponse{
 		Key:          flagKey,
 		ErrorCode:    errorCode,
@@ -418,24 +445,24 @@ func (v *VectorConfigurationService) errorResponse(w http.ResponseWriter, status
 	})
 }
 
-func (v *VectorConfigurationService) internalServerErrorResponse(w http.ResponseWriter, msg string) {
+func (v *VectorDataService) internalServerErrorResponse(w http.ResponseWriter, msg string) {
 	v.writeResponse(w, http.StatusInternalServerError, ErrorDetails{
 		ErrorDetails: msg,
 	})
 }
 
-func (v *VectorConfigurationService) bulkErrorResponse(w http.ResponseWriter, statusCode int, errorCode string, msg string) {
+func (v *VectorDataService) bulkErrorResponse(w http.ResponseWriter, statusCode int, errorCode string, msg string) {
 	v.writeResponse(w, statusCode, ErrorResponse{
 		ErrorCode:    errorCode,
 		ErrorDetails: msg,
 	})
 }
 
-func (v *VectorConfigurationService) writeResponse(w http.ResponseWriter, statusCode int, response any) {
+func (v *VectorDataService) writeResponse(w http.ResponseWriter, statusCode int, response any) {
 	v.writeResponseWithEtag(w, statusCode, response, nil)
 }
 
-func (v *VectorConfigurationService) writeResponseWithEtag(w http.ResponseWriter, statusCode int, response any, etag *string) {
+func (v *VectorDataService) writeResponseWithEtag(w http.ResponseWriter, statusCode int, response any, etag *string) {
 	if etag != nil {
 		w.Header().Set("ETag", *etag)
 	}
@@ -451,7 +478,7 @@ func (v *VectorConfigurationService) writeResponseWithEtag(w http.ResponseWriter
 	_, _ = w.Write(jsonData)
 }
 
-func (v *VectorConfigurationService) notModifiedResponse(w http.ResponseWriter) {
+func (v *VectorDataService) notModifiedResponse(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNotModified)
 }
 

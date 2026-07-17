@@ -12,8 +12,8 @@
 #   2. Reads the current appVersion from charts/kubernetes-landscape-orchestrator/Chart.yaml
 #      (source of truth).
 #   3. Computes the next semver according to the requested bump type.
-#   4. Updates both `appVersion` and `version` to the new value in
-#      charts/kubernetes-landscape-orchestrator/Chart.yaml.
+#   4. Updates both `appVersion` and `version` to the new value in every chart
+#      listed in CHARTS (kubernetes-landscape-orchestrator + vector-data-service).
 #   5. Creates a conventional commit: chore(release): X.Y.Z
 #   6. Creates an annotated git tag X.Y.Z.
 #   7. Runs `git push` and `git push origin refs/tags/X.Y.Z`.
@@ -21,8 +21,8 @@
 # What it does (tag <value>):
 #   1. Validates the working tree is clean.
 #   2. Validates the tag value matches X.Y.Z-<suffix> (e.g. 1.0.0-rc.1).
-#   3. Updates both `appVersion` and `version` to the tag value in
-#      charts/kubernetes-landscape-orchestrator/Chart.yaml.
+#   3. Updates both `appVersion` and `version` to the tag value in every chart
+#      listed in CHARTS (kubernetes-landscape-orchestrator + vector-data-service).
 #   4. Creates a conventional commit: chore(release): X.Y.Z-<suffix>.
 #   5. Creates an annotated git tag X.Y.Z-<suffix>.
 #   6. Runs `git push` and `git push origin refs/tags/<value>`.
@@ -35,7 +35,15 @@
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Source of truth for the current released version.
 CHART="${REPO_ROOT}/charts/kubernetes-landscape-orchestrator/Chart.yaml"
+# All charts are released together and kept at the same version. Every chart
+# listed here is bumped, committed, and must match the release tag (the
+# publish-helm-charts workflow validates each one).
+CHARTS=(
+  "${REPO_ROOT}/charts/kubernetes-landscape-orchestrator/Chart.yaml"
+  "${REPO_ROOT}/charts/vector-data-service/Chart.yaml"
+)
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -189,15 +197,17 @@ if [[ "${MODE}" == "tag" ]]; then
 
   info "Tag            : ${CUSTOM_TAG}"
   info "Commit         : $(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
-  info "Chart affected :"
-  info "  ${CHART}"
+  info "Charts affected :"
+  for c in "${CHARTS[@]}"; do info "  ${c}"; done
   echo ""
 
   if [[ "${DRY_RUN}" == true ]]; then
     info "DRY RUN — would execute:"
-    info "  yq -i \".version = \\\"${CUSTOM_TAG}\\\"\"    ${CHART}"
-    info "  yq -i \".appVersion = \\\"${CUSTOM_TAG}\\\"\" ${CHART}"
-    info "  git add ${CHART}"
+    for c in "${CHARTS[@]}"; do
+      info "  yq -i \".version = \\\"${CUSTOM_TAG}\\\"\"    ${c}"
+      info "  yq -i \".appVersion = \\\"${CUSTOM_TAG}\\\"\" ${c}"
+    done
+    info "  git add ${CHARTS[*]}"
     info "  git commit -m \"chore(release): ${CUSTOM_TAG}\""
     info "  git tag -a ${CUSTOM_TAG} -m \"Release ${CUSTOM_TAG}\""
     info "  git push"
@@ -214,12 +224,14 @@ if [[ "${MODE}" == "tag" ]]; then
     esac
   fi
 
-  info "Updating chart version..."
-  yq -i ".version = \"${CUSTOM_TAG}\"" "${CHART}"
-  yq -i ".appVersion = \"${CUSTOM_TAG}\"" "${CHART}"
+  info "Updating chart versions..."
+  for c in "${CHARTS[@]}"; do
+    yq -i ".version = \"${CUSTOM_TAG}\"" "${c}"
+    yq -i ".appVersion = \"${CUSTOM_TAG}\"" "${c}"
+  done
 
   info "Committing..."
-  git -C "${REPO_ROOT}" add "${CHART}"
+  git -C "${REPO_ROOT}" add "${CHARTS[@]}"
   git -C "${REPO_ROOT}" commit -m "chore(release): ${CUSTOM_TAG}"
 
   info "Creating annotated tag ${CUSTOM_TAG}..."
@@ -258,17 +270,19 @@ assert_tag_does_not_exist "${TAG}"
 info "Current appVersion : ${CURRENT_VERSION}"
 info "Next version       : ${NEXT_VERSION}  (${BUMP_TYPE} bump)"
 info "Git tag            : ${TAG}"
-info "Chart affected     :"
-info "  ${CHART}"
+info "Charts affected    :"
+for c in "${CHARTS[@]}"; do info "  ${c}"; done
 echo ""
 
 # ── dry-run exit ──────────────────────────────────────────────────────────────
 
 if [[ "${DRY_RUN}" == true ]]; then
   info "DRY RUN — would execute:"
-  info "  yq -i \".version = \\\"${NEXT_VERSION}\\\"\"    ${CHART}"
-  info "  yq -i \".appVersion = \\\"${NEXT_VERSION}\\\"\" ${CHART}"
-  info "  git add ${CHART}"
+  for c in "${CHARTS[@]}"; do
+    info "  yq -i \".version = \\\"${NEXT_VERSION}\\\"\"    ${c}"
+    info "  yq -i \".appVersion = \\\"${NEXT_VERSION}\\\"\" ${c}"
+  done
+  info "  git add ${CHARTS[*]}"
   info "  git commit -m \"chore(release): ${TAG}\""
   info "  git tag -a ${TAG} -m \"Release ${TAG}\""
   info "  git push"
@@ -289,17 +303,18 @@ fi
 
 # ── update Chart.yaml ─────────────────────────────────────────────────────────
 
-info "Updating chart version..."
+info "Updating chart versions..."
 
-yq -i ".version = \"${NEXT_VERSION}\"" "${CHART}"
-yq -i ".appVersion = \"${NEXT_VERSION}\"" "${CHART}"
-
-info "  ${CHART}   version + appVersion -> ${NEXT_VERSION}"
+for c in "${CHARTS[@]}"; do
+  yq -i ".version = \"${NEXT_VERSION}\"" "${c}"
+  yq -i ".appVersion = \"${NEXT_VERSION}\"" "${c}"
+  info "  ${c}   version + appVersion -> ${NEXT_VERSION}"
+done
 
 # ── commit ────────────────────────────────────────────────────────────────────
 
 info "Committing..."
-git -C "${REPO_ROOT}" add "${CHART}"
+git -C "${REPO_ROOT}" add "${CHARTS[@]}"
 git -C "${REPO_ROOT}" commit -m "chore(release): ${TAG}"
 
 info "Creating annotated tag ${TAG}..."
