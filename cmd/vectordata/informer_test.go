@@ -11,7 +11,7 @@ import (
 	toolscache "k8s.io/client-go/tools/cache"
 )
 
-var _ = Describe("Vector Configuration Informer", func() {
+var _ = Describe("Vector Data Informer", func() {
 	It("invalidates the cache entry keyed by vectorId when the ConfigMap is deleted", func() {
 		cache := &InMemoryCache{store: map[string]string{VectorId: VectorConfig}}
 		configMap := getDefaultConfigMap()

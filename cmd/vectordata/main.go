@@ -17,16 +17,16 @@ import (
 )
 
 const (
-	VectorConfigServicePortEnv      = "VECTOR_CONFIGURATION_SERVICE_PORT"
-	VectorConfigServiceNamespaceEnv = "VECTOR_CONFIGURATION_SERVICE_NAMESPACE"
-	DefaultPort                     = 4000
+	VectorDataServicePortEnv      = "VECTOR_DATA_SERVICE_PORT"
+	VectorDataServiceNamespaceEnv = "VECTOR_DATA_SERVICE_NAMESPACE"
+	DefaultPort                   = 4000
 )
 
 func main() {
 	port := initServerPort()
-	namespace := os.Getenv(VectorConfigServiceNamespaceEnv)
+	namespace := os.Getenv(VectorDataServiceNamespaceEnv)
 	if namespace == "" {
-		slog.Info(fmt.Sprintf("No namespace configured in environment variable %s, using default namespace", VectorConfigServiceNamespaceEnv))
+		slog.Info(fmt.Sprintf("No namespace configured in environment variable %s, using default namespace", VectorDataServiceNamespaceEnv))
 		namespace = "default"
 	}
 
@@ -42,8 +42,13 @@ func main() {
 	errChan := make(chan error, 2)
 
 	cache := &InMemoryCache{store: make(map[string]string)}
-	NewInformer(cache, namespace).setupAndStart(ctx, k8sClient, errChan)
-	server := NewConfigurationService(k8sClient, cache, namespace, port).Start(errChan)
+	informer := NewInformer(cache, namespace)
+	configMapInformer := informer.setupAndStart(ctx, k8sClient, errChan)
+
+	service := NewVectorDataService(k8sClient, cache, namespace, port, func() bool {
+		return configMapInformer.HasSynced()
+	})
+	server := service.Start(errChan)
 
 	select {
 	case <-ctx.Done():
@@ -74,7 +79,7 @@ func initServerPort() int {
 	flag.Parse()
 
 	port := portFlag
-	if envPort := os.Getenv(VectorConfigServicePortEnv); envPort != "" {
+	if envPort := os.Getenv(VectorDataServicePortEnv); envPort != "" {
 		if p, err := strconv.Atoi(envPort); err == nil {
 			port = p
 		}

@@ -42,9 +42,27 @@ builds:
     ldflags:
       - -s -w -X github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/build.Version={{.Version}} -X github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/build.GitCommit={{.Commit}}
 
+  - id: vector-data-service
+    binary: vector-data-service
+    main: ./cmd/vectordata
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: amd64
+
 archives:
   - id: kubernetes-landscape-orchestrator
     ids: [kubernetes-landscape-orchestrator]
+    formats: [none]
+  - id: vector-data-service
+    ids: [vector-data-service]
     formats: [none]
 
 checksum:
@@ -61,6 +79,21 @@ dockers_v2:
     platforms:
       - linux/amd64
       - linux/arm64
+    build_args:
+      OPERATOR_NAME: kubernetes-landscape-orchestrator
+
+  - id: vector-data-service
+    ids: [vector-data-service]
+    dockerfile: Dockerfile
+    images:
+      - ghcr.io/konfidence-project/vector-data-service
+    tags:
+      - "{{ .Version }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    build_args:
+      OPERATOR_NAME: vector-data-service
 
 changelog:
   use: github

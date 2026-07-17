@@ -54,18 +54,58 @@ type BulkFlagResponse struct {
 	Flags []FlagResponse `json:"flags"`
 }
 
-var _ = Describe("Vector Configuration Service API", func() {
+var _ = Describe("Vector Data Service health endpoints", func() {
+	var (
+		fakeClient *fake.Clientset
+		service    *VectorDataService
+		recorder   *httptest.ResponseRecorder
+	)
+
+	BeforeEach(func() {
+		fakeClient = fake.NewSimpleClientset()
+		service = NewVectorDataService(fakeClient, &InMemoryCache{store: make(map[string]string)}, corev1.NamespaceDefault, Port, nil)
+		recorder = httptest.NewRecorder()
+	})
+
+	It("liveness always returns 200", func() {
+		request := httptest.NewRequest("GET", "/healthz", nil)
+		service.routes().ServeHTTP(recorder, request)
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+	})
+
+	It("readiness returns 200 when no Ready func is set", func() {
+		request := httptest.NewRequest("GET", "/readyz", nil)
+		service.routes().ServeHTTP(recorder, request)
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+	})
+
+	It("readiness returns 200 when Ready reports true", func() {
+		service = NewVectorDataService(fakeClient, &InMemoryCache{store: make(map[string]string)}, corev1.NamespaceDefault, Port, func() bool { return true })
+		request := httptest.NewRequest("GET", "/readyz", nil)
+		service.routes().ServeHTTP(recorder, request)
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+	})
+
+	It("readiness returns 503 when Ready reports false", func() {
+		service = NewVectorDataService(fakeClient, &InMemoryCache{store: make(map[string]string)}, corev1.NamespaceDefault, Port, func() bool { return false })
+		request := httptest.NewRequest("GET", "/readyz", nil)
+		service.routes().ServeHTTP(recorder, request)
+		Expect(recorder.Code).To(Equal(http.StatusServiceUnavailable))
+	})
+})
+
+var _ = Describe("Vector Data Service API", func() {
 	var (
 		fakeClient           *fake.Clientset
 		cache                Cache
-		configurationService *VectorConfigurationService
+		configurationService *VectorDataService
 		recorder             *httptest.ResponseRecorder
 	)
 
 	BeforeEach(func() {
 		cache = &InMemoryCache{store: make(map[string]string)}
 		fakeClient = fake.NewSimpleClientset(getDefaultConfigMap())
-		configurationService = NewConfigurationService(fakeClient, cache, corev1.NamespaceDefault, Port)
+		configurationService = NewVectorDataService(fakeClient, cache, corev1.NamespaceDefault, Port, nil)
 		recorder = httptest.NewRecorder()
 	})
 
@@ -120,7 +160,7 @@ var _ = Describe("Vector Configuration Service API", func() {
 		})
 		It("returns 404 if vector configMap does not contain any features", func() {
 			fakeClient = fake.NewSimpleClientset(getConfigMap("{}", AuthoredConfig, DeploymentResultsConfig))
-			configurationService = NewConfigurationService(fakeClient, cache, corev1.NamespaceDefault, Port)
+			configurationService = NewVectorDataService(fakeClient, cache, corev1.NamespaceDefault, Port, nil)
 			request := httptest.NewRequest("POST", SingleFlagEndpoint+RatioFlag, getDefaultEvaluationContext())
 			configurationService.routes().ServeHTTP(recorder, request)
 			Expect(recorder.Code).To(Equal(http.StatusNotFound))
@@ -132,7 +172,7 @@ var _ = Describe("Vector Configuration Service API", func() {
 		})
 		It("returns 404 if configMap is empty", func() {
 			fakeClient = fake.NewSimpleClientset(getEmptyConfigMap())
-			configurationService = NewConfigurationService(fakeClient, cache, corev1.NamespaceDefault, Port)
+			configurationService = NewVectorDataService(fakeClient, cache, corev1.NamespaceDefault, Port, nil)
 			request := httptest.NewRequest("POST", SingleFlagEndpoint+MaxUsersFlag, getDefaultEvaluationContext())
 			configurationService.routes().ServeHTTP(recorder, request)
 			Expect(recorder.Code).To(Equal(http.StatusNotFound))
@@ -163,7 +203,7 @@ var _ = Describe("Vector Configuration Service API", func() {
 		})
 		It("returns 500 if configMap contains invalid json", func() {
 			fakeClient = fake.NewSimpleClientset(getInvalidConfigMap())
-			configurationService = NewConfigurationService(fakeClient, cache, corev1.NamespaceDefault, Port)
+			configurationService = NewVectorDataService(fakeClient, cache, corev1.NamespaceDefault, Port, nil)
 			request := httptest.NewRequest("POST", SingleFlagEndpoint+MaxUsersFlag, getDefaultEvaluationContext())
 			configurationService.routes().ServeHTTP(recorder, request)
 			Expect(recorder.Code).To(Equal(http.StatusInternalServerError))
@@ -173,7 +213,7 @@ var _ = Describe("Vector Configuration Service API", func() {
 		})
 		It("returns 500 if configMap contains invalid features", func() {
 			fakeClient = fake.NewSimpleClientset(getConfigMapWithInvalidFeatures())
-			configurationService = NewConfigurationService(fakeClient, cache, corev1.NamespaceDefault, Port)
+			configurationService = NewVectorDataService(fakeClient, cache, corev1.NamespaceDefault, Port, nil)
 			request := httptest.NewRequest("POST", SingleFlagEndpoint+MaxUsersFlag, getDefaultEvaluationContext())
 			configurationService.routes().ServeHTTP(recorder, request)
 			Expect(recorder.Code).To(Equal(http.StatusInternalServerError))
@@ -203,7 +243,7 @@ var _ = Describe("Vector Configuration Service API", func() {
 		})
 		It("returns 200 if configMap is empty and does not contain a vector configuration", func() {
 			fakeClient = fake.NewSimpleClientset(getEmptyConfigMap())
-			configurationService = NewConfigurationService(fakeClient, cache, corev1.NamespaceDefault, Port)
+			configurationService = NewVectorDataService(fakeClient, cache, corev1.NamespaceDefault, Port, nil)
 			request := httptest.NewRequest("POST", BulkFlagEndpoint, getDefaultEvaluationContext())
 			configurationService.routes().ServeHTTP(recorder, request)
 			Expect(recorder.Code).To(Equal(http.StatusOK))
@@ -237,7 +277,7 @@ var _ = Describe("Vector Configuration Service API", func() {
 		})
 		It("returns 500 if configMap contains invalid json", func() {
 			fakeClient = fake.NewSimpleClientset(getInvalidConfigMap())
-			configurationService = NewConfigurationService(fakeClient, cache, corev1.NamespaceDefault, Port)
+			configurationService = NewVectorDataService(fakeClient, cache, corev1.NamespaceDefault, Port, nil)
 			request := httptest.NewRequest("POST", BulkFlagEndpoint, getDefaultEvaluationContext())
 			configurationService.routes().ServeHTTP(recorder, request)
 			Expect(recorder.Code).To(Equal(http.StatusInternalServerError))
@@ -247,7 +287,7 @@ var _ = Describe("Vector Configuration Service API", func() {
 		})
 		It("returns 500 if configMap contains invalid features", func() {
 			fakeClient = fake.NewSimpleClientset(getConfigMapWithInvalidFeatures())
-			configurationService = NewConfigurationService(fakeClient, cache, corev1.NamespaceDefault, Port)
+			configurationService = NewVectorDataService(fakeClient, cache, corev1.NamespaceDefault, Port, nil)
 			request := httptest.NewRequest("POST", BulkFlagEndpoint, getDefaultEvaluationContext())
 			configurationService.routes().ServeHTTP(recorder, request)
 			Expect(recorder.Code).To(Equal(http.StatusInternalServerError))
