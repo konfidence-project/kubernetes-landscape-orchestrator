@@ -42,10 +42,3 @@ app.kubernetes.io/component: vector-data-service
 {{- default "default" .Values.serviceAccount.name -}}
 {{- end -}}
 {{- end -}}
-
-{{- /*
-The namespace whose ConfigMaps the service reads. Defaults to the release namespace.
-*/ -}}
-{{- define "vector-data-service.watchNamespace" -}}
-{{- default .Release.Namespace .Values.watchNamespace -}}
-{{- end -}}

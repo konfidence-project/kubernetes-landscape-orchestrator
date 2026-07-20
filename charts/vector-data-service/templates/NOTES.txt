@@ -1,6 +1,6 @@
 Konfidence vector-data service {{ .Chart.AppVersion }} installed in namespace {{ .Release.Namespace }}.
 
-It reads `vector-data-<vectorId>` ConfigMaps from namespace {{ include "vector-data-service.watchNamespace" . }}
+It reads `vector-data-<vectorId>` ConfigMaps from namespace {{ .Release.Namespace }}
 and serves them over OFREP on port {{ .Values.port }}.
 
 Verify the service is running:

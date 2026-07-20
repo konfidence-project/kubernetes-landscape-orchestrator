@@ -1,12 +1,6 @@
 # -- Port the vector-data service listens on (OFREP + health endpoints).
 port: 4000
 
-# -- Namespace whose `vector-data-<vectorId>` ConfigMaps the service reads.
-# Defaults to the release namespace when empty. The service runs in and watches
-# this single namespace, so the chart creates a namespaced Role + RoleBinding
-# for it here.
-watchNamespace: ""
-
 # -- Override the chart name used in resource names.
 nameOverride: ""
 # -- Override the fully-qualified app name used in resource names.
