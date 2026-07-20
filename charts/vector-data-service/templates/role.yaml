@@ -2,7 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ include "vector-data-service.fullname" . }}
-  namespace: {{ include "vector-data-service.watchNamespace" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "vector-data-service.labels" . | nindent 4 }}
 rules:

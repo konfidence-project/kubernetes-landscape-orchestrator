@@ -35,7 +35,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
             - name: VECTOR_DATA_SERVICE_NAMESPACE
-              value: {{ include "vector-data-service.watchNamespace" . | quote }}
+              value: {{ .Release.Namespace | quote }}
             - name: VECTOR_DATA_SERVICE_PORT
               value: {{ .Values.port | quote }}
             {{- with .Values.env }}
