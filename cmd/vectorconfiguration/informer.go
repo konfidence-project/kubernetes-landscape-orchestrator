@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -24,7 +25,7 @@ func NewInformer(flagCache Cache, namespace string) *Informer {
 	return &Informer{Cache: flagCache, Namespace: namespace}
 }
 
-func (i *Informer) setupAndStart(ctx context.Context, watcherClient *kubernetes.Clientset, errChan chan error) {
+func (i *Informer) setupAndStart(ctx context.Context, watcherClient kubernetes.Interface, errChan chan error) cache.SharedIndexInformer {
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(watcherClient, 10*time.Minute, informers.WithNamespace(i.Namespace))
 	configMapInformer := informerFactory.Core().V1().ConfigMaps().Informer()
 	_, err := configMapInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -38,7 +39,7 @@ func (i *Informer) setupAndStart(ctx context.Context, watcherClient *kubernetes.
 			}
 
 			slog.Info(fmt.Sprintf("ConfigMap updated %s/%s. Removing entry from cache if necessary...", newConfigMap.Namespace, newConfigMap.Name))
-			i.Cache.Set(newConfigMap.Name, "")
+			i.Cache.Set(strings.TrimPrefix(newConfigMap.Name, ConfigMapPrefix), "")
 		},
 		DeleteFunc: func(obj interface{}) {
 			var configMap *corev1.ConfigMap
@@ -56,7 +57,7 @@ func (i *Informer) setupAndStart(ctx context.Context, watcherClient *kubernetes.
 			}
 
 			slog.Info(fmt.Sprintf("ConfigMap deleted %s/%s. Removing entry from cache if necessary...", configMap.Namespace, configMap.Name))
-			i.Cache.Set(configMap.Name, "")
+			i.Cache.Set(strings.TrimPrefix(configMap.Name, ConfigMapPrefix), "")
 		},
 	})
 
@@ -87,4 +88,6 @@ func (i *Informer) setupAndStart(ctx context.Context, watcherClient *kubernetes.
 			slog.Info(fmt.Sprintf("Watching for ConfigMap updates/deletions inside namespace: %s", i.Namespace))
 		}
 	}()
+
+	return configMapInformer
 }
