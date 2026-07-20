@@ -123,8 +123,8 @@ ginkgo: hermit ## Install ginkgo CLI to LOCALBIN.
 build: hermit fmt vet ## Build the operator binary.
 	go build -o bin/kubernetes-landscape-orchestrator main.go
 
-.PHONY: build-vector-data
-build-vector-data: hermit fmt vet ## Build the vector-data service binary.
+.PHONY: build-vector-data-service
+build-vector-data-service: hermit fmt vet ## Build the vector-data service binary.
 	go build -o bin/vector-data-service ./cmd/vectordata
 
 .PHONY: run
@@ -174,16 +174,16 @@ uninstall-git-hooks: hermit ## Uninstall git hooks via prek.
 helm-install: hermit ## Install the landscape-orchestrator chart into the current cluster.
 	$(HELM) upgrade --install kubernetes-landscape-orchestrator charts/kubernetes-landscape-orchestrator
 
-.PHONY: helm-install-vector-data
-helm-install-vector-data: hermit ## Install the vector-data-service chart into the current cluster.
+.PHONY: helm-install-vector-data-service
+helm-install-vector-data-service: hermit ## Install the vector-data-service chart into the current cluster.
 	$(HELM) upgrade --install vector-data-service charts/vector-data-service
 
 .PHONY: helm-uninstall
 helm-uninstall: hermit ## Uninstall the landscape-orchestrator helm release.
 	$(HELM) uninstall kubernetes-landscape-orchestrator --ignore-not-found
 
-.PHONY: helm-uninstall-vector-data
-helm-uninstall-vector-data: hermit ## Uninstall the vector-data-service helm release.
+.PHONY: helm-uninstall-vector-data-service
+helm-uninstall-vector-data-service: hermit ## Uninstall the vector-data-service helm release.
 	$(HELM) uninstall vector-data-service --ignore-not-found
 
 .PHONY: helm-docs
