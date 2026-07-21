@@ -1,5 +1,5 @@
 # -- Port the vector-data service listens on (OFREP + health endpoints).
-port: 4000
+port: 80
 
 # -- Override the chart name used in resource names.
 nameOverride: ""
