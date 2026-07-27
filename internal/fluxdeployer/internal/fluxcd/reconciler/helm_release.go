@@ -17,8 +17,8 @@ import (
 	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
-	// see https://github.com/konfidence-project/konfidence/tree/main/api/star/v1alpha1
-	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	// see https://github.com/konfidence-project/konfidence/tree/main/api/v1alpha1
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 )
 
@@ -36,7 +36,7 @@ type HelmReleaseReconciler struct {
 var _ fluxcd.FluxHelmReconciler = (*HelmReleaseReconciler)(nil)
 
 func (r *HelmReleaseReconciler) Reconcile(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource) (isReady bool, err error) {
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource) (isReady bool, err error) {
 
 	helmRelease := &helmv2.HelmRelease{
 		ObjectMeta: metav1.ObjectMeta{
@@ -64,7 +64,7 @@ func (r *HelmReleaseReconciler) Reconcile(
 
 func (r *HelmReleaseReconciler) mutateHelmRelease(
 	ctx context.Context,
-	deployment *landscapev1alpha1.ArtifactDeployment,
+	deployment *konfidencev1alpha1.ArtifactDeployment,
 	helmChartResource *fluxcd.HelmChartResource,
 	helmRelease *helmv2.HelmRelease,
 ) error {
@@ -111,7 +111,7 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 }
 
 func (r *HelmReleaseReconciler) getHelmChart(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) *sourcev1.HelmChart {
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, ocmResource *konfidencev1alpha1.OCMResource) *sourcev1.HelmChart {
 
 	objectKey := types.NamespacedName{
 		Namespace: deployment.GetNamespace(),
@@ -127,7 +127,7 @@ func (r *HelmReleaseReconciler) getHelmChart(
 }
 
 func (r *HelmReleaseReconciler) mapStatusConditionsFromHelmChart(
-	deployment *landscapev1alpha1.ArtifactDeployment, helmChart *sourcev1.HelmChart) bool {
+	deployment *konfidencev1alpha1.ArtifactDeployment, helmChart *sourcev1.HelmChart) bool {
 
 	for _, condition := range helmChart.Status.Conditions {
 		if conditionType := mapHelmChartConditionType(condition.Type); conditionType != "" {
@@ -148,14 +148,14 @@ func (r *HelmReleaseReconciler) mapStatusConditionsFromHelmChart(
 func mapHelmChartConditionType(conditionType string) string {
 	switch conditionType {
 	case conditionTypeReady:
-		return landscapev1alpha1.ArtifactFetchedCondition
+		return konfidencev1alpha1.ArtifactFetchedCondition
 	default:
 		return ""
 	}
 }
 
 func (r *HelmReleaseReconciler) mapStatusConditionsFromHelmRelease(
-	deployment *landscapev1alpha1.ArtifactDeployment, helmRelease *helmv2.HelmRelease) {
+	deployment *konfidencev1alpha1.ArtifactDeployment, helmRelease *helmv2.HelmRelease) {
 
 	for _, condition := range helmRelease.Status.Conditions {
 		if conditionType := mapHelmReleaseConditionType(condition.Type); conditionType != "" {
@@ -174,9 +174,9 @@ func (r *HelmReleaseReconciler) mapStatusConditionsFromHelmRelease(
 func mapHelmReleaseConditionType(conditionType string) string {
 	switch conditionType {
 	case conditionTypeReady:
-		return landscapev1alpha1.ArtifactDeployedCondition
+		return konfidencev1alpha1.ArtifactDeployedCondition
 	case "Released":
-		return landscapev1alpha1.AppHealthyCondition
+		return konfidencev1alpha1.AppHealthyCondition
 	default:
 		return ""
 	}

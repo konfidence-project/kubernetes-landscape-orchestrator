@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	fluxcd "github.com/fluxcd/pkg/apis/meta"
-	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/konfidence/pkg/sanitize"
 	"github.com/konfidence-project/konfidence/pkg/secret"
 	"github.com/konfidence-project/konfidence/pkg/url"
@@ -21,19 +21,19 @@ const (
 )
 
 func buildHelmRepositoryResourceName(
-	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) string {
+	deployment *konfidencev1alpha1.ArtifactDeployment, ocmResource *konfidencev1alpha1.OCMResource) string {
 
 	return utils.SanitizeK8sResourceName(fmt.Sprintf("%s-%s", deployment.Name[:6], ocmResource.Name))
 }
 
 func buildResourceName(
-	deployment *landscapev1alpha1.ArtifactDeployment, ocmResource *landscapev1alpha1.OCMResource) string {
+	deployment *konfidencev1alpha1.ArtifactDeployment, ocmResource *konfidencev1alpha1.OCMResource) string {
 
 	return utils.SanitizeK8sResourceName(fmt.Sprintf("%s-%s",
 		ocmResource.Name, deployment.Name[:6]))
 }
 
-func isInsecure(deployment *landscapev1alpha1.ArtifactDeployment) bool {
+func isInsecure(deployment *konfidencev1alpha1.ArtifactDeployment) bool {
 	label, err := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-insecure")
 	if err != nil {
 		return false
@@ -43,7 +43,7 @@ func isInsecure(deployment *landscapev1alpha1.ArtifactDeployment) bool {
 }
 
 func getSecretRef(
-	ctx context.Context, k8sClient client.Client, deployment *landscapev1alpha1.ArtifactDeployment, repositoryString string,
+	ctx context.Context, k8sClient client.Client, deployment *konfidencev1alpha1.ArtifactDeployment, repositoryString string,
 ) (*fluxcd.LocalObjectReference, error) {
 	log := logf.FromContext(ctx)
 	label, labelErr := utils.GetKonfidenceLabel(&deployment.ObjectMeta, "registry-skip-auth")

@@ -4,29 +4,30 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: activationtaskregistrations.star.konfidence.cloud
+  name: vectordata.konfidence.cloud
 spec:
-  group: star.konfidence.cloud
+  group: konfidence.cloud
   names:
     categories:
     - konfidence
     - kden
-    kind: ActivationTaskRegistration
-    listKind: ActivationTaskRegistrationList
-    plural: activationtaskregistrations
-    singular: activationtaskregistration
+    kind: VectorData
+    listKind: VectorDataList
+    plural: vectordata
+    singular: vectordata
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The type of registered activation task
-      jsonPath: .spec.type
-      name: Type
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      name: Reason
       type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ActivationTaskRegistration is the Schema for the activationtaskregistrations
-          API
+        description: VectorData is the schema for the vectordata API.
         properties:
           apiVersion:
             description: |-
@@ -46,44 +47,57 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of ActivationTaskRegistration
+            description: |-
+              VectorDataSpec is the LCP→landscape-orchestrator contract for vector-scoped data.
+              Star resolves the OCM envelope `{features, authored}` and aggregates per-AD
+              DeploymentResults; the landscape orchestrator materialises the payload on its
+              target runtime (ConfigMap on K8s, etc.).
             properties:
-              precedes:
-                items:
-                  type: string
-                type: array
-              spec:
+              authored:
+                description: Authored carries the optional "authored" subset of the
+                  OCM envelope, verbatim JSON.
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
-              succeeds:
-                items:
-                  type: string
-                type: array
-              type:
+              deploymentResults:
+                additionalProperties:
+                  description: |-
+                    DeploymentResult contains a single output produced by a deployer. These results are used to transport information
+                    from the deployer to later phases of the vector lifecycle.
+                  properties:
+                    name:
+                      description: Name is a unique identifier for the result within
+                        an ArtifactDeploymentStatus.
+                      type: string
+                    spec:
+                      description: Spec contains deployer-specific structured data.
+                        Its format is determined by the Type field.
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    type:
+                      description: Type describes the structure contained in Spec.
+                        Each deployer may define multiple result types.
+                      type: string
+                  required:
+                  - name
+                  - spec
+                  - type
+                  type: object
                 description: |-
-                  INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "make" to regenerate code after modifying this file
-                  The following markers will use OpenAPI v3 schema to validate the value
-                  More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
-                type: string
-            required:
-            - spec
-            - type
+                  DeploymentResults aggregated from underlying ArtifactDeployments, keyed
+                  "<componentName>/<resultName>".
+                type: object
+              features:
+                description: Features carries the optional "features" subset of the
+                  OCM envelope, verbatim JSON.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
             type: object
+            x-kubernetes-validations:
+            - message: VectorData spec is immutable after it has been set
+              rule: self == oldSelf
           status:
-            description: status defines the observed state of ActivationTaskRegistration
             properties:
               conditions:
-                description: |-
-                  conditions represent the current state of the ActivationTaskRegistration resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -139,13 +153,11 @@ spec:
                   - type
                   type: object
                 type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
             type: object
-        required:
-        - spec
         type: object
+        x-kubernetes-validations:
+        - message: Spec is required once set
+          rule: '!has(oldSelf.spec) || has(self.spec)'
     served: true
     storage: true
     subresources:

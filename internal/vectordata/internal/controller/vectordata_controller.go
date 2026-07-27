@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	star "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -59,15 +59,15 @@ type VectorDataReconciler struct {
 	Recorder events.EventRecorder
 }
 
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectordata,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectordata/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectordata/finalizers,verbs=update
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=vectordata,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=vectordata/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=vectordata/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;delete
 
 func (r *VectorDataReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	vd := &star.VectorData{}
+	vd := &konfidencev1alpha1.VectorData{}
 	if err := r.Get(ctx, req.NamespacedName, vd); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -98,7 +98,7 @@ func (r *VectorDataReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	switch err := r.Get(ctx, cmKey, existing); {
 	case err == nil:
 		// ConfigMap already present. Spec is immutable upstream and the CM is Immutable=true — do not touch it.
-		return ctrl.Result{}, r.setReady(ctx, vd, metav1.ConditionTrue, star.VectorDataReasonMaterialized,
+		return ctrl.Result{}, r.setReady(ctx, vd, metav1.ConditionTrue, konfidencev1alpha1.VectorDataReasonMaterialized,
 			fmt.Sprintf("ConfigMap %s already present", cmName))
 	case !apierrors.IsNotFound(err):
 		_ = r.setReady(ctx, vd, metav1.ConditionFalse, "ConfigMapGetFailed", err.Error())
@@ -125,7 +125,7 @@ func (r *VectorDataReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, fmt.Errorf("create ConfigMap %s: %w", cmKey, err)
 	}
 
-	if err := r.setReady(ctx, vd, metav1.ConditionTrue, star.VectorDataReasonMaterialized,
+	if err := r.setReady(ctx, vd, metav1.ConditionTrue, konfidencev1alpha1.VectorDataReasonMaterialized,
 		fmt.Sprintf("ConfigMap %s materialized", cmName)); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -138,7 +138,7 @@ func (r *VectorDataReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 // renderData maps the runtime-agnostic VectorData.Spec to the data layout the vector configuration service consumes.
 // Star pre-splits the OCM envelope into Spec.Features/Spec.Authored (verbatim RawExtension); we just forward them.
 // DeploymentResults are fanned out per artifact basename, value = the deployer-emitted Spec JSON verbatim.
-func renderData(vd *star.VectorData) (map[string]string, error) {
+func renderData(vd *konfidencev1alpha1.VectorData) (map[string]string, error) {
 	data := map[string]string{
 		FeaturesConfigKey: rawOrNull(vd.Spec.Features),
 		AuthoredConfigKey: rawOrNull(vd.Spec.Authored),
@@ -180,7 +180,7 @@ func componentBasename(compoundKey string) string {
 	return component
 }
 
-func (r *VectorDataReconciler) handleDeletion(ctx context.Context, vd *star.VectorData, log logr.Logger) (ctrl.Result, error) {
+func (r *VectorDataReconciler) handleDeletion(ctx context.Context, vd *konfidencev1alpha1.VectorData, log logr.Logger) (ctrl.Result, error) {
 	if !controllerutil.ContainsFinalizer(vd, VectorDataFinalizer) {
 		return ctrl.Result{}, nil
 	}
@@ -200,10 +200,10 @@ func (r *VectorDataReconciler) handleDeletion(ctx context.Context, vd *star.Vect
 	return ctrl.Result{}, nil
 }
 
-func (r *VectorDataReconciler) setReady(ctx context.Context, vd *star.VectorData, status metav1.ConditionStatus, reason, message string) error {
+func (r *VectorDataReconciler) setReady(ctx context.Context, vd *konfidencev1alpha1.VectorData, status metav1.ConditionStatus, reason, message string) error {
 	patch := client.MergeFrom(vd.DeepCopy())
 	meta.SetStatusCondition(&vd.Status.Conditions, metav1.Condition{
-		Type:               star.VectorDataReadyCondition,
+		Type:               konfidencev1alpha1.VectorDataReadyCondition,
 		Status:             status,
 		Reason:             reason,
 		Message:            message,
@@ -220,7 +220,7 @@ func (r *VectorDataReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Reconcile on spec changes and on deletion-timestamp transitions so the finalizer path
 	// runs independent of whether the API server bumps generation on the deletion write.
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&star.VectorData{}, builder.WithPredicates(predicate.Or(
+		For(&konfidencev1alpha1.VectorData{}, builder.WithPredicates(predicate.Or(
 			predicate.GenerationChangedPredicate{},
 			predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) bool {
 				return e.ObjectOld.GetDeletionTimestamp() != e.ObjectNew.GetDeletionTimestamp()

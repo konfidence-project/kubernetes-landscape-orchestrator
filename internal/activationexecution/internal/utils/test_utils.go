@@ -4,7 +4,7 @@ package utils
 import (
 	"context"
 
-	landscape "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,16 +18,16 @@ func CreateActivationTaskExecution(
 	ctx context.Context, k8sClient client.Client,
 	name string, namespace string, specType string, executionSpec string, vectorActivation string,
 ) {
-	activationTaskExecution := &landscape.ActivationTaskExecution{
+	activationTaskExecution := &konfidencev1alpha1.ActivationTaskExecution{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "star.konfidence.cloud/v1alpha1",
-			Kind:       landscape.ActivationTaskExecutionKind,
+			APIVersion: "konfidence.cloud/v1alpha1",
+			Kind:       konfidencev1alpha1.ActivationTaskExecutionKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: landscape.ActivationTaskExecutionSpec{
+		Spec: konfidencev1alpha1.ActivationTaskExecutionSpec{
 			Type: specType,
 			Spec: runtime.RawExtension{
 				Raw: []byte(executionSpec),
@@ -39,8 +39,14 @@ func CreateActivationTaskExecution(
 	Expect(k8sClient.Create(ctx, activationTaskExecution)).To(Succeed())
 }
 
-func GetActivationTaskExecution(ctx context.Context, k8sClient client.Client, name string, namespace string, opt bool) *landscape.ActivationTaskExecution {
-	activationTaskExecution := &landscape.ActivationTaskExecution{}
+func GetActivationTaskExecution(
+	ctx context.Context,
+	k8sClient client.Client,
+	name string,
+	namespace string,
+	opt bool,
+) *konfidencev1alpha1.ActivationTaskExecution {
+	activationTaskExecution := &konfidencev1alpha1.ActivationTaskExecution{}
 	activationTaskExecutionLookupKey := types.NamespacedName{Name: name, Namespace: namespace}
 	err := k8sClient.Get(ctx, activationTaskExecutionLookupKey, activationTaskExecution)
 
@@ -52,7 +58,7 @@ func GetActivationTaskExecution(ctx context.Context, k8sClient client.Client, na
 	return activationTaskExecution
 }
 
-func DeleteActivationTaskExecution(ctx context.Context, k8sClient client.Client, activationTaskExecution *landscape.ActivationTaskExecution) {
+func DeleteActivationTaskExecution(ctx context.Context, k8sClient client.Client, activationTaskExecution *konfidencev1alpha1.ActivationTaskExecution) {
 	err := k8sClient.Delete(ctx, activationTaskExecution)
 	Expect(err).ToNot(HaveOccurred(), "Failed to delete activationTaskExecution: %s", activationTaskExecution.Name)
 }
@@ -92,16 +98,16 @@ func CreateVectorActivation(
 	ctx context.Context, k8sClient client.Client,
 	name string, namespace string, stageName string, stageVersionName, vectorName string, vectorDeploymentName string,
 ) {
-	vectorActivation := &landscape.VectorActivation{
+	vectorActivation := &konfidencev1alpha1.VectorActivation{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "common.konfidence.cloud/v1alpha1",
-			Kind:       landscape.VectorActivationKind,
+			Kind:       konfidencev1alpha1.VectorActivationKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: landscape.VectorActivationSpec{
+		Spec: konfidencev1alpha1.VectorActivationSpec{
 			Stage:            stageName,
 			StageVersion:     stageVersionName,
 			Vector:           vectorName,
@@ -112,13 +118,13 @@ func CreateVectorActivation(
 	Expect(k8sClient.Create(ctx, vectorActivation)).To(Succeed())
 }
 
-func DeleteVectorActivation(ctx context.Context, k8sClient client.Client, vectorActivation *landscape.VectorActivation) {
+func DeleteVectorActivation(ctx context.Context, k8sClient client.Client, vectorActivation *konfidencev1alpha1.VectorActivation) {
 	err := k8sClient.Delete(ctx, vectorActivation)
 	Expect(err).ToNot(HaveOccurred(), "Failed to delete vectorActivation: %s", vectorActivation.Name)
 }
 
-func GetVectorActivations(ctx context.Context, k8sClient client.Client) *landscape.VectorActivationList {
-	vectorActivations := &landscape.VectorActivationList{}
+func GetVectorActivations(ctx context.Context, k8sClient client.Client) *konfidencev1alpha1.VectorActivationList {
+	vectorActivations := &konfidencev1alpha1.VectorActivationList{}
 	err := k8sClient.List(ctx, vectorActivations)
 
 	Expect(err).ToNot(HaveOccurred(), "Failed to fetch vectorActivations")
@@ -135,12 +141,12 @@ func CleanupVectorActivations(k8sClient client.Client) {
 }
 
 func CreateVectorDeployment(ctx context.Context, k8sClient client.Client, name string, namespace string, vector string) {
-	vectorDeployment := &landscape.VectorDeployment{
+	vectorDeployment := &konfidencev1alpha1.VectorDeployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: landscape.VectorDeploymentSpec{
+		Spec: konfidencev1alpha1.VectorDeploymentSpec{
 			Vector: vector,
 		},
 	}
@@ -148,13 +154,13 @@ func CreateVectorDeployment(ctx context.Context, k8sClient client.Client, name s
 	Expect(k8sClient.Create(ctx, vectorDeployment)).To(Succeed())
 }
 
-func DeleteVectorDeployment(ctx context.Context, k8sClient client.Client, vectorDeployment *landscape.VectorDeployment) {
+func DeleteVectorDeployment(ctx context.Context, k8sClient client.Client, vectorDeployment *konfidencev1alpha1.VectorDeployment) {
 	err := k8sClient.Delete(ctx, vectorDeployment)
 	Expect(err).ToNot(HaveOccurred(), "Failed to delete vectorDeployment: %s", vectorDeployment.Name)
 }
 
-func GetVectorDeployments(ctx context.Context, k8sClient client.Client) *landscape.VectorDeploymentList {
-	vectorDeployments := &landscape.VectorDeploymentList{}
+func GetVectorDeployments(ctx context.Context, k8sClient client.Client) *konfidencev1alpha1.VectorDeploymentList {
+	vectorDeployments := &konfidencev1alpha1.VectorDeploymentList{}
 	err := k8sClient.List(ctx, vectorDeployments)
 
 	Expect(err).ToNot(HaveOccurred(), "Failed to fetch vectorDeployments")
@@ -170,7 +176,7 @@ func CleanupVectorDeployments(k8sClient client.Client) {
 	}
 }
 
-func UpdateVectorDeploymentStatus(ctx context.Context, k8sClient client.Client, vectorDeployment *landscape.VectorDeployment) {
+func UpdateVectorDeploymentStatus(ctx context.Context, k8sClient client.Client, vectorDeployment *konfidencev1alpha1.VectorDeployment) {
 	err := k8sClient.Status().Update(ctx, vectorDeployment)
 	Expect(err).ToNot(HaveOccurred(), "Failed to update status of vectorDeployment: %s", vectorDeployment.Name)
 }

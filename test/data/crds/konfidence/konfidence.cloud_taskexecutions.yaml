@@ -4,30 +4,36 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: vectordata.star.konfidence.cloud
+  name: taskexecutions.konfidence.cloud
 spec:
-  group: star.konfidence.cloud
+  group: konfidence.cloud
   names:
     categories:
     - konfidence
     - kden
-    kind: VectorData
-    listKind: VectorDataList
-    plural: vectordata
-    singular: vectordata
+    kind: TaskExecution
+    listKind: TaskExecutionList
+    plural: taskexecutions
+    singular: taskexecution
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.conditions[?(@.type=="Ready")].status
-      name: Ready
+    - description: The type of the task execution
+      jsonPath: .spec.type
+      name: Type
       type: string
-    - jsonPath: .status.conditions[?(@.type=="Ready")].reason
-      name: Reason
+    - description: The latest condition type
+      jsonPath: .status.conditions[-1:].type
+      name: Condition
+      type: string
+    - description: The latest condition status
+      jsonPath: .status.conditions[-1:].status
+      name: Condition-Status
       type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: VectorData is the schema for the vectordata API.
+        description: TaskExecution is the Schema for the taskexecutions API
         properties:
           apiVersion:
             description: |-
@@ -47,55 +53,26 @@ spec:
           metadata:
             type: object
           spec:
-            description: |-
-              VectorDataSpec is the LCP→landscape-orchestrator contract for vector-scoped data.
-              Star resolves the OCM envelope `{features, authored}` and aggregates per-AD
-              DeploymentResults; the landscape orchestrator materialises the payload on its
-              target runtime (ConfigMap on K8s, etc.).
+            description: spec defines the desired state of TaskExecution
             properties:
-              authored:
-                description: Authored carries the optional "authored" subset of the
-                  OCM envelope, verbatim JSON.
+              dependsOn:
+                items:
+                  type: string
+                type: array
+              name:
+                type: string
+              spec:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
-              deploymentResults:
-                additionalProperties:
-                  description: |-
-                    DeploymentResult contains a single output produced by a deployer. These results are used to transport information
-                    from the deployer to later phases of the vector lifecycle.
-                  properties:
-                    name:
-                      description: Name is a unique identifier for the result within
-                        an ArtifactDeploymentStatus.
-                      type: string
-                    spec:
-                      description: Spec contains deployer-specific structured data.
-                        Its format is determined by the Type field.
-                      type: object
-                      x-kubernetes-preserve-unknown-fields: true
-                    type:
-                      description: Type describes the structure contained in Spec.
-                        Each deployer may define multiple result types.
-                      type: string
-                  required:
-                  - name
-                  - spec
-                  - type
-                  type: object
-                description: |-
-                  DeploymentResults aggregated from underlying ArtifactDeployments, keyed
-                  "<componentName>/<resultName>".
-                type: object
-              features:
-                description: Features carries the optional "features" subset of the
-                  OCM envelope, verbatim JSON.
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
+              type:
+                type: string
+            required:
+            - name
+            - spec
+            - type
             type: object
-            x-kubernetes-validations:
-            - message: VectorData spec is immutable after it has been set
-              rule: self == oldSelf
           status:
+            description: status defines the observed state of TaskExecution
             properties:
               conditions:
                 items:
@@ -154,10 +131,9 @@ spec:
                   type: object
                 type: array
             type: object
+        required:
+        - spec
         type: object
-        x-kubernetes-validations:
-        - message: Spec is required once set
-          rule: '!has(oldSelf.spec) || has(self.spec)'
     served: true
     storage: true
     subresources:

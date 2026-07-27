@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -36,9 +36,9 @@ type VectorAssignmentReconciler struct {
 	Recorder events.EventRecorder
 }
 
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectorassignments,verbs=get;list;watch
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectorassignments/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=vectorassignments,verbs=get;list;watch
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=vectorassignments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch
 
@@ -46,7 +46,7 @@ type VectorAssignmentReconciler struct {
 func (r *VectorAssignmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	manifestTypeFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		switch obj := obj.(type) {
-		case *landscapev1alpha1.VectorAssignment:
+		case *konfidencev1alpha1.VectorAssignment:
 			return obj.Spec.Manifest.Type == "cloud.konfidence.flux.kustomize" || obj.Spec.Manifest.Type == "cloud.konfidence.flux.helm"
 		case *gatewayv1.HTTPRoute, *corev1.Service:
 			return true
@@ -56,7 +56,7 @@ func (r *VectorAssignmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&landscapev1alpha1.VectorAssignment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
+		For(&konfidencev1alpha1.VectorAssignment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
 		Owns(&corev1.Service{}, builder.MatchEveryOwner).
 		Owns(&gatewayv1.HTTPRoute{}).
 		Named("k8s_vectorassignment").
@@ -67,7 +67,7 @@ func (r *VectorAssignmentReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	log := logf.FromContext(ctx)
 	log.Info("start reconciling vector assignment")
 
-	assignment := &landscapev1alpha1.VectorAssignment{}
+	assignment := &konfidencev1alpha1.VectorAssignment{}
 	if err := r.Get(ctx, req.NamespacedName, assignment); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -78,7 +78,7 @@ func (r *VectorAssignmentReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	originalAssignment := assignment.DeepCopy()
 	patch := client.MergeFrom(originalAssignment)
 
-	artifactDeployment := &landscapev1alpha1.ArtifactDeployment{}
+	artifactDeployment := &konfidencev1alpha1.ArtifactDeployment{}
 	err := r.Get(ctx, types.NamespacedName{
 		Namespace: assignment.Namespace,
 		Name:      assignment.Spec.ArtifactDeploymentRef.Name,
@@ -123,7 +123,7 @@ func (r *VectorAssignmentReconciler) Reconcile(ctx context.Context, req ctrl.Req
 }
 
 func (r *VectorAssignmentReconciler) ensureAppNameService(
-	ctx context.Context, assignment *landscapev1alpha1.VectorAssignment, route ServiceRouteResult,
+	ctx context.Context, assignment *konfidencev1alpha1.VectorAssignment, route ServiceRouteResult,
 ) (*corev1.Service, error) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -157,7 +157,7 @@ func (r *VectorAssignmentReconciler) ensureAppNameService(
 }
 
 func (r *VectorAssignmentReconciler) ensureHTTPRoute(
-	ctx context.Context, assignment *landscapev1alpha1.VectorAssignment, svc *corev1.Service, route ServiceRouteResult,
+	ctx context.Context, assignment *konfidencev1alpha1.VectorAssignment, svc *corev1.Service, route ServiceRouteResult,
 ) error {
 	httpRoute := &gatewayv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
@@ -225,7 +225,7 @@ func (r *VectorAssignmentReconciler) ensureHTTPRoute(
 }
 
 func (r *VectorAssignmentReconciler) mapStatusConditions(
-	assignment *landscapev1alpha1.VectorAssignment,
+	assignment *konfidencev1alpha1.VectorAssignment,
 	route *gatewayv1.HTTPRoute,
 ) {
 	// The created HTTPRoute always has exactly one parent ref, which is the Service created for the application. We
@@ -234,7 +234,7 @@ func (r *VectorAssignmentReconciler) mapStatusConditions(
 		meta.IsStatusConditionTrue(route.Status.Parents[0].Conditions, string(gatewayv1.RouteConditionAccepted)) &&
 		meta.IsStatusConditionTrue(route.Status.Parents[0].Conditions, string(gatewayv1.RouteConditionResolvedRefs)) {
 		meta.SetStatusCondition(&assignment.Status.Conditions, metav1.Condition{
-			Type:               landscapev1alpha1.VectorAssignmentReadyCondition,
+			Type:               konfidencev1alpha1.VectorAssignmentReadyCondition,
 			Status:             metav1.ConditionTrue,
 			Reason:             "AssignmentReady",
 			Message:            "HTTPRoute has been accepted and all references resolved",
@@ -243,7 +243,7 @@ func (r *VectorAssignmentReconciler) mapStatusConditions(
 		})
 	} else {
 		meta.SetStatusCondition(&assignment.Status.Conditions, metav1.Condition{
-			Type:               landscapev1alpha1.VectorAssignmentReadyCondition,
+			Type:               konfidencev1alpha1.VectorAssignmentReadyCondition,
 			Status:             metav1.ConditionFalse,
 			Reason:             "AssignmentNotReady",
 			Message:            "HTTPRoute is either not accepted or has unresolved references",

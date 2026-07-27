@@ -18,7 +18,7 @@ import (
 	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
 
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
-	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 )
 
@@ -31,9 +31,9 @@ type KustomizeArtifactDeploymentReconciler struct {
 	KustomizationReconciler       fluxcd.FluxKustomizeReconciler
 }
 
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=artifactdeployments/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=artifactdeployments/finalizers,verbs=update
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments/finalizers,verbs=update
 // +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=ocirepositories,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=kustomize.toolkit.fluxcd.io,resources=kustomizations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
@@ -44,7 +44,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 	log.Info("start reconciling Kustomize artifact deployment")
 
 	// get the ArtifactDeployment object
-	deployment := &landscapev1alpha1.ArtifactDeployment{}
+	deployment := &konfidencev1alpha1.ArtifactDeployment{}
 	if err := r.Get(ctx, req.NamespacedName, deployment); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -110,7 +110,7 @@ func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manage
 	// Create a predicate to filter ...
 	manifestTypeFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		switch obj := obj.(type) {
-		case *landscapev1alpha1.ArtifactDeployment:
+		case *konfidencev1alpha1.ArtifactDeployment:
 			// ... for 'Kustomize' manifest types
 			return obj.Spec.Manifest.Type == "cloud.konfidence.flux.kustomize"
 		case *sourcev1.OCIRepository, *kustomizev1.Kustomization:
@@ -122,7 +122,7 @@ func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manage
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&landscapev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
+		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
 		Owns(&sourcev1.OCIRepository{}).
 		Owns(&kustomizev1.Kustomization{}).
 		Named("kustomize_artifactdeployment").

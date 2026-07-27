@@ -9,7 +9,7 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
 	// konfidence CRDs
-	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -52,7 +52,7 @@ func Execute() {
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(landscapev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(konfidencev1alpha1.AddToScheme(scheme))
 	utilruntime.Must(sourcev1.AddToScheme(scheme))
 	utilruntime.Must(helmv2.AddToScheme(scheme))
 	utilruntime.Must(kustomizev1.AddToScheme(scheme))

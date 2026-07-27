@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	star "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,13 +24,13 @@ var _ = Describe("VectorData Controller", func() {
 	)
 
 	AfterEach(func() {
-		vdList := &star.VectorDataList{}
+		vdList := &konfidencev1alpha1.VectorDataList{}
 		Expect(k8sClient.List(context.Background(), vdList)).To(Succeed())
 		for i := range vdList.Items {
 			_ = k8sClient.Delete(context.Background(), &vdList.Items[i])
 		}
 		Eventually(func() int {
-			l := &star.VectorDataList{}
+			l := &konfidencev1alpha1.VectorDataList{}
 			_ = k8sClient.List(context.Background(), l)
 			return len(l.Items)
 		}, timeout, interval).Should(Equal(0))
@@ -49,7 +49,7 @@ var _ = Describe("VectorData Controller", func() {
 			vd := newVectorData("vd-happy",
 				`{"betaApi":false,"darkMode":true}`,
 				`{"_origin":"test"}`,
-				map[string]star.DeploymentResult{
+				map[string]konfidencev1alpha1.DeploymentResult{
 					"github.com/example/component-a/endpoint": {Name: "endpoint", Type: "serviceEndpoint",
 						Spec: runtime.RawExtension{Raw: []byte(`{"url":"http://a"}`)}},
 				})
@@ -70,12 +70,12 @@ var _ = Describe("VectorData Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
-				got := &star.VectorData{}
+				got := &konfidencev1alpha1.VectorData{}
 				g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "vd-happy"}, got)).To(Succeed())
 				g.Expect(got.Finalizers).To(ContainElement(VectorDataFinalizer))
 				g.Expect(readyCondition(got)).ToNot(BeNil())
 				g.Expect(readyCondition(got).Status).To(Equal(metav1.ConditionTrue))
-				g.Expect(readyCondition(got).Reason).To(Equal(star.VectorDataReasonMaterialized))
+				g.Expect(readyCondition(got).Reason).To(Equal(konfidencev1alpha1.VectorDataReasonMaterialized))
 			}, timeout, interval).Should(Succeed())
 		})
 
@@ -95,7 +95,7 @@ var _ = Describe("VectorData Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 			Eventually(func() bool {
 				return apierrors.IsNotFound(k8sClient.Get(context.Background(),
-					types.NamespacedName{Namespace: ns, Name: "vd-delete"}, &star.VectorData{}))
+					types.NamespacedName{Namespace: ns, Name: "vd-delete"}, &konfidencev1alpha1.VectorData{}))
 			}, timeout, interval).Should(BeTrue())
 		})
 
@@ -110,7 +110,7 @@ var _ = Describe("VectorData Controller", func() {
 			firstRV := cm.ResourceVersion
 
 			// Trigger another reconcile via a metadata change (annotation).
-			got := &star.VectorData{}
+			got := &konfidencev1alpha1.VectorData{}
 			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "vd-idempotent"}, got)).To(Succeed())
 			if got.Annotations == nil {
 				got.Annotations = map[string]string{}
@@ -128,21 +128,21 @@ var _ = Describe("VectorData Controller", func() {
 	})
 })
 
-func newVectorData(name string, featuresJSON, authoredJSON string, results map[string]star.DeploymentResult) *star.VectorData {
-	spec := star.VectorDataSpec{DeploymentResults: results}
+func newVectorData(name string, featuresJSON, authoredJSON string, results map[string]konfidencev1alpha1.DeploymentResult) *konfidencev1alpha1.VectorData {
+	spec := konfidencev1alpha1.VectorDataSpec{DeploymentResults: results}
 	if featuresJSON != "" {
 		spec.Features = &runtime.RawExtension{Raw: json.RawMessage(featuresJSON)}
 	}
 	if authoredJSON != "" {
 		spec.Authored = &runtime.RawExtension{Raw: json.RawMessage(authoredJSON)}
 	}
-	return &star.VectorData{
+	return &konfidencev1alpha1.VectorData{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
 		Spec:       spec,
 	}
 }
 
-func readyCondition(vd *star.VectorData) *metav1.Condition {
+func readyCondition(vd *konfidencev1alpha1.VectorData) *metav1.Condition {
 	for i := range vd.Status.Conditions {
 		if vd.Status.Conditions[i].Type == "Ready" {
 			return &vd.Status.Conditions[i]

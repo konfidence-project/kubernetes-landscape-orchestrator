@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	landscape "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -30,9 +30,9 @@ type TaskExecutionReconciler struct {
 	Recorder events.EventRecorder
 }
 
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=taskexecutions,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=taskexecutions/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=taskexecutions/finalizers,verbs=update
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=taskexecutions,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=taskexecutions/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=taskexecutions/finalizers,verbs=update
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get
 
@@ -48,7 +48,7 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	log := logf.FromContext(ctx)
 	log.Info("Reconciling taskExecution")
 
-	taskExecution := &landscape.TaskExecution{}
+	taskExecution := &konfidencev1alpha1.TaskExecution{}
 	if err := r.Get(ctx, req.NamespacedName, taskExecution); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -69,9 +69,9 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	case batchv1.JobFailed:
 		log.Info(fmt.Sprintf("Job %s failed", job.Name))
 		meta.SetStatusCondition(&taskExecution.Status.Conditions, metav1.Condition{
-			Type:               landscape.TaskFailed,
+			Type:               konfidencev1alpha1.TaskFailed,
 			Status:             metav1.ConditionTrue,
-			Reason:             landscape.TaskFailed,
+			Reason:             konfidencev1alpha1.TaskFailed,
 			Message:            fmt.Sprintf("Reconciling TaskExecution %s failed", taskExecution.Name),
 			ObservedGeneration: taskExecution.Generation,
 			LastTransitionTime: metav1.Now(),
@@ -80,9 +80,9 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	case batchv1.JobComplete:
 		log.Info(fmt.Sprintf("Job %s completed successfully", job.Name))
 		meta.SetStatusCondition(&taskExecution.Status.Conditions, metav1.Condition{
-			Type:               landscape.TaskSucceeded,
+			Type:               konfidencev1alpha1.TaskSucceeded,
 			Status:             metav1.ConditionTrue,
-			Reason:             landscape.TaskSucceeded,
+			Reason:             konfidencev1alpha1.TaskSucceeded,
 			Message:            fmt.Sprintf("TaskExecution %s reconciled successfully", taskExecution.Name),
 			ObservedGeneration: taskExecution.Generation,
 			LastTransitionTime: metav1.Now(),
@@ -99,7 +99,7 @@ func (r *TaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{}, nil
 }
 
-func (r *TaskExecutionReconciler) createOrGetJob(ctx context.Context, taskExecution *landscape.TaskExecution) (*batchv1.Job, error) {
+func (r *TaskExecutionReconciler) createOrGetJob(ctx context.Context, taskExecution *konfidencev1alpha1.TaskExecution) (*batchv1.Job, error) {
 	log := logf.FromContext(ctx)
 	jobs := &batchv1.JobList{}
 	if err := r.List(ctx, jobs, client.InNamespace(taskExecution.Namespace), client.MatchingFields{taskExecutionOwnerKey: taskExecution.Name}); err != nil {
@@ -135,7 +135,7 @@ func (r *TaskExecutionReconciler) createOrGetJob(ctx context.Context, taskExecut
 	}
 }
 
-func (r *TaskExecutionReconciler) constructJob(taskExecution *landscape.TaskExecution) (*batchv1.Job, error) {
+func (r *TaskExecutionReconciler) constructJob(taskExecution *konfidencev1alpha1.TaskExecution) (*batchv1.Job, error) {
 	jobSpec := batchv1.JobSpec{}
 	if err := json.Unmarshal(taskExecution.Spec.Spec.Raw, &jobSpec); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal taskExecution spec: %w", err)
@@ -169,7 +169,7 @@ func (r *TaskExecutionReconciler) isJobFinished(job *batchv1.Job) (bool, batchv1
 
 var (
 	taskExecutionOwnerKey = ".metadata.controller"
-	apiGVStr              = landscape.GroupVersion.String()
+	apiGVStr              = konfidencev1alpha1.GroupVersion.String()
 )
 
 // SetupWithManager sets up the controller with the Manager.
@@ -182,7 +182,7 @@ func (r *TaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return nil
 		}
 		// make sure it is a taskExecution...
-		if owner.APIVersion != apiGVStr || owner.Kind != landscape.TaskExecutionKind {
+		if owner.APIVersion != apiGVStr || owner.Kind != konfidencev1alpha1.TaskExecutionKind {
 			return nil
 		}
 
@@ -194,17 +194,17 @@ func (r *TaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	taskExecutionFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		switch o := obj.(type) {
-		case *landscape.TaskExecution:
+		case *konfidencev1alpha1.TaskExecution:
 			return o.Spec.Type == "k8s-job"
 		case *batchv1.Job:
-			return r.jobOwnerRefsContainKind(o.OwnerReferences, landscape.TaskExecutionKind)
+			return r.jobOwnerRefsContainKind(o.OwnerReferences, konfidencev1alpha1.TaskExecutionKind)
 		default:
 			return false
 		}
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&landscape.TaskExecution{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(taskExecutionFilter).
+		For(&konfidencev1alpha1.TaskExecution{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(taskExecutionFilter).
 		Owns(&batchv1.Job{}).
 		Named("taskExecution").
 		Complete(r)
