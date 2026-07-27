@@ -1,4 +1,4 @@
-# -- Port the vector-data service listens on (OFREP + health endpoints).
+# -- Container port the service binds (unprivileged; runs as non-root, no caps).
 port: 4000
 
 # -- Override the chart name used in resource names.
@@ -52,6 +52,8 @@ serviceAccount:
 service:
   # -- Kubernetes Service type.
   type: ClusterIP
+  # -- Port the Service exposes to clients (targets the container `port`).
+  port: 80
   # -- Annotations to add to the Service.
   annotations: {}
 
