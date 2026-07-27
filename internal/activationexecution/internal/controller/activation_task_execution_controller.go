@@ -7,7 +7,7 @@ import (
 	"os"
 	"reflect"
 
-	landscape "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -60,14 +60,14 @@ type DeploymentSpec struct {
 	ServicePorts []corev1.ServicePort `json:"ServicePorts"`
 }
 
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=activationtaskexecutions,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=activationtaskexecutions/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=activationtaskexecutions,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=activationtaskexecutions/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectoractivations,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectoractivations/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectordeployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=vectordeployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=vectoractivations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=vectoractivations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=vectordeployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=vectordeployments/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
@@ -83,7 +83,7 @@ func (r *ActivationTaskExecutionReconciler) Reconcile(ctx context.Context, req c
 	log.Info("Reconcile started...")
 
 	// get activationTaskExecution
-	activationTaskExecution := &landscape.ActivationTaskExecution{}
+	activationTaskExecution := &konfidencev1alpha1.ActivationTaskExecution{}
 	if err := r.Get(ctx, req.NamespacedName, activationTaskExecution); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -109,13 +109,13 @@ func (r *ActivationTaskExecutionReconciler) Reconcile(ctx context.Context, req c
 }
 
 func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
-	ctx context.Context, req ctrl.Request, activationTaskExecution *landscape.ActivationTaskExecution,
+	ctx context.Context, req ctrl.Request, activationTaskExecution *konfidencev1alpha1.ActivationTaskExecution,
 ) error {
 	log := logf.FromContext(ctx)
 	log.Info("Reconciling activationTaskExecution")
 
 	// get vectorActivation
-	vectorActivation := &landscape.VectorActivation{}
+	vectorActivation := &konfidencev1alpha1.VectorActivation{}
 	err := r.Get(ctx, types.NamespacedName{
 		Namespace: req.Namespace,
 		Name:      activationTaskExecution.Spec.VectorActivation,
@@ -140,9 +140,9 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 
 	// mark activationTaskExecution as successful
 	meta.SetStatusCondition(&activationTaskExecution.Status.Conditions, metav1.Condition{
-		Type:               landscape.ActivationTaskExecutionSucceeded,
+		Type:               konfidencev1alpha1.ActivationTaskExecutionSucceeded,
 		Status:             metav1.ConditionTrue,
-		Reason:             landscape.ActivationTaskExecutionSucceeded,
+		Reason:             konfidencev1alpha1.ActivationTaskExecutionSucceeded,
 		Message:            fmt.Sprintf("Successfully reconciled ActivationTaskExecution %s", activationTaskExecution.Name),
 		ObservedGeneration: activationTaskExecution.Generation,
 		LastTransitionTime: metav1.Now(),
@@ -156,8 +156,8 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(
 	ctx context.Context,
 	req ctrl.Request,
 	httpRouteConfig HTTPRouteConfig,
-	vectorActivation *landscape.VectorActivation,
-	activationTaskExecution *landscape.ActivationTaskExecution,
+	vectorActivation *konfidencev1alpha1.VectorActivation,
+	activationTaskExecution *konfidencev1alpha1.ActivationTaskExecution,
 ) (*gwapiv1.HTTPRoute, error) {
 	log := logf.FromContext(ctx)
 
@@ -198,7 +198,7 @@ func (r *ActivationTaskExecutionReconciler) getOrCreateHttpRoute(
 }
 
 func (r *ActivationTaskExecutionReconciler) constructHttpRoute(
-	req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *landscape.VectorActivation,
+	req ctrl.Request, httpRouteConfig HTTPRouteConfig, vectorActivation *konfidencev1alpha1.VectorActivation,
 ) (*gwapiv1.HTTPRoute, error) {
 	gatewayNamespace := gwapiv1.Namespace(GatewayNamespace)
 	httpRoute := &gwapiv1.HTTPRoute{
@@ -259,11 +259,11 @@ func (r *ActivationTaskExecutionReconciler) constructHttpRoute(
 func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(
 	ctx context.Context,
 	req ctrl.Request,
-	activationTaskExecution *landscape.ActivationTaskExecution,
-	vectorActivation *landscape.VectorActivation,
+	activationTaskExecution *konfidencev1alpha1.ActivationTaskExecution,
+	vectorActivation *konfidencev1alpha1.VectorActivation,
 ) ([]HTTPRouteConfig, error) {
 	var httpRouteConfigs []HTTPRouteConfig
-	vectorDeployment := &landscape.VectorDeployment{}
+	vectorDeployment := &konfidencev1alpha1.VectorDeployment{}
 	if err := r.Get(ctx, types.NamespacedName{Name: vectorActivation.Spec.VectorDeployment, Namespace: req.Namespace}, vectorDeployment); err != nil {
 		return nil, fmt.Errorf("failed to get VectorDeployment %s: %w", vectorActivation.Spec.VectorDeployment, err)
 	}
@@ -305,7 +305,7 @@ func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(
 func (r *ActivationTaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	activationTaskExecutionFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		switch o := obj.(type) {
-		case *landscape.ActivationTaskExecution:
+		case *konfidencev1alpha1.ActivationTaskExecution:
 			return o.Spec.Type == HttpActivationTaskExecutionType
 		default:
 			return false
@@ -313,7 +313,8 @@ func (r *ActivationTaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) e
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&landscape.ActivationTaskExecution{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(activationTaskExecutionFilter).
+		For(&konfidencev1alpha1.ActivationTaskExecution{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		WithEventFilter(activationTaskExecutionFilter).
 		Named("activationTaskExecution").
 		Complete(r)
 }

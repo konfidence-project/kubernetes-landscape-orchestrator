@@ -36,6 +36,7 @@ bin/*/
 bin/manager
 bin/kubernetes-landscape-orchestrator
 bin/ginkgo
+bin/vector-data-service
 
 # Generated ClusterRole manifests fed to charts/patch-clusterrole.sh
 config/rbac/

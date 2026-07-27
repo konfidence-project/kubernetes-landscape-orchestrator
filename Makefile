@@ -96,7 +96,14 @@ test: hermit generate-test-crds fmt vet setup-envtest ginkgo ## Run all unit tes
 
 .PHONY: generate-test-crds
 generate-test-crds: hermit ## Generate CRDs needed for controller tests.
-	$(CONTROLLER_GEN) crd paths="github.com/konfidence-project/konfidence/api/star/..." output:crd:artifacts:config=test/data/crds/star
+	$(CONTROLLER_GEN) crd paths="github.com/konfidence-project/konfidence/api/v1alpha1/..." output:crd:artifacts:config=test/data/crds/konfidence
+	@# keep only the CRDs relevant to this orchestrator
+	@rm -f \
+		test/data/crds/konfidence/konfidence.cloud_projects.yaml \
+		test/data/crds/konfidence/konfidence.cloud_stageconfigurations.yaml \
+		test/data/crds/konfidence/konfidence.cloud_vectorpromotions.yaml \
+		test/data/crds/konfidence/konfidence.cloud_vectorpromotionconfigs.yaml \
+		test/data/crds/konfidence/konfidence.cloud_vectortemplates.yaml
 
 .PHONY: setup-envtest
 setup-envtest: hermit ## Download the envtest binaries for the configured Kubernetes version.

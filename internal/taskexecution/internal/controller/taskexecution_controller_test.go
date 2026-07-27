@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	landscape "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	testutil "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/taskexecution/internal/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -45,7 +45,7 @@ var _ = Describe("TaskExecution Controller", func() {
 			testutil.CreateTaskExecution(ctx, k8sClient, TaskExecution, Namespace, TaskExecution, TaskExecutionType, nil, TaskExecutionSpec)
 
 			// check that the taskExecution has been created and has valid properties
-			taskExecution := &landscape.TaskExecution{}
+			taskExecution := &konfidencev1alpha1.TaskExecution{}
 			taskExecutionLookupKey := types.NamespacedName{Name: TaskExecution, Namespace: Namespace}
 			Eventually(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, taskExecutionLookupKey, taskExecution)).To(Succeed())
@@ -83,7 +83,7 @@ var _ = Describe("TaskExecution Controller", func() {
 			Eventually(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, taskExecutionLookupKey, taskExecution)).To(Succeed())
 				g.Expect(taskExecution.Status.Conditions).To(HaveLen(1))
-				g.Expect(meta.IsStatusConditionTrue(taskExecution.Status.Conditions, landscape.TaskSucceeded)).To(BeTrue())
+				g.Expect(meta.IsStatusConditionTrue(taskExecution.Status.Conditions, konfidencev1alpha1.TaskSucceeded)).To(BeTrue())
 			}, timeout, interval).Should(Succeed())
 		})
 	})

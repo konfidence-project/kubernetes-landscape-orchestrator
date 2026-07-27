@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
 	"k8s.io/apimachinery/pkg/api/meta"
 
@@ -25,8 +25,8 @@ type DeploymentResultServiceSpec struct {
 	ServicePorts []corev1.ServicePort
 }
 
-func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment) error {
-	if !meta.IsStatusConditionTrue(deployment.Status.Conditions, landscapev1alpha1.ArtifactDeployedCondition) {
+func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) error {
+	if !meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.ArtifactDeployedCondition) {
 		return nil
 	}
 	// detect exposable services of flux deployment by label
@@ -44,9 +44,9 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 	deployment.Status.DeploymentResults = deploymentResultServices
 
 	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-		Type:               landscapev1alpha1.DeploymentResultCreatedCondition,
+		Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
 		Status:             metav1.ConditionTrue,
-		Reason:             landscapev1alpha1.DeploymentResultCreatedCondition,
+		Reason:             konfidencev1alpha1.DeploymentResultCreatedCondition,
 		Message:            "Successfully created DeploymentResult",
 		ObservedGeneration: deployment.Generation,
 		LastTransitionTime: metav1.Now(),
@@ -56,7 +56,7 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 }
 
 func (s *DeploymentResultStatusUpdater) fetchExposableServices(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment,
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment,
 ) (*corev1.ServiceList, error) {
 	serviceLabelSelector := &metav1.LabelSelector{
 		MatchLabels: map[string]string{
@@ -85,8 +85,8 @@ func (s *DeploymentResultStatusUpdater) fetchExposableServices(
 	return serviceList, nil
 }
 
-func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceList *corev1.ServiceList) ([]landscapev1alpha1.DeploymentResult, error) {
-	deploymentResultServices := make([]landscapev1alpha1.DeploymentResult, len(serviceList.Items))
+func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceList *corev1.ServiceList) ([]konfidencev1alpha1.DeploymentResult, error) {
+	deploymentResultServices := make([]konfidencev1alpha1.DeploymentResult, len(serviceList.Items))
 
 	for i, service := range serviceList.Items {
 		deploymentResultServiceSpec := DeploymentResultServiceSpec{
@@ -100,7 +100,7 @@ func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceLis
 			return nil, fmt.Errorf("failed to marshal deploymentResultServiceSpec: %w", err)
 		}
 
-		deploymentResultServices[i] = landscapev1alpha1.DeploymentResult{
+		deploymentResultServices[i] = konfidencev1alpha1.DeploymentResult{
 			Name: service.Labels["konfidence.cloud/appname"],
 			Type: "http-k8s-service",
 			Spec: runtime.RawExtension{Raw: deploymentResultServiceSpecRaw},

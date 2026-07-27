@@ -3,7 +3,7 @@ package fluxcd_test
 import (
 	"testing"
 
-	"github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	"github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"

@@ -4,36 +4,40 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: taskexecutions.star.konfidence.cloud
+  name: stageversions.konfidence.cloud
 spec:
-  group: star.konfidence.cloud
+  group: konfidence.cloud
   names:
     categories:
     - konfidence
     - kden
-    kind: TaskExecution
-    listKind: TaskExecutionList
-    plural: taskexecutions
-    singular: taskexecution
+    kind: StageVersion
+    listKind: StageVersionList
+    plural: stageversions
+    singular: stageversion
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The type of the task execution
-      jsonPath: .spec.type
-      name: Type
+    - description: Name of the referenced Stage
+      jsonPath: .spec.stageRef.name
+      name: Stage
       type: string
-    - description: The latest condition type
-      jsonPath: .status.conditions[-1:].type
-      name: Condition
+    - description: The object generation of the stage
+      jsonPath: .spec.stageGeneration
+      name: Stage-Generation
+      type: integer
+    - description: The deployment vector for this stage
+      jsonPath: .spec.vector
+      name: Vector
       type: string
-    - description: The latest condition status
-      jsonPath: .status.conditions[-1:].status
-      name: Condition-Status
-      type: string
+    - description: Time since creation of StageVersion
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: TaskExecution is the Schema for the taskexecutions API
+        description: StageVersion is the Schema for the stageversions API
         properties:
           apiVersion:
             description: |-
@@ -53,26 +57,40 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of TaskExecution
+            description: Spec defines the desired state of the StageVersion and is
+              immutable after it has been set
             properties:
-              dependsOn:
-                items:
-                  type: string
-                type: array
-              name:
-                type: string
-              spec:
+              stageGeneration:
+                description: the object generation of the stage that created this
+                  stage version
+                format: int64
+                minimum: 1
+                type: integer
+              stageRef:
+                description: stageRef references the Stage this StageVersion belongs
+                  to
+                properties:
+                  name:
+                    description: Name is the name of the Stage. Required.
+                    type: string
+                required:
+                - name
                 type: object
-                x-kubernetes-preserve-unknown-fields: true
-              type:
+              vector:
+                description: Vector points to the OCM component version that contains
+                  the deployment vector for this stage.
+                minLength: 1
                 type: string
             required:
-            - name
-            - spec
-            - type
+            - stageGeneration
+            - stageRef
+            - vector
             type: object
+            x-kubernetes-validations:
+            - message: StageVersion spec is immutable after it has been set
+              rule: self == oldSelf
           status:
-            description: status defines the observed state of TaskExecution
+            description: status defines the observed state of StageVersion
             properties:
               conditions:
                 items:
@@ -131,9 +149,10 @@ spec:
                   type: object
                 type: array
             type: object
-        required:
-        - spec
         type: object
+        x-kubernetes-validations:
+        - message: Spec is required once set
+          rule: '!has(oldSelf.spec) || has(self.spec)'
     served: true
     storage: true
     subresources:

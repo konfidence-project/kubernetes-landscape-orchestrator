@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	landscape "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	testutil "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/activationexecution/internal/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -60,7 +60,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			testutil.CreateVectorActivation(ctx, k8sClient, VectorActivation, Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 
 			// check that the vectorActivation has been created and has valid properties
-			vectorActivation := &landscape.VectorActivation{}
+			vectorActivation := &konfidencev1alpha1.VectorActivation{}
 			vectorActivationLookupKey := types.NamespacedName{Name: VectorActivation, Namespace: Namespace}
 			Eventually(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, vectorActivationLookupKey, vectorActivation)).To(Succeed())
@@ -70,7 +70,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			testutil.CreateVectorDeployment(ctx, k8sClient, VectorDeployment, Namespace, Vector001)
 
 			// check that the vectorDeployment has been created and has valid properties
-			vectorDeployment := &landscape.VectorDeployment{}
+			vectorDeployment := &konfidencev1alpha1.VectorDeployment{}
 			vectorDeploymentLookupKey := types.NamespacedName{Name: VectorDeployment, Namespace: Namespace}
 			Eventually(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, vectorDeploymentLookupKey, vectorDeployment)).To(Succeed())
@@ -78,8 +78,8 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			// create deploymentResults
-			deploymentResults := make(map[string]landscape.DeploymentResult)
-			deploymentResults[ServiceName1] = landscape.DeploymentResult{
+			deploymentResults := make(map[string]konfidencev1alpha1.DeploymentResult)
+			deploymentResults[ServiceName1] = konfidencev1alpha1.DeploymentResult{
 				Name: ServiceName1,
 				Type: HttpActivationTaskExecutionType,
 				Spec: runtime.RawExtension{
@@ -90,7 +90,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				},
 			}
 
-			deploymentResults[ServiceName2] = landscape.DeploymentResult{
+			deploymentResults[ServiceName2] = konfidencev1alpha1.DeploymentResult{
 				Name: ServiceName2,
 				Type: HttpActivationTaskExecutionType,
 				Spec: runtime.RawExtension{
@@ -117,7 +117,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			)
 
 			// check that the activationTaskExecution has been created and has valid properties
-			activationTaskExecution := &landscape.ActivationTaskExecution{}
+			activationTaskExecution := &konfidencev1alpha1.ActivationTaskExecution{}
 			activationTaskExecutionLookupKey := types.NamespacedName{Name: ActivationTaskExecution, Namespace: Namespace}
 			Eventually(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, activationTaskExecutionLookupKey, activationTaskExecution)).To(Succeed())
@@ -141,7 +141,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			Eventually(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, activationTaskExecutionLookupKey, activationTaskExecution)).To(Succeed())
 				g.Expect(activationTaskExecution.Status.Conditions).To(HaveLen(1))
-				g.Expect(meta.IsStatusConditionTrue(activationTaskExecution.Status.Conditions, landscape.ActivationTaskExecutionSucceeded)).To(BeTrue())
+				g.Expect(meta.IsStatusConditionTrue(activationTaskExecution.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionSucceeded)).To(BeTrue())
 			}, timeout, interval).Should(Succeed())
 		})
 	})
@@ -178,7 +178,7 @@ func verifyHTTPRoute(
 		g.Expect(route.Spec.Rules[0].BackendRefs[0].BackendRef.Port).To(Equal(port))
 		g.Expect(route.GetOwnerReferences()).To(HaveLen(1))
 		g.Expect(testutil.HasOwnerReference(route.GetOwnerReferences(), metav1.OwnerReference{
-			Kind: landscape.VectorActivationKind,
+			Kind: konfidencev1alpha1.VectorActivationKind,
 			Name: vectorActivation,
 		})).To(BeTrue())
 	}, timeout, interval).Should(Succeed())

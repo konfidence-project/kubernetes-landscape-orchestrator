@@ -4,40 +4,36 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: vectormigrations.star.konfidence.cloud
+  name: stageversionusages.konfidence.cloud
 spec:
-  group: star.konfidence.cloud
+  group: konfidence.cloud
   names:
     categories:
     - konfidence
     - kden
-    kind: VectorMigration
-    listKind: VectorMigrationList
-    plural: vectormigrations
-    singular: vectormigration
+    kind: StageVersionUsage
+    listKind: StageVersionUsageList
+    plural: stageversionusages
+    singular: stageversionusage
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The stage version
-      jsonPath: .spec.stageVersion
-      name: Stage-Version
+    - description: The referenced StageVersion
+      jsonPath: .spec.stageVersionRef.name
+      name: Stage-Version-Ref
       type: string
-    - description: The deployment vector
-      jsonPath: .spec.vector
-      name: Vector
+    - description: The label selector for the StageVersion
+      jsonPath: .spec.stageVersionSelector
+      name: Stage-Version-Selector
       type: string
-    - description: The latest condition type
-      jsonPath: .status.conditions[-1:].type
-      name: Condition
-      type: string
-    - description: The latest condition status
-      jsonPath: .status.conditions[-1:].status
-      name: Condition-Status
+    - description: The reason for this StageVersion usage
+      jsonPath: .spec.reason
+      name: Reason
       type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: VectorMigration is the Schema for the vectormigrations API
+        description: StageVersionUsage is the Schema for the stageversionusages API
         properties:
           apiVersion:
             description: |-
@@ -57,20 +53,77 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of VectorMigration
+            description: spec defines the desired state of StageVersionUsage
             properties:
-              stageVersion:
+              reason:
+                description: Reason is human-readable description of why this StageVersion
+                  is in use, e.g. "executing vector migrations", "latest vector for
+                  stage xyz",
                 type: string
-              vector:
-                description: Vector points to the OCM component version that contains
-                  the deployment vector for this stage.
-                type: string
-            required:
-            - stageVersion
-            - vector
+              stageVersionRef:
+                description: StageVersionRef references a stageVersion
+                properties:
+                  name:
+                    description: Name is the name of the StageVersion. Required.
+                    type: string
+                required:
+                - name
+                type: object
+              stageVersionSelector:
+                description: StageVersionSelector is a label selector to find a StageVersion
+                  when name is not provided.
+                properties:
+                  matchExpressions:
+                    description: matchExpressions is a list of label selector requirements.
+                      The requirements are ANDed.
+                    items:
+                      description: |-
+                        A label selector requirement is a selector that contains values, a key, and an operator that
+                        relates the key and values.
+                      properties:
+                        key:
+                          description: key is the label key that the selector applies
+                            to.
+                          type: string
+                        operator:
+                          description: |-
+                            operator represents a key's relationship to a set of values.
+                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                          type: string
+                        values:
+                          description: |-
+                            values is an array of string values. If the operator is In or NotIn,
+                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                            the values array must be empty. This array is replaced during a strategic
+                            merge patch.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: atomic
+                      required:
+                      - key
+                      - operator
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  matchLabels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                    type: object
+                type: object
+                x-kubernetes-map-type: atomic
             type: object
+            x-kubernetes-validations:
+            - message: exactly one of the fields in [stageVersionRef stageVersionSelector]
+                must be set
+              rule: '[has(self.stageVersionRef),has(self.stageVersionSelector)].filter(x,x==true).size()
+                == 1'
           status:
-            description: status defines the observed state of VectorMigration
+            description: status defines the observed state of StageVersionUsage
             properties:
               conditions:
                 items:
@@ -127,6 +180,12 @@ spec:
                   - status
                   - type
                   type: object
+                type: array
+              resolvedStageVersions:
+                description: ResolvedStageVersions contains the names of all resolved
+                  stageVersion resources specified by either stageVersionRef or StageVersionSelector
+                items:
+                  type: string
                 type: array
             type: object
         required:

@@ -15,8 +15,8 @@ import (
 	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
-	// see https://github.com/konfidence-project/konfidence/tree/main/api/star/v1alpha1
-	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	// see https://github.com/konfidence-project/konfidence/tree/main/api/v1alpha1
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 )
 
@@ -37,7 +37,7 @@ type OCIRepositoryReconciler struct {
 var _ fluxcd.FluxKustomizeReconciler = (*OCIRepositoryReconciler)(nil)
 
 func (r *OCIRepositoryReconciler) Reconcile(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource) (isReady bool, err error) {
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource) (isReady bool, err error) {
 
 	ociRepository := &sourcev1.OCIRepository{
 		ObjectMeta: metav1.ObjectMeta{
@@ -64,7 +64,7 @@ func (r *OCIRepositoryReconciler) Reconcile(
 
 func (r *OCIRepositoryReconciler) mutateOCIRepository(
 	ctx context.Context,
-	deployment *landscapev1alpha1.ArtifactDeployment,
+	deployment *konfidencev1alpha1.ArtifactDeployment,
 	kustomizeResource *fluxcd.KustomizeResource,
 	ociRepository *sourcev1.OCIRepository,
 ) error {
@@ -96,7 +96,7 @@ func (r *OCIRepositoryReconciler) mutateOCIRepository(
 }
 
 func (r *OCIRepositoryReconciler) mapStatusConditions(
-	deployment *landscapev1alpha1.ArtifactDeployment, ociRepository *sourcev1.OCIRepository) {
+	deployment *konfidencev1alpha1.ArtifactDeployment, ociRepository *sourcev1.OCIRepository) {
 
 	for _, condition := range ociRepository.Status.Conditions {
 		if conditionType := mapOCIRepositoryConditionType(condition.Type); conditionType != "" {
@@ -115,7 +115,7 @@ func (r *OCIRepositoryReconciler) mapStatusConditions(
 func mapOCIRepositoryConditionType(conditionType string) string {
 	switch conditionType {
 	case conditionTypeReady:
-		return landscapev1alpha1.ArtifactFetchedCondition
+		return konfidencev1alpha1.ArtifactFetchedCondition
 	default:
 		return ""
 	}

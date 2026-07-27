@@ -18,7 +18,7 @@ import (
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 
 	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
-	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 )
 
@@ -31,9 +31,9 @@ type HelmArtifactDeploymentReconciler struct {
 	HelmReleaseReconciler         fluxcd.FluxHelmReconciler
 }
 
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=artifactdeployments/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=star.konfidence.cloud,resources=artifactdeployments/finalizers,verbs=update
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments/finalizers,verbs=update
 // +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=helmrepositories,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=helmcharts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;create;update;patch;delete
@@ -45,7 +45,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 	log.Info("start reconciling Helm artifact deployment")
 
 	// get the ArtifactDeployment object
-	deployment := &landscapev1alpha1.ArtifactDeployment{}
+	deployment := &konfidencev1alpha1.ArtifactDeployment{}
 	if err := r.Get(ctx, req.NamespacedName, deployment); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -113,7 +113,7 @@ func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) er
 	// Create a predicate to filter ...
 	manifestTypeFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		switch obj := obj.(type) {
-		case *landscapev1alpha1.ArtifactDeployment:
+		case *konfidencev1alpha1.ArtifactDeployment:
 			// ... for 'Helm' manifest types
 			return obj.Spec.Manifest.Type == "cloud.konfidence.flux.helm"
 		case *sourcev1.HelmRepository, *sourcev1.HelmChart, *helmv2.HelmRelease:
@@ -125,7 +125,7 @@ func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) er
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&landscapev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
+		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
 		Owns(&sourcev1.HelmRepository{}).
 		Owns(&sourcev1.HelmChart{}).
 		Owns(&helmv2.HelmRelease{}).

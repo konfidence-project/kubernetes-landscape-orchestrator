@@ -15,8 +15,8 @@ import (
 	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
-	// see https://github.com/konfidence-project/konfidence/tree/main/api/star/v1alpha1
-	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	// see https://github.com/konfidence-project/konfidence/tree/main/api/v1alpha1
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 )
 
@@ -35,7 +35,7 @@ type HelmRepositoryReconciler struct {
 var _ fluxcd.FluxHelmReconciler = (*HelmRepositoryReconciler)(nil)
 
 func (r *HelmRepositoryReconciler) Reconcile(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource) (isReady bool, err error) {
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource) (isReady bool, err error) {
 
 	helmRepository := &sourcev1.HelmRepository{
 		ObjectMeta: metav1.ObjectMeta{
@@ -61,7 +61,7 @@ func (r *HelmRepositoryReconciler) Reconcile(
 
 func (r *HelmRepositoryReconciler) mutateHelmRepository(
 	ctx context.Context,
-	deployment *landscapev1alpha1.ArtifactDeployment,
+	deployment *konfidencev1alpha1.ArtifactDeployment,
 	helmChartResource *fluxcd.HelmChartResource,
 	helmRepository *sourcev1.HelmRepository,
 ) error {

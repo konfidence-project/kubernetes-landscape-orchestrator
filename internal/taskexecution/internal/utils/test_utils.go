@@ -4,7 +4,7 @@ package utils
 import (
 	"context"
 
-	landscape "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -18,16 +18,16 @@ func CreateTaskExecution(
 	ctx context.Context, k8sClient client.Client,
 	name string, namespace string, specName string, specType string, dependsOn []string, jobSpec string,
 ) {
-	taskExecution := &landscape.TaskExecution{
+	taskExecution := &konfidencev1alpha1.TaskExecution{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "star.konfidence.cloud/v1alpha1",
+			APIVersion: "konfidence.cloud/v1alpha1",
 			Kind:       "TaskExecution",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: landscape.TaskExecutionSpec{
+		Spec: konfidencev1alpha1.TaskExecutionSpec{
 			Name:      specName,
 			Type:      specType,
 			DependsOn: dependsOn,
@@ -40,8 +40,8 @@ func CreateTaskExecution(
 	Expect(k8sClient.Create(ctx, taskExecution)).To(Succeed())
 }
 
-func GetTaskExecution(ctx context.Context, k8sClient client.Client, name string, namespace string, opt bool) *landscape.TaskExecution {
-	taskExecution := &landscape.TaskExecution{}
+func GetTaskExecution(ctx context.Context, k8sClient client.Client, name string, namespace string, opt bool) *konfidencev1alpha1.TaskExecution {
+	taskExecution := &konfidencev1alpha1.TaskExecution{}
 	taskExecutionLookupKey := types.NamespacedName{Name: name, Namespace: namespace}
 	err := k8sClient.Get(ctx, taskExecutionLookupKey, taskExecution)
 
@@ -53,7 +53,7 @@ func GetTaskExecution(ctx context.Context, k8sClient client.Client, name string,
 	return taskExecution
 }
 
-func DeleteTaskExecution(ctx context.Context, k8sClient client.Client, taskExecution *landscape.TaskExecution) {
+func DeleteTaskExecution(ctx context.Context, k8sClient client.Client, taskExecution *konfidencev1alpha1.TaskExecution) {
 	err := k8sClient.Delete(ctx, taskExecution)
 	Expect(err).ToNot(HaveOccurred(), "Failed to delete taskExecution: %s", taskExecution.Name)
 }

@@ -19,8 +19,8 @@ import (
 	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
-	// see https://github.com/konfidence-project/konfidence/tree/main/api/star/v1alpha1
-	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	// see https://github.com/konfidence-project/konfidence/tree/main/api/v1alpha1
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 )
@@ -42,7 +42,7 @@ type KustomizationReconciler struct {
 var _ fluxcd.FluxKustomizeReconciler = (*KustomizationReconciler)(nil)
 
 func (r *KustomizationReconciler) Reconcile(
-	ctx context.Context, deployment *landscapev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource) (isReady bool, err error) {
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource) (isReady bool, err error) {
 
 	kustomization := &kustomizev1.Kustomization{
 		ObjectMeta: metav1.ObjectMeta{
@@ -69,7 +69,7 @@ func (r *KustomizationReconciler) Reconcile(
 
 func (r *KustomizationReconciler) mutateKustomization(
 	ctx context.Context,
-	deployment *landscapev1alpha1.ArtifactDeployment,
+	deployment *konfidencev1alpha1.ArtifactDeployment,
 	kustomizeResource *fluxcd.KustomizeResource,
 	kustomization *kustomizev1.Kustomization,
 ) error {
@@ -111,7 +111,7 @@ func (r *KustomizationReconciler) mutateKustomization(
 }
 
 func (r *KustomizationReconciler) mapStatusConditions(
-	deployment *landscapev1alpha1.ArtifactDeployment, kustomization *kustomizev1.Kustomization) {
+	deployment *konfidencev1alpha1.ArtifactDeployment, kustomization *kustomizev1.Kustomization) {
 
 	for _, condition := range kustomization.Status.Conditions {
 		if conditionType := mapKustomizationConditionType(condition.Type); conditionType != "" {
@@ -130,9 +130,9 @@ func (r *KustomizationReconciler) mapStatusConditions(
 func mapKustomizationConditionType(conditionType string) string {
 	switch conditionType {
 	case conditionTypeReady:
-		return landscapev1alpha1.ArtifactDeployedCondition
+		return konfidencev1alpha1.ArtifactDeployedCondition
 	case "Healthy":
-		return landscapev1alpha1.AppHealthyCondition
+		return konfidencev1alpha1.AppHealthyCondition
 	default:
 		return ""
 	}

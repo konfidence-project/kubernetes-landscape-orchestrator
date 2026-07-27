@@ -1,5 +1,5 @@
 // Package vectordata hosts the Kubernetes-runtime implementor for the Konfidence VectorData CRD defined in
-// `github.com/konfidence-project/konfidence/api/star/v1alpha1`. The Star vector-deployment-controller emits a
+// `github.com/konfidence-project/konfidence/api/v1alpha1`. The Star vector-deployment-controller emits a
 // runtime-agnostic VectorData CR (with the OCM-resolved authored bytes and aggregated DeploymentResults). This
 // package watches those CRs and materialises them as a Kubernetes ConfigMap in the same (landscape) namespace,
 // using the data layout the in-process `cmd/vectorconfiguration` service consumes:

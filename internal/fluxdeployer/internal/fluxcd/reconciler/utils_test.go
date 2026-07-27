@@ -3,7 +3,7 @@ package reconciler
 import (
 	"context"
 
-	landscapev1alpha1 "github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	. "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/reconciler/mocks"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -54,7 +54,7 @@ var _ = Describe("util functions", func() {
 					return nil
 				})
 
-			deployment := &landscapev1alpha1.ArtifactDeployment{}
+			deployment := &konfidencev1alpha1.ArtifactDeployment{}
 			secretRef, err := getSecretRef(ctx, clientMock, deployment, RegistryUrl)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			gomega.Expect(secretRef.Name).To(gomega.Equal(MappedSecretName))
@@ -71,13 +71,13 @@ var _ = Describe("util functions", func() {
 				return nil
 			})
 
-		deployment := &landscapev1alpha1.ArtifactDeployment{}
+		deployment := &konfidencev1alpha1.ArtifactDeployment{}
 		secretRef, err := getSecretRef(ctx, clientMock, deployment, RegistryUrl)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		gomega.Expect(secretRef.Name).To(gomega.Equal(SecretName))
 	})
 	It("should return nil secretRef if auth is disabled in deployment", func() {
-		deployment := &landscapev1alpha1.ArtifactDeployment{}
+		deployment := &konfidencev1alpha1.ArtifactDeployment{}
 		deployment.SetLabels(map[string]string{LabelName: "true"})
 		secretRef, err := getSecretRef(ctx, clientMock, deployment, RegistryUrl)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())

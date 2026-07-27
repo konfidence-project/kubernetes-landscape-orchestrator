@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
-	"github.com/konfidence-project/konfidence/api/star/v1alpha1"
+	"github.com/konfidence-project/konfidence/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/json"
 )
 

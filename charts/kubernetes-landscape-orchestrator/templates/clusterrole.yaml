@@ -114,6 +114,62 @@ rules:
   - update
   - watch
 - apiGroups:
+  - konfidence.cloud
+  resources:
+  - activationtaskexecutions
+  - artifactdeployments
+  - taskexecutions
+  - vectoractivations
+  - vectordeployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - konfidence.cloud
+  resources:
+  - activationtaskexecutions/status
+  - artifactdeployments/status
+  - taskexecutions/status
+  - vectoractivations/status
+  - vectorassignments/status
+  - vectordata/status
+  - vectordeployments/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - konfidence.cloud
+  resources:
+  - artifactdeployments/finalizers
+  - taskexecutions/finalizers
+  - vectordata/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - konfidence.cloud
+  resources:
+  - vectorassignments
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - konfidence.cloud
+  resources:
+  - vectordata
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - kustomize.toolkit.fluxcd.io
   resources:
   - kustomizations
@@ -134,62 +190,6 @@ rules:
   verbs:
   - create
   - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - star.konfidence.cloud
-  resources:
-  - activationtaskexecutions
-  - artifactdeployments
-  - taskexecutions
-  - vectoractivations
-  - vectordeployments
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - star.konfidence.cloud
-  resources:
-  - activationtaskexecutions/status
-  - artifactdeployments/status
-  - taskexecutions/status
-  - vectoractivations/status
-  - vectorassignments/status
-  - vectordata/status
-  - vectordeployments/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - star.konfidence.cloud
-  resources:
-  - artifactdeployments/finalizers
-  - taskexecutions/finalizers
-  - vectordata/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - star.konfidence.cloud
-  resources:
-  - vectorassignments
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - star.konfidence.cloud
-  resources:
-  - vectordata
-  verbs:
   - get
   - list
   - patch
