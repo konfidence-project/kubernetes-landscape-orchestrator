@@ -1,16 +1,16 @@
 Konfidence vector-data service {{ .Chart.AppVersion }} installed in namespace {{ .Release.Namespace }}.
 
 It reads `vector-data-<vectorId>` ConfigMaps from namespace {{ .Release.Namespace }}
-and serves them over OFREP on port {{ .Values.port }}.
+and serves them over OFREP.
 
 Verify the service is running:
   kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
 
 In-cluster endpoint:
-  http://{{ include "vector-data-service.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.port }}
+  http://{{ include "vector-data-service.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
 
 Query the vector-scoped data for a vectorId (OFREP bulk evaluation):
   curl -s -X POST \
-    "http://{{ include "vector-data-service.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.port }}/ofrep/v1/evaluate/flags" \
+    "http://{{ include "vector-data-service.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}/ofrep/v1/evaluate/flags" \
     -H 'Content-Type: application/json' \
     -d '{"context":{"targetingKey":"<vectorId>"}}'
