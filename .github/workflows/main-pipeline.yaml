@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - release-please-workflow # TODO: remove this branch before merging
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
