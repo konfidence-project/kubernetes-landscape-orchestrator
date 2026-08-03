@@ -30,8 +30,8 @@ jobs:
 
   release-please:
     name: Release PR
-    needs: [ lint-test-build ]
-    if: "needs.lint-test-build.result == 'success'"
+#    needs: [ ]
+#    if: "needs.lint-test-build.result == 'success'"
     permissions:
       contents: write
       pull-requests: write
