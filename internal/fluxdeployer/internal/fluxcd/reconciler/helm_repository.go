@@ -40,7 +40,7 @@ func (r *HelmRepositoryReconciler) Reconcile(
 	helmRepository := &sourcev1.HelmRepository{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: deployment.GetNamespace(),
-			Name:      buildHelmRepositoryResourceName(deployment, &helmChartResource.OCMResource),
+			Name:      deployment.Name,
 		},
 	}
 

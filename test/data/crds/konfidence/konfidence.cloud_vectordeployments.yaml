@@ -188,6 +188,14 @@ spec:
                   description: LocalArtifactDeploymentReference holds a reference
                     to an ArtifactDeployment in the same namespace.
                   properties:
+                    collisionCount:
+                      description: |-
+                        CollisionCount salts the ArtifactDeployment name hash to recover from a
+                        (rare) hash collision with a different artifact. nil and 0 both mean "no
+                        salt" and yield the original, unsalted name. Once bumped it is permanent
+                        for this artifact slot. Mirrors Deployment.Status.CollisionCount.
+                      format: int32
+                      type: integer
                     name:
                       description: "Name\tis the name of the ArtifactDeployment. Required."
                       type: string
@@ -220,7 +228,7 @@ spec:
               resultingVectorData:
                 description: |-
                   ResultingVectorData records the name of the VectorData object created for this VectorDeployment. The VectorData
-                  CR is the contract between the Star side (which resolves the OCM payload) and the runtime-specific implementor
+                  CR is the contract between the vector deployment controller (which resolves the OCM payload) and the runtime-specific implementor
                   (which materialises it on the target runtime). The field is empty until step 5 of the lifecycle has produced the
                   CR. Names are stable across reconciliations.
                 properties:

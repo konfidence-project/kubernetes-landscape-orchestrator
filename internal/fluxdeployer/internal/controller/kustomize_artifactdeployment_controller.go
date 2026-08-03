@@ -6,6 +6,8 @@ import (
 	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -56,30 +58,53 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 	originalDeployment := deployment.DeepCopy()
 	patch := client.MergeFrom(originalDeployment)
 
+	// reconcile the single OCM resource of type "kustomize"; reject spec with multiple matches
+	var matches []konfidencev1alpha1.OCMResource
 	for _, ocmResource := range deployment.Spec.Component.Resources {
-		if ocmResource.Type != "kustomize" {
-			// we only handle kustomize resources, skip all other resource types
-			continue
+		if ocmResource.Type == ocmResourceTypeKustomize {
+			matches = append(matches, ocmResource)
+		}
+	}
+
+	if len(matches) > 1 {
+		msg := fmt.Sprintf("expected exactly one OCM resource of type %q, found %d; refusing to reconcile", ocmResourceTypeKustomize, len(matches))
+		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
+			Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
+			Status:             metav1.ConditionFalse,
+			Reason:             "MultipleKustomizeResources",
+			Message:            msg,
+			ObservedGeneration: deployment.Generation,
+			LastTransitionTime: metav1.Now(),
+		})
+
+		if !reflect.DeepEqual(deployment.Status, originalDeployment.Status) {
+			if err := r.Client.Status().Patch(ctx, deployment, patch); err != nil {
+				return ctrl.Result{}, fmt.Errorf("unable to patch artifact deployment status: %w", err)
+			}
 		}
 
+		return ctrl.Result{}, fmt.Errorf("%s", msg)
+	}
+
+	if len(matches) == 1 {
+		ocmResource := matches[0]
 		kustomizeResource, err := fluxcd.Map(ocmResource).ToKustomize()
 		if err != nil {
 			log.Error(err, fmt.Sprintf("failed to map OCM resource %q to KustomizeResource", ocmResource.Name),
 				"ArtifactDeployment", deployment)
-			continue
-		}
-
-		if isReady, err := r.OCIRepositoryReconciler.Reconcile(ctx, deployment, kustomizeResource); err != nil {
-			log.Error(err, fmt.Sprintf("failed to reconcile OCIRepository of OCM resource '%s'", ocmResource.Name),
-				"ArtifactDeployment", deployment)
 		} else {
-			if isReady {
-				if _, err := r.KustomizationReconciler.Reconcile(ctx, deployment, kustomizeResource); err != nil {
-					log.Error(err, fmt.Sprintf("failed to reconcile Kustomization of OCM resource '%s'", ocmResource.Name),
-						"ArtifactDeployment", deployment)
-				}
+			if isReady, err := r.OCIRepositoryReconciler.Reconcile(ctx, deployment, kustomizeResource); err != nil {
+				log.Error(err, fmt.Sprintf("failed to reconcile OCIRepository of OCM resource '%s'", ocmResource.Name),
+					"ArtifactDeployment", deployment)
 			} else {
-				log.Info("OCIRepository is not ready, skipping Kustomization reconciliation")
+				if isReady {
+					if _, err := r.KustomizationReconciler.Reconcile(ctx, deployment, kustomizeResource); err != nil {
+						log.Error(err, fmt.Sprintf("failed to reconcile Kustomization of OCM resource '%s'", ocmResource.Name),
+							"ArtifactDeployment", deployment)
+					}
+				} else {
+					log.Info("OCIRepository is not ready, skipping Kustomization reconciliation")
+				}
 			}
 		}
 	}
@@ -112,7 +137,7 @@ func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manage
 		switch obj := obj.(type) {
 		case *konfidencev1alpha1.ArtifactDeployment:
 			// ... for 'Kustomize' manifest types
-			return obj.Spec.Manifest.Type == "cloud.konfidence.flux.kustomize"
+			return obj.Spec.Manifest.Type == manifestTypeKustomize
 		case *sourcev1.OCIRepository, *kustomizev1.Kustomization:
 			// ... or owned resources
 			return true

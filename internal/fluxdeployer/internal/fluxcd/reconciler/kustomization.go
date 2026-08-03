@@ -12,8 +12,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
-
 	// see https://github.com/fluxcd/kustomize-controller/tree/main/api/v1
 	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
 	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
@@ -47,7 +45,7 @@ func (r *KustomizationReconciler) Reconcile(
 	kustomization := &kustomizev1.Kustomization{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: deployment.GetNamespace(),
-			Name:      buildResourceName(deployment, &kustomizeResource.OCMResource),
+			Name:      deployment.Name,
 		},
 	}
 	mutateFn := func() error { return r.mutateKustomization(ctx, deployment, kustomizeResource, kustomization) }
@@ -92,17 +90,17 @@ func (r *KustomizationReconciler) mutateKustomization(
 		SourceRef: kustomizev1.CrossNamespaceSourceReference{
 			Kind:      sourcev1.OCIRepositoryKind,
 			Namespace: deployment.GetNamespace(),
-			Name:      buildResourceName(deployment, &kustomizeResource.OCMResource),
+			Name:      deployment.Name,
 		},
 		Path:            kustomizeResource.Path,
 		KubeConfig:      kubeConfig,
 		TargetNamespace: r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
-		NameSuffix:      "-" + deployment.Name[:6],
+		NameSuffix:      buildKustomizationNameSuffix(deployment),
 		Prune:           true,
 		Wait:            true,
 		CommonMetadata: &kustomizev1.CommonMetadata{
 			Labels: map[string]string{
-				"konfidence.cloud/artifact-deployment": utils.SanitizeK8sResourceName(deployment.Name),
+				"konfidence.cloud/artifact-deployment": deployment.Name,
 			},
 		},
 	}

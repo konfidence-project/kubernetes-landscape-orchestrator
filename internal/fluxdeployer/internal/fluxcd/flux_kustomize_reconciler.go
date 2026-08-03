@@ -1,5 +1,7 @@
 package fluxcd
 
+//go:generate go run go.uber.org/mock/mockgen -destination=./mocks/mock_flux_kustomize_reconciler.go -package=mocks github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd FluxKustomizeReconciler
+
 import (
 	"context"
 

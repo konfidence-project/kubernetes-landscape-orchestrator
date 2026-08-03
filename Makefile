@@ -105,6 +105,15 @@ generate-test-crds: hermit ## Generate CRDs needed for controller tests.
 		test/data/crds/konfidence/konfidence.cloud_vectorpromotionconfigs.yaml \
 		test/data/crds/konfidence/konfidence.cloud_vectortemplates.yaml
 
+.PHONY: generate-mocks
+generate-mocks: hermit ## Regenerate all gomock mocks via go generate.
+	go generate ./...
+
+.PHONY: regenerate-mocks
+regenerate-mocks: hermit ## Wipe every mocks/ directory's contents, then regenerate from go:generate directives.
+	find . -path ./vendor -prune -o -type d -name mocks -print -exec sh -c 'rm -rf "$$0"/*' {} \;
+	$(MAKE) generate-mocks
+
 .PHONY: setup-envtest
 setup-envtest: hermit ## Download the envtest binaries for the configured Kubernetes version.
 	@echo "Setting up envtest binaries for Kubernetes version $(ENVTEST_K8S_VERSION)..."
