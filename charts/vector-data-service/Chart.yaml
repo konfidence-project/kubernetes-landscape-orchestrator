@@ -1,13 +1,10 @@
 apiVersion: v2
 name: vector-data-service
-description: >-
-  Konfidence vector-data service — serves vector-scoped data (feature flags,
-  authored configuration, and deployment results) to workloads at runtime over
-  the OpenFeature Remote Evaluation Protocol (OFREP).
+description: Konfidence vector-data service — serves vector-scoped data (feature flags, authored configuration, and deployment results) to workloads at runtime over the OpenFeature Remote Evaluation Protocol (OFREP).
 type: application
-version: 1.0.0
-appVersion: 1.0.0
-kubeVersion: '>=1.27.0-0'
+version: 0.0.0-rc.1
+appVersion: "0.0.0-rc.1"
+kubeVersion: ">=1.27.0-0"
 keywords:
   - konfidence
   - vector-data
