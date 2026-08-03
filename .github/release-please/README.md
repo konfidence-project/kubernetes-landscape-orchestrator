@@ -21,8 +21,13 @@ Trigger the [Pre-release workflow](../workflows/prerelease-pipeline.yaml) manual
 
 ## Overriding the Release Version
 
-Push an empty commit to `main` with a `Release-As` footer before the release PR is merged:
+Use a [`Release-As` footer](https://github.com/googleapis/release-please?tab=readme-ov-file#release-as-an-alternative-to-a-changelog) to force a specific version regardless of commit history.
+
+> **Important:** Close any open release-please PR before pushing a `Release-As` commit. If a PR is already open,
+> release-please will update it in place rather than open a fresh one — this is known to produce inconsistent
+> results where the version, changelog, and manifest may not align correctly.
 
 ```bash
-git commit --allow-empty -m "chore: release 1.0.0" -m "Release-As: 1.0.0"
+git commit --allow-empty -m "chore: release 0.1.0" -m "Release-As: 0.1.0"
+git push origin main
 ```
