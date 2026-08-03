@@ -33,14 +33,6 @@ func SanitizeK8sResourceName(name string) string {
 	return name
 }
 
-// Must helper function that panics if the error is not nil, otherwise returns the string
-func Must(s string, err error) string {
-	if err != nil {
-		panic(err)
-	}
-	return s
-}
-
 func GetKonfidenceLabel(meta *metav1.ObjectMeta, label string) (string, error) {
 	value := meta.GetLabels()[fmt.Sprintf("konfidence.cloud/%s", label)]
 	if value == "" {

@@ -47,7 +47,7 @@ func (r *VectorAssignmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	manifestTypeFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		switch obj := obj.(type) {
 		case *konfidencev1alpha1.VectorAssignment:
-			return obj.Spec.Manifest.Type == "cloud.konfidence.flux.kustomize" || obj.Spec.Manifest.Type == "cloud.konfidence.flux.helm"
+			return obj.Spec.Manifest.Type == manifestTypeKustomize || obj.Spec.Manifest.Type == manifestTypeHelm
 		case *gatewayv1.HTTPRoute, *corev1.Service:
 			return true
 		default:

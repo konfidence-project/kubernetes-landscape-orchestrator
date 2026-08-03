@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,7 +40,7 @@ func (r *HelmReleaseReconciler) Reconcile(
 	helmRelease := &helmv2.HelmRelease{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: deployment.GetNamespace(),
-			Name:      buildResourceName(deployment, &helmChartResource.OCMResource),
+			Name:      deployment.Name,
 		},
 	}
 
@@ -53,7 +52,7 @@ func (r *HelmReleaseReconciler) Reconcile(
 	}
 
 	// map the status conditions of the HelmChart and HelmRelease to the ArtifactDeployment
-	if helmChart := r.getHelmChart(ctx, deployment, &helmChartResource.OCMResource); helmChart != nil {
+	if helmChart := r.getHelmChart(ctx, deployment); helmChart != nil {
 		if isReady := r.mapStatusConditionsFromHelmChart(deployment, helmChart); isReady {
 			r.mapStatusConditionsFromHelmRelease(deployment, helmRelease)
 		} // else: HelmChart is not ready, skipping status update
@@ -89,12 +88,13 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 				SourceRef: helmv2.CrossNamespaceObjectReference{
 					Kind:      sourcev1.HelmRepositoryKind,
 					Namespace: deployment.GetNamespace(),
-					Name:      buildHelmRepositoryResourceName(deployment, &helmChartResource.OCMResource),
+					Name:      deployment.Name,
 				},
 				Chart:   helmChartResource.ChartName,
 				Version: helmChartResource.Version,
 			},
 		},
+		ReleaseName:      deployment.Name,
 		KubeConfig:       kubeConfig,
 		TargetNamespace:  r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
 		StorageNamespace: r.ConfigProvider.GetTargetNamespace(deployment.GetNamespace()),
@@ -102,7 +102,7 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 		Install:          r.ConfigProvider.GetHelmInstallConfig(deployment.GetNamespace()),
 		CommonMetadata: &helmv2.CommonMetadata{
 			Labels: map[string]string{
-				"konfidence.cloud/artifact-deployment": utils.SanitizeK8sResourceName(deployment.Name),
+				"konfidence.cloud/artifact-deployment": deployment.Name,
 			},
 		},
 	}
@@ -111,11 +111,11 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 }
 
 func (r *HelmReleaseReconciler) getHelmChart(
-	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, ocmResource *konfidencev1alpha1.OCMResource) *sourcev1.HelmChart {
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) *sourcev1.HelmChart {
 
 	objectKey := types.NamespacedName{
 		Namespace: deployment.GetNamespace(),
-		Name:      fmt.Sprintf("%s-%s", deployment.GetNamespace(), buildResourceName(deployment, ocmResource)),
+		Name:      fmt.Sprintf("%s-%s", deployment.GetNamespace(), deployment.Name),
 	}
 	helmChart := &sourcev1.HelmChart{}
 

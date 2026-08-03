@@ -1,5 +1,7 @@
 package controller
 
+//go:generate go run go.uber.org/mock/mockgen -destination=./mocks/mock_status_updater.go -package=mocks github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller StatusUpdater
+
 import (
 	"context"
 

@@ -30,6 +30,7 @@ var _ = Describe("ConfigProvider", func() {
 			systemNS   = "konfidence-system"
 			configName = "flux-deployer-configuration"
 			landscape  = "prod"
+			otherLand  = "other"
 		)
 
 		BeforeEach(func() {
@@ -43,7 +44,7 @@ var _ = Describe("ConfigProvider", func() {
 					SecretRef: &fluxmeta.SecretKeyReference{Name: "remote-secret", Key: "kubeconfig"},
 				},
 				{
-					Landscape:    "other",
+					Landscape:    otherLand,
 					ConfigMapRef: &fluxmeta.LocalObjectReference{Name: "other-cm"},
 				},
 			}

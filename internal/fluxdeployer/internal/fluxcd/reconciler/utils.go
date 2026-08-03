@@ -7,6 +7,7 @@ import (
 
 	fluxcd "github.com/fluxcd/pkg/apis/meta"
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
 	"github.com/konfidence-project/konfidence/pkg/sanitize"
 	"github.com/konfidence-project/konfidence/pkg/secret"
 	"github.com/konfidence-project/konfidence/pkg/url"
@@ -17,20 +18,22 @@ import (
 )
 
 const (
-	conditionTypeReady = "Ready"
+	conditionTypeReady               = "Ready"
+	maxKustomizationNameSuffixLength = 36
 )
 
-func buildHelmRepositoryResourceName(
-	deployment *konfidencev1alpha1.ArtifactDeployment, ocmResource *konfidencev1alpha1.OCMResource) string {
+// buildKustomizationNameSuffix builds a NameSuffix of the form -<version>-<hash>, falling
+// back to -<hash> when the combined length exceeds maxKustomizationNameSuffixLength.
+// Both values are read from annotations attached to the deployment.
+func buildKustomizationNameSuffix(deployment *konfidencev1alpha1.ArtifactDeployment) string {
+	ann := deployment.GetAnnotations()
+	version := ann[pkgctrl.ArtifactVersionAnnotation]
+	hash := ann[pkgctrl.ArtifactHashAnnotation]
 
-	return utils.SanitizeK8sResourceName(fmt.Sprintf("%s-%s", deployment.Name[:6], ocmResource.Name))
-}
-
-func buildResourceName(
-	deployment *konfidencev1alpha1.ArtifactDeployment, ocmResource *konfidencev1alpha1.OCMResource) string {
-
-	return utils.SanitizeK8sResourceName(fmt.Sprintf("%s-%s",
-		ocmResource.Name, deployment.Name[:6]))
+	if full := version + "-" + hash; len(full)+1 <= maxKustomizationNameSuffixLength {
+		return "-" + utils.SanitizeK8sResourceName(full)
+	}
+	return "-" + utils.SanitizeK8sResourceName(hash)
 }
 
 func isInsecure(deployment *konfidencev1alpha1.ArtifactDeployment) bool {

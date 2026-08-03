@@ -4,30 +4,45 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: vectordata.konfidence.cloud
+  name: landscapes.konfidence.cloud
 spec:
   group: konfidence.cloud
   names:
     categories:
     - konfidence
     - kden
-    kind: VectorData
-    listKind: VectorDataList
-    plural: vectordata
-    singular: vectordata
+    kind: Landscape
+    listKind: LandscapeList
+    plural: landscapes
+    singular: landscape
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    - description: The project this landscape belongs to
+      jsonPath: .status.projectName
+      name: Project
+      type: string
+    - description: The landscape namespace
+      jsonPath: .status.namespace
+      name: Namespace
+      type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
       type: string
-    - jsonPath: .status.conditions[?(@.type=="Ready")].reason
-      name: Reason
-      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: VectorData is the schema for the vectordata API.
+        description: |-
+          Landscape is the Schema for the landscapes API. A Landscape owns a dedicated
+          namespace that serves as a deployment target for vectors. Landscapes must be
+          created in project namespaces. The landscape name is capped at 46 characters
+          so the derived namespace name stays within the 63-character Kubernetes limits.
         properties:
           apiVersion:
             description: |-
@@ -48,54 +63,38 @@ spec:
             type: object
           spec:
             description: |-
-              VectorDataSpec is the LCP→landscape-orchestrator contract for vector-scoped data.
-              The vector deployment controller resolves the OCM envelope `{features, authored}` and aggregates per-AD
-              DeploymentResults; the landscape orchestrator materialises the payload on its
-              target runtime (ConfigMap on K8s, etc.).
+              LandscapeSpec defines the desired state of Landscape.
+
+              The transition rule catches namespace being set or unset after creation;
+              changing a set namespace is caught by the field-level rule. The two rules
+              are split to stay within the CEL cost budget of the schema.
             properties:
-              authored:
-                description: Authored carries the optional "authored" subset of the
-                  OCM envelope, verbatim JSON.
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-              deploymentResults:
-                additionalProperties:
-                  description: |-
-                    DeploymentResult contains a single output produced by a deployer. These results are used to transport information
-                    from the deployer to later phases of the vector lifecycle.
-                  properties:
-                    name:
-                      description: Name is a unique identifier for the result within
-                        an ArtifactDeploymentStatus.
-                      type: string
-                    spec:
-                      description: Spec contains deployer-specific structured data.
-                        Its format is determined by the Type field.
-                      type: object
-                      x-kubernetes-preserve-unknown-fields: true
-                    type:
-                      description: Type describes the structure contained in Spec.
-                        Each deployer may define multiple result types.
-                      type: string
-                  required:
-                  - name
-                  - spec
-                  - type
-                  type: object
+              displayName:
                 description: |-
-                  DeploymentResults aggregated from underlying ArtifactDeployments, keyed
-                  "<componentName>/<resultName>".
-                type: object
-              features:
-                description: Features carries the optional "features" subset of the
-                  OCM envelope, verbatim JSON.
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
+                  DisplayName is the human-readable name of the landscape, shown in user
+                  interfaces. It does not affect the namespace name or any label, and it
+                  may be changed at any time.
+                maxLength: 253
+                minLength: 1
+                type: string
+              namespace:
+                description: |-
+                  Namespace overrides the name of the namespace created for this landscape.
+                  When unset it defaults to "kden-l-<landscape-name>-<hash>". It is
+                  immutable once the Landscape exists, because the namespace and everything
+                  it holds are bound to this name.
+                maxLength: 63
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+                x-kubernetes-validations:
+                - message: namespace is immutable
+                  rule: self == oldSelf
             type: object
             x-kubernetes-validations:
-            - message: VectorData spec is immutable after it has been set
-              rule: self == oldSelf
+            - message: namespace is immutable
+              rule: has(self.namespace) == has(oldSelf.namespace)
           status:
+            description: LandscapeStatus defines the observed state of Landscape.
             properties:
               conditions:
                 items:
@@ -153,11 +152,20 @@ spec:
                   - type
                   type: object
                 type: array
+              namespace:
+                description: Namespace is the name of the namespace managed for this
+                  landscape.
+                type: string
+              projectName:
+                description: |-
+                  ProjectName is the name of the project this landscape belongs to,
+                  derived from the namespace where the Landscape CR was created.
+                type: string
             type: object
         type: object
         x-kubernetes-validations:
-        - message: Spec is required once set
-          rule: '!has(oldSelf.spec) || has(self.spec)'
+        - message: landscape name must be at most 46 characters
+          rule: size(self.metadata.name) <= 46
     served: true
     storage: true
     subresources:

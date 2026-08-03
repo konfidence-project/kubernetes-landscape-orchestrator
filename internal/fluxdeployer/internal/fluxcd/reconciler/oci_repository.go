@@ -42,7 +42,7 @@ func (r *OCIRepositoryReconciler) Reconcile(
 	ociRepository := &sourcev1.OCIRepository{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: deployment.GetNamespace(),
-			Name:      buildResourceName(deployment, &kustomizeResource.OCMResource),
+			Name:      deployment.Name,
 		},
 	}
 	mutateFn := func() error { return r.mutateOCIRepository(ctx, deployment, kustomizeResource, ociRepository) }
