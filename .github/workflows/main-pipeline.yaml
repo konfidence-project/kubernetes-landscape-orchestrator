@@ -31,7 +31,7 @@ jobs:
   release-please:
     name: Release PR
     needs: [ lint-test-build ]
-    if: "needs.lint-test-build.result != 'failure'"
+    if: "always() && needs.lint-test-build.result != 'failure'"
     permissions:
       contents: write
       pull-requests: write
