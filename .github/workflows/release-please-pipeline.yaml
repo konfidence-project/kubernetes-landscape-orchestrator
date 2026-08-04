@@ -1,0 +1,20 @@
+name: Release PR
+
+on:
+  push:
+    branches:
+      - main
+      - release-please-workflow # TODO: remove this branch before merging
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release PR
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: konfidence-project/.github/.github/workflows/release-please.yaml@release-please-workflow # TODO: pin back to @v4 before merge to main
+    secrets: inherit
