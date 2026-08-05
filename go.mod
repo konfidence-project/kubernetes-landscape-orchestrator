@@ -6,7 +6,7 @@ require (
 	github.com/distribution/reference v0.6.0
 	github.com/fluxcd/helm-controller/api v1.6.3
 	github.com/fluxcd/kustomize-controller/api v1.9.4
-	github.com/fluxcd/pkg/apis/meta v1.30.1
+	github.com/fluxcd/pkg/apis/meta v1.31.0
 	github.com/fluxcd/source-controller/api v1.9.3
 	github.com/go-logr/logr v1.4.4
 	github.com/konfidence-project/konfidence v0.0.0-20260803090438-8fff849098b1
