@@ -38,11 +38,11 @@ kubectl create namespace target-namespace
 kubectl label namespace target-namespace istio-injection=enabled
 ```
 
-Install the `ArtifactDeployment` CRD:
+Install the Konfidence CRDs:
 
 ```bash
-git clone https://github.com/konfidence-project/crds.git
-make install
+git clone https://github.com/konfidence-project/konfidence.git
+make -C konfidence install
 ```
 
 Run a minimal OCI registry ([olareg](https://github.com/olareg/olareg)) on your machine:

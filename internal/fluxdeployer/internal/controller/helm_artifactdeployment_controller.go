@@ -19,7 +19,7 @@ import (
 	// see https://github.com/fluxcd/helm-controller/tree/main/api/v2
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 
-	// see https://github.com/konfidence-project/crds/tree/main/api/landscape/v1alpha1
+	// see https://github.com/konfidence-project/konfidence/tree/main/api/v1alpha1
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 )
