@@ -64,9 +64,9 @@ func (s *DeploymentResultStatusUpdater) fetchExposableServices(
 		},
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
-				// TODO (sascha 05.12.25): konfidence specific label "konfidence.cloud/appname" in
-				// deployment-manifests (Helm-charts, kustomize) has to be removed.
-				// Solution comes with https://github.com/konfidence-project/konfidence-project/issues/299
+				// TODO (sascha 05.12.25): Remove the Konfidence-specific
+				// "konfidence.cloud/appname" label from deployment manifests
+				// (Helm charts and Kustomize).
 				Key:      "konfidence.cloud/appname",
 				Operator: metav1.LabelSelectorOpExists,
 			},
