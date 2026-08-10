@@ -10,7 +10,9 @@ import (
 const OperatorFlagName = "FluxDeployer"
 
 func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
-	configProvider := &internalcontroller.ConfigProvider{Client: mgr.GetClient()}
+	configProvider := &internalcontroller.ConfigProvider{
+		Client: mgr.GetClient(),
+	}
 
 	if err := (&internalcontroller.HelmArtifactDeploymentReconciler{
 		Client:                        mgr.GetClient(),

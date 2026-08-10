@@ -11,8 +11,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
@@ -22,6 +24,7 @@ import (
 	// see https://github.com/konfidence-project/konfidence/tree/main/api/v1alpha1
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentclass"
 )
 
 // KustomizeArtifactDeploymentReconciler reconciles ArtifactDeployment objects where manifest type is 'Kustomize'
@@ -52,6 +55,16 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get artifact deployment object: %w", err)
+	}
+
+	// Only reconcile ArtifactDeployments whose manifest type is currently covered by
+	// an active DeploymentClass we own. This check uses the informer cache.
+	activeTypes, err := deploymentclass.ActiveTypes(ctx, r.Client)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("resolve active deployment class types: %w", err)
+	}
+	if _, active := activeTypes[deployment.Spec.Manifest.Type]; !active {
+		return ctrl.Result{}, nil
 	}
 
 	// preserve original deployment status for patching it later
@@ -109,7 +122,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 		}
 	}
 
-	err := r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
+	err = r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
 	if err != nil {
 		log.Error(err, "failed to handle Kustomize deployment result", "ArtifactDeployment", deployment)
 	}
@@ -146,10 +159,24 @@ func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manage
 		}
 	})
 
+	// deploymentClassMapper re-enqueues all ArtifactDeployments of the kustomize type when
+	// the corresponding DeploymentClass is created or deleted, so the active-type check
+	// in Reconcile reflects the current state without waiting for the next spec change.
+	deploymentClassMapper := handler.EnqueueRequestsFromMapFunc(
+		func(ctx context.Context, obj client.Object) []reconcile.Request {
+			dc, ok := obj.(*konfidencev1alpha1.DeploymentClass)
+			if !ok || dc.Spec.Controller != deploymentclass.ControllerName || dc.Spec.Type != manifestTypeKustomize {
+				return nil
+			}
+			return deploymentclass.ArtifactDeploymentsForType(ctx, r.Client, manifestTypeKustomize)
+		},
+	)
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
 		Owns(&sourcev1.OCIRepository{}).
 		Owns(&kustomizev1.Kustomization{}).
+		Watches(&konfidencev1alpha1.DeploymentClass{}, deploymentClassMapper).
 		Named("kustomize_artifactdeployment").
 		Complete(r)
 }

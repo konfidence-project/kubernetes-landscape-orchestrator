@@ -122,6 +122,23 @@ rules:
 - apiGroups:
   - konfidence.cloud
   resources:
+  - deploymentclasses
+  - deploymenttargets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - konfidence.cloud
+  resources:
+  - deploymenttargets/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - konfidence.cloud
+  resources:
   - activationtaskexecutions/status
   - artifactdeployments/status
   - taskexecutions/status

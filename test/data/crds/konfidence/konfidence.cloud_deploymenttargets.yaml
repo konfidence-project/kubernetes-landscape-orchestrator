@@ -1,0 +1,192 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: deploymenttargets.konfidence.cloud
+spec:
+  group: konfidence.cloud
+  names:
+    categories:
+    - konfidence
+    - kden
+    kind: DeploymentTarget
+    listKind: DeploymentTargetList
+    plural: deploymenttargets
+    singular: deploymenttarget
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Deployment class type
+      jsonPath: .spec.type
+      name: Type
+      type: string
+    - description: Connection type
+      jsonPath: .spec.connection.type
+      name: Connection
+      type: string
+    - description: Ready status
+      jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          DeploymentTarget is the Schema for the deploymenttargets API. A DeploymentTarget
+          configures a concrete deployment destination within a landscape for a specific
+          deployment class. It is namespace-scoped and created in landscape namespaces.
+          Multiple DeploymentTargets of different types can exist in the same landscape,
+          and multiple targets of the same type can share underlying infrastructure
+          (e.g., two Kubernetes deployment classes targeting the same cluster).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: DeploymentTargetSpec defines the desired state of DeploymentTarget.
+            properties:
+              connection:
+                description: |-
+                  Connection defines how to connect to this deployment target.
+                  The structure and interpretation of connection details is specific to the
+                  deployment class and its implementing controller.
+                properties:
+                  ref:
+                    description: |-
+                      Ref references a Secret or ConfigMap containing connection details.
+                      The structure of the referenced resource depends on the connection type
+                      and the deployment class requirements.
+                    properties:
+                      apiGroup:
+                        description: |-
+                          APIGroup is the group for the resource being referenced.
+                          Defaults to the core API group ("") for Secret and ConfigMap.
+                          For deployer-specific CRDs, set this to the appropriate API group.
+                        type: string
+                      kind:
+                        description: Kind is the resource kind (e.g., "Secret", "ConfigMap",
+                          or a deployer-specific kind).
+                        maxLength: 64
+                        minLength: 1
+                        type: string
+                      name:
+                        description: Name is the name of the referenced resource.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                    required:
+                    - kind
+                    - name
+                    type: object
+                  type:
+                    description: |-
+                      Type is a hint for how to interpret the connection reference. It is advisory
+                      and informational only. The deployer controller interprets and enforces its meaning.
+                    maxLength: 64
+                    minLength: 1
+                    type: string
+                required:
+                - type
+                type: object
+              type:
+                description: |-
+                  Type references a DeploymentClass by its spec.type field.
+                  The referenced DeploymentClass must exist in the cluster.
+                  This determines which controller will handle deployments to this target.
+                maxLength: 253
+                minLength: 1
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+            required:
+            - connection
+            - type
+            type: object
+          status:
+            description: |-
+              DeploymentTargetStatus defines the observed state of DeploymentTarget.
+              The deployer controller responsible for this target's DeploymentClass is expected
+              to set the Ready condition once it has accepted the resource. What "accepted" means
+              is up to the deployer. It may include connectivity checks or simply validate the
+              configuration.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -1,8 +1,8 @@
 package controller
 
 const (
-	manifestTypeHelm      = "cloud.konfidence.flux.helm"
-	manifestTypeKustomize = "cloud.konfidence.flux.kustomize"
+	manifestTypeHelm      = "konfidence.cloud/helm"
+	manifestTypeKustomize = "konfidence.cloud/kustomize"
 
 	ocmResourceTypeHelmChart = "helmChart"
 	ocmResourceTypeKustomize = "kustomize"
