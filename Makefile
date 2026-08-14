@@ -100,7 +100,6 @@ generate-test-crds: hermit ## Generate CRDs needed for controller tests.
 	@# keep only the CRDs relevant to this orchestrator
 	@rm -f \
 		test/data/crds/konfidence/konfidence.cloud_projects.yaml \
-		test/data/crds/konfidence/konfidence.cloud_stageconfigurations.yaml \
 		test/data/crds/konfidence/konfidence.cloud_vectorpromotions.yaml \
 		test/data/crds/konfidence/konfidence.cloud_vectorpromotionconfigs.yaml \
 		test/data/crds/konfidence/konfidence.cloud_vectortemplates.yaml
