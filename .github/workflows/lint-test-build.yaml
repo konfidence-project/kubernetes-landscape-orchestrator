@@ -36,7 +36,7 @@ jobs:
     name: Build / Orchestrator
     needs: [lint, reuse-lint, test]
     permissions:
-      contents: read
+      contents: write
       packages: write
       attestations: write
       id-token: write
