@@ -7,6 +7,7 @@ import (
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentresult"
 	"k8s.io/apimachinery/pkg/api/meta"
 
 	corev1 "k8s.io/api/core/v1"
@@ -19,11 +20,7 @@ type DeploymentResultStatusUpdater struct {
 	client.Client
 }
 
-type DeploymentResultServiceSpec struct {
-	Namespace    string
-	K8sName      string
-	ServicePorts []corev1.ServicePort
-}
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 
 func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) error {
 	if !meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.ArtifactDeployedCondition) {
@@ -58,22 +55,11 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 func (s *DeploymentResultStatusUpdater) fetchExposableServices(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment,
 ) (*corev1.ServiceList, error) {
-	serviceLabelSelector := &metav1.LabelSelector{
+	serviceSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchLabels: map[string]string{
-			"konfidence.cloud/artifact-deployment": utils.SanitizeK8sResourceName(deployment.Name),
+			labelArtifactDeployment: utils.SanitizeK8sResourceName(deployment.Name),
 		},
-		MatchExpressions: []metav1.LabelSelectorRequirement{
-			{
-				// TODO (sascha 05.12.25): Remove the Konfidence-specific
-				// "konfidence.cloud/appname" label from deployment manifests
-				// (Helm charts and Kustomize).
-				Key:      "konfidence.cloud/appname",
-				Operator: metav1.LabelSelectorOpExists,
-			},
-		},
-	}
-
-	serviceSelector, err := metav1.LabelSelectorAsSelector(serviceLabelSelector)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Selector: %w", err)
 	}
@@ -85,26 +71,41 @@ func (s *DeploymentResultStatusUpdater) fetchExposableServices(
 	return serviceList, nil
 }
 
+// mapServicesToDeploymentResult turns the opted-in Services into DeploymentResults. A Service opts in via the
+// annotationDeploymentResult annotation, whose value becomes the stable result Name; Services without it are ignored.
+// Results are identified by (Name, Type); two Services yielding the same pair is a misconfiguration and is rejected.
 func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceList *corev1.ServiceList) ([]konfidencev1alpha1.DeploymentResult, error) {
-	deploymentResultServices := make([]konfidencev1alpha1.DeploymentResult, len(serviceList.Items))
+	deploymentResultServices := make([]konfidencev1alpha1.DeploymentResult, 0, len(serviceList.Items))
+	seen := make(map[string]string, len(serviceList.Items))
 
-	for i, service := range serviceList.Items {
-		deploymentResultServiceSpec := DeploymentResultServiceSpec{
+	for i := range serviceList.Items {
+		service := &serviceList.Items[i]
+		resultName, ok := service.Annotations[annotationDeploymentResult]
+		if !ok {
+			continue
+		}
+
+		if first, dup := seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService]; dup {
+			return nil, fmt.Errorf(
+				"services %q and %q both declare deployment result (name=%q, type=%q); the pair must be unique",
+				first, service.Name, resultName, deploymentresult.TypeHTTPK8sService)
+		}
+		seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService] = service.Name
+
+		deploymentResultServiceSpecRaw, err := json.Marshal(deploymentresult.ServiceSpec{
 			Namespace:    service.Namespace,
 			K8sName:      service.Name,
 			ServicePorts: service.Spec.Ports,
-		}
-
-		deploymentResultServiceSpecRaw, err := json.Marshal(deploymentResultServiceSpec)
+		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal deploymentResultServiceSpec: %w", err)
 		}
 
-		deploymentResultServices[i] = konfidencev1alpha1.DeploymentResult{
-			Name: service.Labels["konfidence.cloud/appname"],
-			Type: "http-k8s-service",
+		deploymentResultServices = append(deploymentResultServices, konfidencev1alpha1.DeploymentResult{
+			Name: resultName,
+			Type: deploymentresult.TypeHTTPK8sService,
 			Spec: runtime.RawExtension{Raw: deploymentResultServiceSpecRaw},
-		}
+		})
 	}
 	return deploymentResultServices, nil
 }

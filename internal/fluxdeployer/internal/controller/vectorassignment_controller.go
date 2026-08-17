@@ -11,26 +11,22 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-)
-
-var (
-	gatewayv1ServiceGroup gatewayv1.Group = ""
-	gatewayv1ServiceKind  gatewayv1.Kind  = "Service"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const VectorAssignmentControllerName = "flux-vector-assignment-controller"
 
 // VectorAssignmentReconciler reconciles VectorAssignment resources where manifest type is either
-// 'cloud.konfidence.flux.kustomize' or 'cloud.konfidence.flux.helm'
+// 'cloud.konfidence.flux.kustomize' or 'cloud.konfidence.flux.helm'. East-west routing is carried by deployment
+// results in VectorData, so the deployer no longer creates routing objects; it only reflects whether the referenced
+// ArtifactDeployment has published its deployment results.
 type VectorAssignmentReconciler struct {
 	client.Client
 	Recorder events.EventRecorder
@@ -39,34 +35,26 @@ type VectorAssignmentReconciler struct {
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=vectorassignments,verbs=get;list;watch
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=vectorassignments/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch
-// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch
-// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *VectorAssignmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	manifestTypeFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		switch obj := obj.(type) {
-		case *konfidencev1alpha1.VectorAssignment:
-			return obj.Spec.Manifest.Type == manifestTypeKustomize || obj.Spec.Manifest.Type == manifestTypeHelm
-		case *gatewayv1.HTTPRoute, *corev1.Service:
+		assignment, ok := obj.(*konfidencev1alpha1.VectorAssignment)
+		if !ok {
 			return true
-		default:
-			return false
 		}
+		return assignment.Spec.Manifest.Type == manifestTypeKustomize || assignment.Spec.Manifest.Type == manifestTypeHelm
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&konfidencev1alpha1.VectorAssignment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
-		Owns(&corev1.Service{}, builder.MatchEveryOwner).
-		Owns(&gatewayv1.HTTPRoute{}).
+		For(&konfidencev1alpha1.VectorAssignment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Watches(&konfidencev1alpha1.ArtifactDeployment{}, handler.EnqueueRequestsFromMapFunc(r.assignmentsForArtifactDeployment)).
+		WithEventFilter(manifestTypeFilter).
 		Named("k8s_vectorassignment").
 		Complete(r)
 }
 
 func (r *VectorAssignmentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
-	log.Info("start reconciling vector assignment")
-
 	assignment := &konfidencev1alpha1.VectorAssignment{}
 	if err := r.Get(ctx, req.NamespacedName, assignment); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -75,194 +63,67 @@ func (r *VectorAssignmentReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, fmt.Errorf("failed to get vector assignment object: %w", err)
 	}
 
-	originalAssignment := assignment.DeepCopy()
-	patch := client.MergeFrom(originalAssignment)
+	original := assignment.DeepCopy()
 
 	artifactDeployment := &konfidencev1alpha1.ArtifactDeployment{}
-	err := r.Get(ctx, types.NamespacedName{
+	adErr := r.Get(ctx, types.NamespacedName{
 		Namespace: assignment.Namespace,
 		Name:      assignment.Spec.ArtifactDeploymentRef.Name,
 	}, artifactDeployment)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("could not get referenced artifact deployment: %w", err)
+	if adErr != nil && !apierrors.IsNotFound(adErr) {
+		return ctrl.Result{}, fmt.Errorf("could not get referenced artifact deployment: %w", adErr)
 	}
 
-	for _, deploymentResult := range artifactDeployment.Status.DeploymentResults {
-		if deploymentResult.Type != "http-k8s-service" {
-			continue
-		}
-		log.Info(fmt.Sprintf("reconciling artifact deployment result %q", deploymentResult.Name))
-
-		route := ServiceRouteResult{
-			Name: deploymentResult.Name,
-		}
-		err := json.Unmarshal(deploymentResult.Spec.Raw, &route.Service)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("could not unmarshal deploymentresult spec for %q: %w", deploymentResult.Name, err)
-		}
-
-		svc, err := r.ensureAppNameService(ctx, assignment, route)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("could not ensure app name service exists for %q: %w", deploymentResult.Name, err)
-		}
-
-		err = r.ensureHTTPRoute(ctx, assignment, svc, route)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("could not ensure httproute exists for %q: %w", deploymentResult.Name, err)
-		}
+	status, reason, message := metav1.ConditionFalse, "ArtifactDeploymentMissing", "referenced ArtifactDeployment not found"
+	switch {
+	case adErr == nil && meta.IsStatusConditionTrue(artifactDeployment.Status.Conditions, konfidencev1alpha1.DeploymentResultCreatedCondition):
+		status, reason, message = metav1.ConditionTrue, "AssignmentReady", "ArtifactDeployment published its deployment results"
+	case adErr == nil:
+		status, reason, message = metav1.ConditionFalse, "AssignmentNotReady", "waiting for ArtifactDeployment to publish deployment results"
 	}
 
-	if !reflect.DeepEqual(assignment.Status, originalAssignment.Status) {
-		if err := r.Client.Status().Patch(ctx, assignment, patch); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to patch vector assignment status: %w", err)
-		}
-	}
+	meta.SetStatusCondition(&assignment.Status.Conditions, metav1.Condition{
+		Type:               konfidencev1alpha1.VectorAssignmentReadyCondition,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: assignment.Generation,
+		LastTransitionTime: metav1.Now(),
+	})
 
-	log.Info("finish reconciling vector assignment")
+	if reflect.DeepEqual(assignment.Status, original.Status) {
+		return ctrl.Result{}, nil
+	}
+	if err := r.Status().Patch(ctx, assignment, client.MergeFrom(original)); err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to patch vector assignment status: %w", err)
+	}
+	r.Recorder.Eventf(assignment, nil, corev1.EventTypeNormal, "VectorAssignmentReadyChanged", "VectorAssignmentReadyChanged",
+		fmt.Sprintf("Ready=%s: %s", status, message))
 	return ctrl.Result{}, nil
 }
 
-func (r *VectorAssignmentReconciler) ensureAppNameService(
-	ctx context.Context, assignment *konfidencev1alpha1.VectorAssignment, route ServiceRouteResult,
-) (*corev1.Service, error) {
-	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      route.Name,
-			Namespace: route.Service.Namespace,
-		},
-	}
-
-	mutateFn := func() error {
-		svc.Spec = corev1.ServiceSpec{
-			Ports: route.Service.ServicePorts,
-		}
-
-		err := controllerutil.SetOwnerReference(assignment, svc, r.Scheme())
-		if err != nil {
-			return fmt.Errorf("failed to set owner reference on appName service: %w", err)
-		}
-
+// assignmentsForArtifactDeployment enqueues the VectorAssignments that reference the given ArtifactDeployment so
+// their readiness re-evaluates when the ArtifactDeployment's deployment results change.
+func (r *VectorAssignmentReconciler) assignmentsForArtifactDeployment(ctx context.Context, obj client.Object) []reconcile.Request {
+	deployment, ok := obj.(*konfidencev1alpha1.ArtifactDeployment)
+	if !ok {
 		return nil
 	}
-	operationResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, mutateFn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to reconcile appName service: %w", err)
+
+	assignments := &konfidencev1alpha1.VectorAssignmentList{}
+	if err := r.List(ctx, assignments, client.InNamespace(deployment.Namespace)); err != nil {
+		logf.FromContext(ctx).Error(err, "listing VectorAssignments for ArtifactDeployment", "artifactDeployment", deployment.Name)
+		return nil
 	}
 
-	msg := fmt.Sprintf("appName service %s %s", svc.Name, operationResult)
-	r.Recorder.Eventf(assignment, nil, corev1.EventTypeNormal, "AppNameServiceReconciled", "AppNameServiceReconciled", msg)
-	logf.FromContext(ctx).Info(msg)
-
-	return svc, nil
-}
-
-func (r *VectorAssignmentReconciler) ensureHTTPRoute(
-	ctx context.Context, assignment *konfidencev1alpha1.VectorAssignment, svc *corev1.Service, route ServiceRouteResult,
-) error {
-	httpRoute := &gatewayv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s-%s", route.Name, assignment.Spec.VectorDeploymentRef.Name, assignment.Spec.ArtifactDeploymentRef.Name),
-			Namespace: route.Service.Namespace,
-		},
-	}
-
-	mutateFn := func() error {
-		httpRoute.Spec = gatewayv1.HTTPRouteSpec{
-			CommonRouteSpec: gatewayv1.CommonRouteSpec{
-				ParentRefs: []gatewayv1.ParentReference{
-					{
-						Group:     &gatewayv1ServiceGroup,
-						Kind:      &gatewayv1ServiceKind,
-						Namespace: toNamespace(svc.Namespace),
-						Name:      gatewayv1.ObjectName(svc.Name),
-					},
-				},
-			},
-			Rules: []gatewayv1.HTTPRouteRule{
-				{
-					Matches: []gatewayv1.HTTPRouteMatch{
-						{
-							Headers: []gatewayv1.HTTPHeaderMatch{
-								{
-									Name:  "X-Vector-ID",
-									Value: assignment.Spec.VectorDeploymentRef.Name,
-								},
-							},
-						},
-					},
-					BackendRefs: []gatewayv1.HTTPBackendRef{
-						{
-							BackendRef: gatewayv1.BackendRef{
-								BackendObjectReference: gatewayv1.BackendObjectReference{
-									Group:     &gatewayv1ServiceGroup,
-									Kind:      &gatewayv1ServiceKind,
-									Namespace: toNamespace(route.Service.Namespace),
-									Name:      gatewayv1.ObjectName(route.Service.K8sName),
-									Port:      toPort(route.Service.ServicePorts[0].Port), // TODO (karsten / 2025-12-04): support multiple ports? this needs one HTTPRoute per port then
-								},
-							},
-						},
-					},
-				},
-			},
+	var requests []reconcile.Request
+	for i := range assignments.Items {
+		assignment := &assignments.Items[i]
+		if assignment.Spec.ArtifactDeploymentRef.Name == deployment.Name {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{Namespace: assignment.Namespace, Name: assignment.Name},
+			})
 		}
-
-		return controllerutil.SetControllerReference(assignment, httpRoute, r.Scheme())
 	}
-
-	operationResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, httpRoute, mutateFn)
-	if err != nil {
-		return fmt.Errorf("failed to reconcile HTTPRoute: %w", err)
-	}
-
-	msg := fmt.Sprintf("HttpRoute %q %s,", httpRoute.Name, operationResult)
-	r.Recorder.Eventf(assignment, nil, corev1.EventTypeNormal, "HttpRouteReconciled", "HttpRouteReconciled", msg)
-	logf.FromContext(ctx).Info(msg)
-
-	r.mapStatusConditions(assignment, httpRoute)
-
-	return nil
-}
-
-func (r *VectorAssignmentReconciler) mapStatusConditions(
-	assignment *konfidencev1alpha1.VectorAssignment,
-	route *gatewayv1.HTTPRoute,
-) {
-	// The created HTTPRoute always has exactly one parent ref, which is the Service created for the application. We
-	// consider the assignment to be ready when the HTTPRoute is accepted and all references are resolved.
-	if len(route.Status.Parents) == 1 &&
-		meta.IsStatusConditionTrue(route.Status.Parents[0].Conditions, string(gatewayv1.RouteConditionAccepted)) &&
-		meta.IsStatusConditionTrue(route.Status.Parents[0].Conditions, string(gatewayv1.RouteConditionResolvedRefs)) {
-		meta.SetStatusCondition(&assignment.Status.Conditions, metav1.Condition{
-			Type:               konfidencev1alpha1.VectorAssignmentReadyCondition,
-			Status:             metav1.ConditionTrue,
-			Reason:             "AssignmentReady",
-			Message:            "HTTPRoute has been accepted and all references resolved",
-			ObservedGeneration: assignment.Generation,
-			LastTransitionTime: metav1.Now(),
-		})
-	} else {
-		meta.SetStatusCondition(&assignment.Status.Conditions, metav1.Condition{
-			Type:               konfidencev1alpha1.VectorAssignmentReadyCondition,
-			Status:             metav1.ConditionFalse,
-			Reason:             "AssignmentNotReady",
-			Message:            "HTTPRoute is either not accepted or has unresolved references",
-			ObservedGeneration: assignment.Generation,
-			LastTransitionTime: metav1.Now(),
-		})
-	}
-}
-
-func toNamespace(ns string) *gatewayv1.Namespace {
-	gatewayNamespace := gatewayv1.Namespace(ns)
-	return &gatewayNamespace
-}
-
-func toPort(p int32) *gatewayv1.PortNumber {
-	return &p
-}
-
-type ServiceRouteResult struct {
-	Name    string
-	Service DeploymentResultServiceSpec
+	return requests
 }

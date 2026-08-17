@@ -78,8 +78,8 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			// create deploymentResults
-			deploymentResults := make(map[string]konfidencev1alpha1.DeploymentResult)
-			deploymentResults[ServiceName1] = konfidencev1alpha1.DeploymentResult{
+			deploymentResults := make(map[string]konfidencev1alpha1.ComponentDeploymentResults)
+			deploymentResults[ServiceName1] = []konfidencev1alpha1.DeploymentResult{{
 				Name: ServiceName1,
 				Type: HttpActivationTaskExecutionType,
 				Spec: runtime.RawExtension{
@@ -88,9 +88,9 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 						ServiceName1, HttpRouteName1, ServicePort1,
 					)),
 				},
-			}
+			}}
 
-			deploymentResults[ServiceName2] = konfidencev1alpha1.DeploymentResult{
+			deploymentResults[ServiceName2] = []konfidencev1alpha1.DeploymentResult{{
 				Name: ServiceName2,
 				Type: HttpActivationTaskExecutionType,
 				Spec: runtime.RawExtension{
@@ -99,7 +99,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 						ServiceName2, HttpRouteName2, ServicePort2,
 					)),
 				},
-			}
+			}}
 
 			// and update status
 			vectorDeployment.Status.DeploymentResults = deploymentResults
