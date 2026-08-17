@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"maps"
+	"slices"
 
 	utilscmd "github.com/konfidence-project/konfidence/pkg/cmd"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/activationexecution"
@@ -45,7 +47,7 @@ func startOperator(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	enabled, err := utilscmd.FilterEnabledControllers(controllersSpec, controllerSetups)
+	enabled, err := utilscmd.FilterEnabledControllers(controllersSpec, slices.Collect(maps.Keys(controllerSetups)))
 	if err != nil {
 		setupLog.Error(err, "invalid --controllers flag")
 		return err
