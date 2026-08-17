@@ -8,6 +8,7 @@ import (
 	"reflect"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentresult"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -35,7 +36,7 @@ type ActivationTaskExecutionReconciler struct {
 
 const (
 	XVectorId                       = "x-vector-id"
-	HttpActivationTaskExecutionType = "http-k8s-service"
+	HttpActivationTaskExecutionType = deploymentresult.TypeHTTPK8sService
 	Gateway                         = "gateway"
 	GatewayNamespace                = "konfidence-system"
 	DefaultDomain                   = "kden-showroom.msp03.shoot.gardener.cc-one.showroom.apeirora.eu"
@@ -53,11 +54,6 @@ type HTTPRouteConfig struct {
 	VectorID      string `json:"vectorId"`
 	ServiceName   string `json:"serviceName"`
 	Port          int32  `json:"port"`
-}
-
-type DeploymentSpec struct {
-	K8sName      string               `json:"K8sName"`
-	ServicePorts []corev1.ServicePort `json:"ServicePorts"`
 }
 
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=activationtaskexecutions,verbs=get;list;watch;create;update;patch;delete
@@ -268,9 +264,12 @@ func (r *ActivationTaskExecutionReconciler) parseHttpConfigs(
 		return nil, fmt.Errorf("failed to get VectorDeployment %s: %w", vectorActivation.Spec.VectorDeployment, err)
 	}
 
-	for _, deploymentResult := range vectorDeployment.Status.DeploymentResults {
-		if deploymentResult.Type == activationTaskExecution.Spec.Type {
-			var deploymentSpec DeploymentSpec
+	for _, deploymentResults := range vectorDeployment.Status.DeploymentResults {
+		for _, deploymentResult := range deploymentResults {
+			if deploymentResult.Type != activationTaskExecution.Spec.Type {
+				continue
+			}
+			var deploymentSpec deploymentresult.ServiceSpec
 
 			err := json.Unmarshal(deploymentResult.Spec.Raw, &deploymentSpec)
 			if err != nil {

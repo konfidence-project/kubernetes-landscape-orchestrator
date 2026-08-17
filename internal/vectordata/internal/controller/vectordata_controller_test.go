@@ -18,9 +18,11 @@ import (
 
 var _ = Describe("VectorData Controller", func() {
 	const (
-		ns       = "default"
-		timeout  = 10 * time.Second
-		interval = 250 * time.Millisecond
+		ns                 = "default"
+		timeout            = 10 * time.Second
+		interval           = 250 * time.Millisecond
+		httpK8sServiceType = "http-k8s-service"
+		apiResult          = "api"
 	)
 
 	AfterEach(func() {
@@ -49,9 +51,10 @@ var _ = Describe("VectorData Controller", func() {
 			vd := newVectorData("vd-happy",
 				`{"betaApi":false,"darkMode":true}`,
 				`{"_origin":"test"}`,
-				map[string]konfidencev1alpha1.DeploymentResult{
-					"github.com/example/component-a/endpoint": {Name: "endpoint", Type: "serviceEndpoint",
-						Spec: runtime.RawExtension{Raw: []byte(`{"url":"http://a"}`)}},
+				map[string]konfidencev1alpha1.ComponentDeploymentResults{
+					"github.com/example/component-a": {
+						{Name: "endpoint", Type: "serviceEndpoint", Spec: runtime.RawExtension{Raw: []byte(`{"url":"http://a"}`)}},
+					},
 				})
 			Expect(k8sClient.Create(context.Background(), vd)).To(Succeed())
 
@@ -62,6 +65,10 @@ var _ = Describe("VectorData Controller", func() {
 				g.Expect(cm.Data).To(HaveKey(FeaturesConfigKey))
 				g.Expect(cm.Data).To(HaveKey(AuthoredConfigKey))
 				g.Expect(cm.Data).To(HaveKey(DeploymentResultsPrefix + "component-a" + JSONSuffix))
+				var results []konfidencev1alpha1.DeploymentResult
+				g.Expect(json.Unmarshal([]byte(cm.Data[DeploymentResultsPrefix+"component-a"+JSONSuffix]), &results)).To(Succeed())
+				g.Expect(results).To(HaveLen(1))
+				g.Expect(results[0].Name).To(Equal("endpoint"))
 				g.Expect(cm.Immutable).ToNot(BeNil())
 				g.Expect(*cm.Immutable).To(BeTrue())
 				g.Expect(cm.OwnerReferences).To(BeEmpty(), "ConfigMap must not have owner-references")
@@ -76,6 +83,29 @@ var _ = Describe("VectorData Controller", func() {
 				g.Expect(readyCondition(got)).ToNot(BeNil())
 				g.Expect(readyCondition(got).Status).To(Equal(metav1.ConditionTrue))
 				g.Expect(readyCondition(got).Reason).To(Equal(konfidencev1alpha1.VectorDataReasonMaterialized))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("emits one array entry per Service when a component exposes several", func() {
+			vd := newVectorData("vd-multi", `{"a":1}`, `null`,
+				map[string]konfidencev1alpha1.ComponentDeploymentResults{
+					"github.com/acme/shop/storefront": {
+						{Name: "storefront", Type: httpK8sServiceType, Spec: runtime.RawExtension{Raw: []byte(`{"K8sName":"storefront-a1b2"}`)}},
+						{Name: "storefront-admin", Type: httpK8sServiceType, Spec: runtime.RawExtension{Raw: []byte(`{"K8sName":"storefront-admin-a1b2"}`)}},
+					},
+				})
+			Expect(k8sClient.Create(context.Background(), vd)).To(Succeed())
+
+			cmKey := types.NamespacedName{Namespace: ns, Name: ConfigMapPrefix + "vd-multi"}
+			cm := &corev1.ConfigMap{}
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(context.Background(), cmKey, cm)).To(Succeed())
+				g.Expect(cm.Data).To(HaveKey(DeploymentResultsPrefix + "storefront" + JSONSuffix))
+				var results []konfidencev1alpha1.DeploymentResult
+				g.Expect(json.Unmarshal([]byte(cm.Data[DeploymentResultsPrefix+"storefront"+JSONSuffix]), &results)).To(Succeed())
+				g.Expect(results).To(HaveLen(2))
+				g.Expect(results[0].Name).To(Equal("storefront"))
+				g.Expect(results[1].Name).To(Equal("storefront-admin"))
 			}, timeout, interval).Should(Succeed())
 		})
 
@@ -126,9 +156,48 @@ var _ = Describe("VectorData Controller", func() {
 			}, 2*time.Second, interval).Should(Succeed())
 		})
 	})
+
+	Context("Rendering failures", func() {
+		It("reports Ready=False when two components collide on the same result key", func() {
+			vd := newVectorData("vd-collision", `{"a":1}`, `null`,
+				map[string]konfidencev1alpha1.ComponentDeploymentResults{
+					"github.com/acme/team-a/api": {{Name: apiResult, Type: httpK8sServiceType, Spec: runtime.RawExtension{Raw: []byte(`{"K8sName":"api-a"}`)}}},
+					"github.com/acme/team-b/api": {{Name: apiResult, Type: httpK8sServiceType, Spec: runtime.RawExtension{Raw: []byte(`{"K8sName":"api-b"}`)}}},
+				})
+			Expect(k8sClient.Create(context.Background(), vd)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				got := &konfidencev1alpha1.VectorData{}
+				g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "vd-collision"}, got)).To(Succeed())
+				g.Expect(readyCondition(got)).ToNot(BeNil())
+				g.Expect(readyCondition(got).Status).To(Equal(metav1.ConditionFalse))
+				g.Expect(readyCondition(got).Reason).To(Equal("RenderFailed"))
+			}, timeout, interval).Should(Succeed())
+
+			Consistently(func() bool {
+				return apierrors.IsNotFound(k8sClient.Get(context.Background(),
+					types.NamespacedName{Namespace: ns, Name: ConfigMapPrefix + "vd-collision"}, &corev1.ConfigMap{}))
+			}, 2*time.Second, interval).Should(BeTrue())
+		})
+
+		It("rejects a VectorData whose component results collide on (name, type)", func() {
+			vd := newVectorData("vd-dup-result", `{"a":1}`, `null`,
+				map[string]konfidencev1alpha1.ComponentDeploymentResults{
+					"github.com/acme/team-a/api": {
+						{Name: apiResult, Type: httpK8sServiceType, Spec: runtime.RawExtension{Raw: []byte(`{"K8sName":"api-1"}`)}},
+						{Name: apiResult, Type: httpK8sServiceType, Spec: runtime.RawExtension{Raw: []byte(`{"K8sName":"api-2"}`)}},
+					},
+				})
+			// The CRD's CEL rule enforces (name, type) uniqueness, so the apiserver rejects this at admission.
+			Expect(k8sClient.Create(context.Background(), vd)).ToNot(Succeed())
+		})
+	})
 })
 
-func newVectorData(name string, featuresJSON, authoredJSON string, results map[string]konfidencev1alpha1.DeploymentResult) *konfidencev1alpha1.VectorData {
+func newVectorData(
+	name, featuresJSON, authoredJSON string,
+	results map[string]konfidencev1alpha1.ComponentDeploymentResults,
+) *konfidencev1alpha1.VectorData {
 	spec := konfidencev1alpha1.VectorDataSpec{DeploymentResults: results}
 	if featuresJSON != "" {
 		spec.Features = &runtime.RawExtension{Raw: json.RawMessage(featuresJSON)}

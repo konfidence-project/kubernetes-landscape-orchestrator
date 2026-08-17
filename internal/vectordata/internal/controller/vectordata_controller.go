@@ -137,27 +137,48 @@ func (r *VectorDataReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 // renderData maps the runtime-agnostic VectorData.Spec to the data layout the vector configuration service consumes.
 // Star pre-splits the OCM envelope into Spec.Features/Spec.Authored (verbatim RawExtension); we just forward them.
-// DeploymentResults are fanned out per artifact basename, value = the deployer-emitted Spec JSON verbatim.
+// DeploymentResults are keyed by artifact component; each CM entry is the JSON array of that component's results.
 func renderData(vd *konfidencev1alpha1.VectorData) (map[string]string, error) {
 	data := map[string]string{
 		FeaturesConfigKey: rawOrNull(vd.Spec.Features),
 		AuthoredConfigKey: rawOrNull(vd.Spec.Authored),
 	}
-	for compoundKey, result := range vd.Spec.DeploymentResults {
-		basename := componentBasename(compoundKey)
+	seenBasename := make(map[string]string, len(vd.Spec.DeploymentResults))
+	for component, results := range vd.Spec.DeploymentResults {
+		basename := componentBasename(component)
 		if basename == "" {
 			continue
 		}
-		specBytes := result.Spec.Raw
-		if len(specBytes) == 0 {
-			specBytes = []byte(jsonNullLiteral)
+		if other, dup := seenBasename[basename]; dup {
+			return nil, fmt.Errorf("components %q and %q map to the same deployment-result key %q", other, component, basename)
 		}
-		if !json.Valid(specBytes) {
-			return nil, fmt.Errorf("deployment result %q has non-JSON Spec", compoundKey)
+		seenBasename[basename] = component
+
+		if err := assertUniqueResults(component, results); err != nil {
+			return nil, err
 		}
-		data[DeploymentResultsPrefix+basename+JSONSuffix] = string(specBytes)
+
+		encoded, err := json.Marshal(results)
+		if err != nil {
+			return nil, fmt.Errorf("marshal deployment results for component %q: %w", component, err)
+		}
+		data[DeploymentResultsPrefix+basename+JSONSuffix] = string(encoded)
 	}
 	return data, nil
+}
+
+// assertUniqueResults refuses to materialise a component whose results are not unique by (Name, Type); consumers
+// resolve results by that pair, so a duplicate would make the lookup ambiguous.
+func assertUniqueResults(component string, results []konfidencev1alpha1.DeploymentResult) error {
+	seen := make(map[string]struct{}, len(results))
+	for i := range results {
+		key := results[i].Name + "\x00" + results[i].Type
+		if _, dup := seen[key]; dup {
+			return fmt.Errorf("component %q has duplicate deployment result (name=%q, type=%q)", component, results[i].Name, results[i].Type)
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
 }
 
 func rawOrNull(r *runtime.RawExtension) string {
@@ -167,13 +188,8 @@ func rawOrNull(r *runtime.RawExtension) string {
 	return string(r.Raw)
 }
 
-// componentBasename: result keys are "<component>/<result>"; take the basename of the component for the CM key
-// (K8s data keys disallow `/`).
-func componentBasename(compoundKey string) string {
-	component := compoundKey
-	if slash := strings.LastIndex(component, "/"); slash >= 0 {
-		component = compoundKey[:slash]
-	}
+// componentBasename returns the last path segment of an OCM component name; K8s ConfigMap data keys disallow `/`.
+func componentBasename(component string) string {
 	if idx := strings.LastIndex(component, "/"); idx >= 0 && idx < len(component)-1 {
 		return component[idx+1:]
 	}
