@@ -70,6 +70,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 	// preserve original deployment status for patching it later
 	originalDeployment := deployment.DeepCopy()
 	patch := client.MergeFrom(originalDeployment)
+	deploymentTargetNotReady := false
 
 	// reconcile the single OCM resource of type "kustomize"; reject spec with multiple matches
 	var matches []konfidencev1alpha1.OCMResource
@@ -112,8 +113,11 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 			} else {
 				if isReady {
 					if _, err := r.KustomizationReconciler.Reconcile(ctx, deployment, kustomizeResource); err != nil {
-						log.Error(err, fmt.Sprintf("failed to reconcile Kustomization of OCM resource '%s'", ocmResource.Name),
-							"ArtifactDeployment", deployment)
+						deploymentTargetNotReady = setDeploymentTargetNotReady(deployment, err)
+						if !deploymentTargetNotReady {
+							log.Error(err, fmt.Sprintf("failed to reconcile Kustomization of OCM resource '%s'", ocmResource.Name),
+								"ArtifactDeployment", deployment)
+						}
 					}
 				} else {
 					log.Info("OCIRepository is not ready, skipping Kustomization reconciliation")
@@ -127,9 +131,11 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 		log.Error(err, "failed to handle Kustomize deployment result", "ArtifactDeployment", deployment)
 	}
 
-	err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
-	if err != nil {
-		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
+	if !deploymentTargetNotReady {
+		err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
+		if err != nil {
+			log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
+		}
 	}
 
 	// patch the deployment status updates
@@ -154,6 +160,8 @@ func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manage
 		case *sourcev1.OCIRepository, *kustomizev1.Kustomization:
 			// ... or owned resources
 			return true
+		case *konfidencev1alpha1.DeploymentTarget:
+			return obj.Spec.Type == manifestTypeKustomize
 		default:
 			return false
 		}
@@ -171,12 +179,22 @@ func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manage
 			return deploymentclass.ArtifactDeploymentsForType(ctx, r.Client, manifestTypeKustomize)
 		},
 	)
+	deploymentTargetMapper := handler.EnqueueRequestsFromMapFunc(
+		func(ctx context.Context, obj client.Object) []reconcile.Request {
+			dt, ok := obj.(*konfidencev1alpha1.DeploymentTarget)
+			if !ok || dt.Spec.Type != manifestTypeKustomize {
+				return nil
+			}
+			return deploymentclass.ArtifactDeploymentsForTarget(ctx, r.Client, dt)
+		},
+	)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
 		Owns(&sourcev1.OCIRepository{}).
 		Owns(&kustomizev1.Kustomization{}).
 		Watches(&konfidencev1alpha1.DeploymentClass{}, deploymentClassMapper).
+		Watches(&konfidencev1alpha1.DeploymentTarget{}, deploymentTargetMapper).
 		Named("kustomize_artifactdeployment").
 		Complete(r)
 }

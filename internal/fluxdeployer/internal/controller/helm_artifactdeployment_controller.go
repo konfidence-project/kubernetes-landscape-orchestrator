@@ -71,6 +71,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 	// preserve original deployment status for patching it later
 	originalDeployment := deployment.DeepCopy()
 	patch := client.MergeFrom(originalDeployment)
+	deploymentTargetNotReady := false
 
 	// reconcile the single OCM resource of type "helmChart"; reject spec with multiple matches
 	var matches []konfidencev1alpha1.OCMResource
@@ -112,8 +113,11 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 					"ArtifactDeployment", deployment)
 			} else {
 				if _, err := r.HelmReleaseReconciler.Reconcile(ctx, deployment, helmChartResource); err != nil {
-					log.Error(err, fmt.Sprintf("failed to reconcile HelmRelease of OCM resource %s", ocmResource.Name),
-						"ArtifactDeployment", deployment)
+					deploymentTargetNotReady = setDeploymentTargetNotReady(deployment, err)
+					if !deploymentTargetNotReady {
+						log.Error(err, fmt.Sprintf("failed to reconcile HelmRelease of OCM resource %s", ocmResource.Name),
+							"ArtifactDeployment", deployment)
+					}
 				}
 			}
 		}
@@ -124,9 +128,11 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 		log.Error(err, "failed to handle Helm artifact deployment result", "ArtifactDeployment", deployment)
 	}
 
-	err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
-	if err != nil {
-		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
+	if !deploymentTargetNotReady {
+		err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
+		if err != nil {
+			log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
+		}
 	}
 
 	// patch the deployment status updates
@@ -151,6 +157,8 @@ func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) er
 		case *sourcev1.HelmRepository, *sourcev1.HelmChart, *helmv2.HelmRelease:
 			// ... or owned resources
 			return true
+		case *konfidencev1alpha1.DeploymentTarget:
+			return obj.Spec.Type == manifestTypeHelm
 		default:
 			return false
 		}
@@ -168,6 +176,15 @@ func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) er
 			return deploymentclass.ArtifactDeploymentsForType(ctx, r.Client, manifestTypeHelm)
 		},
 	)
+	deploymentTargetMapper := handler.EnqueueRequestsFromMapFunc(
+		func(ctx context.Context, obj client.Object) []reconcile.Request {
+			dt, ok := obj.(*konfidencev1alpha1.DeploymentTarget)
+			if !ok || dt.Spec.Type != manifestTypeHelm {
+				return nil
+			}
+			return deploymentclass.ArtifactDeploymentsForTarget(ctx, r.Client, dt)
+		},
+	)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
@@ -175,6 +192,7 @@ func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Owns(&sourcev1.HelmChart{}).
 		Owns(&helmv2.HelmRelease{}).
 		Watches(&konfidencev1alpha1.DeploymentClass{}, deploymentClassMapper).
+		Watches(&konfidencev1alpha1.DeploymentTarget{}, deploymentTargetMapper).
 		Named("helm_artifactdeployment").
 		Complete(r)
 }

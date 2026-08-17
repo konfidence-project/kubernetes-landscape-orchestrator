@@ -10,6 +10,7 @@ import (
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	controllermocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller/mocks"
 	fluxmocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/mocks"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentclass"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -73,9 +74,16 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 				Component: konfidencev1alpha1.OCMComponent{Resources: resources},
 			},
 		}
+		dc := &konfidencev1alpha1.DeploymentClass{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-helm"},
+			Spec: konfidencev1alpha1.DeploymentClassSpec{
+				Type:       manifestTypeHelm,
+				Controller: deploymentclass.ControllerName,
+			},
+		}
 		cl := fake.NewClientBuilder().
 			WithScheme(newTestScheme()).
-			WithObjects(d).
+			WithObjects(d, dc).
 			WithStatusSubresource(&konfidencev1alpha1.ArtifactDeployment{}).
 			Build()
 		r := &HelmArtifactDeploymentReconciler{
@@ -135,6 +143,27 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 			got := &konfidencev1alpha1.ArtifactDeployment{}
 			Expect(cl.Get(ctx, types.NamespacedName{Namespace: d.Namespace, Name: d.Name}, got)).To(Succeed())
 			Expect(meta.IsStatusConditionTrue(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)).To(BeTrue())
+		})
+
+		It("sets Ready=False when no ready DeploymentTarget exists", func() {
+			r, cl, d := newFixture("helm-no-target", []konfidencev1alpha1.OCMResource{
+				{Name: "a", Type: ocmResourceTypeHelmChart, Content: rawHelmOCIContent()},
+			})
+
+			repoMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
+			releaseMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any()).Return(false,
+				&DeploymentTargetNotReadyError{Namespace: d.Namespace, DeploymentType: manifestTypeHelm}).Times(1)
+			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Name}})
+			Expect(err).NotTo(HaveOccurred())
+
+			got := &konfidencev1alpha1.ArtifactDeployment{}
+			Expect(cl.Get(ctx, types.NamespacedName{Namespace: d.Namespace, Name: d.Name}, got)).To(Succeed())
+			ready := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
+			Expect(ready).NotTo(BeNil())
+			Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			Expect(ready.Reason).To(Equal(ArtifactDeploymentReasonDeploymentTargetNotReady))
 		})
 	})
 })

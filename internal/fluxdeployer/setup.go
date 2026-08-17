@@ -1,6 +1,8 @@
 package fluxdeployer
 
 import (
+	"context"
+
 	"github.com/go-logr/logr"
 	internalcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/reconciler"
@@ -10,6 +12,10 @@ import (
 const OperatorFlagName = "FluxDeployer"
 
 func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
+	if err := internalcontroller.IndexReadyDeploymentTargets(context.Background(), mgr.GetFieldIndexer()); err != nil {
+		return err
+	}
+
 	configProvider := &internalcontroller.ConfigProvider{
 		Client: mgr.GetClient(),
 	}

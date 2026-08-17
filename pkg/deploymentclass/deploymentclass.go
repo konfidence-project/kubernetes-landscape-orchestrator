@@ -7,7 +7,7 @@
 //
 //   - which controller identity string to match against DeploymentClass.spec.controller
 //   - which type strings the KLO binary can actually handle (KnownTypes)
-//   - how to query the live set of active types from the informer cache (ActiveTypes)
+//   - how to query the current set of active types (ActiveTypes)
 //   - how to map a DeploymentClass event to the affected DeploymentTargets (DeploymentTargetsForType)
 package deploymentclass
 
@@ -35,13 +35,8 @@ var KnownTypes = map[string]struct{}{
 	"konfidence.cloud/kustomize": {},
 }
 
-// ActiveTypes queries the informer cache for all DeploymentClass resources whose
-// spec.controller matches ControllerName, and returns the set of their spec.type
-// values. The result represents the deployment class types that are currently
-// active in the cluster for this controller.
-//
-// This call hits the controller-runtime informer cache and does not make a live
-// API server request.
+// ActiveTypes lists DeploymentClass resources through the provided client and returns
+// the spec.type values whose spec.controller matches ControllerName.
 func ActiveTypes(ctx context.Context, c client.Client) (map[string]struct{}, error) {
 	list := &konfidencev1alpha1.DeploymentClassList{}
 	if err := c.List(ctx, list); err != nil {
@@ -61,8 +56,6 @@ func ActiveTypes(ctx context.Context, c client.Client) (map[string]struct{}, err
 // resources cluster-wide whose spec.type matches the given deploymentType string.
 // Used as the Watches mapper function so that DeploymentTarget and ArtifactDeployment
 // controllers are re-enqueued when a DeploymentClass is created, updated, or deleted.
-//
-// This call hits the informer cache.
 func DeploymentTargetsForType(ctx context.Context, c client.Client, deploymentType string) []reconcile.Request {
 	list := &konfidencev1alpha1.DeploymentTargetList{}
 	if err := c.List(ctx, list); err != nil {
@@ -86,8 +79,6 @@ func DeploymentTargetsForType(ctx context.Context, c client.Client, deploymentTy
 // ArtifactDeploymentsForType returns reconcile.Requests for all ArtifactDeployment
 // resources cluster-wide whose spec.manifest.type matches the given deploymentType
 // string. Used as the Watches mapper for ArtifactDeployment controllers.
-//
-// This call hits the informer cache.
 func ArtifactDeploymentsForType(ctx context.Context, c client.Client, deploymentType string) []reconcile.Request {
 	list := &konfidencev1alpha1.ArtifactDeploymentList{}
 	if err := c.List(ctx, list); err != nil {
@@ -103,6 +94,26 @@ func ArtifactDeploymentsForType(ctx context.Context, c client.Client, deployment
 					Name:      ad.Name,
 				},
 			})
+		}
+	}
+	return requests
+}
+
+// ArtifactDeploymentsForTarget returns requests for ArtifactDeployments in the target's
+// namespace whose manifest type matches the DeploymentTarget type.
+func ArtifactDeploymentsForTarget(ctx context.Context, c client.Client, target *konfidencev1alpha1.DeploymentTarget) []reconcile.Request {
+	list := &konfidencev1alpha1.ArtifactDeploymentList{}
+	if err := c.List(ctx, list, client.InNamespace(target.Namespace)); err != nil {
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, ad := range list.Items {
+		if ad.Spec.Manifest.Type == target.Spec.Type {
+			requests = append(requests, reconcile.Request{NamespacedName: types.NamespacedName{
+				Namespace: ad.Namespace,
+				Name:      ad.Name,
+			}})
 		}
 	}
 	return requests
