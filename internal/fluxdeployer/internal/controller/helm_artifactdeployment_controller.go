@@ -33,7 +33,8 @@ type HelmArtifactDeploymentReconciler struct {
 	DeploymentResultStatusUpdater StatusUpdater
 	ReadyConditionStatusUpdater   StatusUpdater
 	HelmRepositoryReconciler      fluxcd.FluxHelmReconciler
-	HelmReleaseReconciler         fluxcd.FluxHelmReconciler
+	HelmReleaseReconciler         fluxcd.FluxHelmWorkloadReconciler
+	DeploymentTargetResolver      DeploymentTargetResolver
 }
 
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
@@ -71,7 +72,19 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 	// preserve original deployment status for patching it later
 	originalDeployment := deployment.DeepCopy()
 	patch := client.MergeFrom(originalDeployment)
-	deploymentTargetNotReady := false
+
+	kubeConfig, err := r.DeploymentTargetResolver.GetKubeConfigRef(ctx, deployment.Namespace, deployment.Spec.Manifest.Type)
+	if err != nil {
+		if !setDeploymentTargetNotReady(deployment, err) {
+			return ctrl.Result{}, fmt.Errorf("resolve DeploymentTarget: %w", err)
+		}
+		if !reflect.DeepEqual(deployment.Status, originalDeployment.Status) {
+			if err := r.Client.Status().Patch(ctx, deployment, patch); err != nil {
+				return ctrl.Result{}, fmt.Errorf("patch ArtifactDeployment status: %w", err)
+			}
+		}
+		return ctrl.Result{}, nil
+	}
 
 	// reconcile the single OCM resource of type "helmChart"; reject spec with multiple matches
 	var matches []konfidencev1alpha1.OCMResource
@@ -112,12 +125,9 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 				log.Error(err, fmt.Sprintf("failed to reconcile HelmRepository of OCM resource %q", ocmResource.Name),
 					"ArtifactDeployment", deployment)
 			} else {
-				if _, err := r.HelmReleaseReconciler.Reconcile(ctx, deployment, helmChartResource); err != nil {
-					deploymentTargetNotReady = setDeploymentTargetNotReady(deployment, err)
-					if !deploymentTargetNotReady {
-						log.Error(err, fmt.Sprintf("failed to reconcile HelmRelease of OCM resource %s", ocmResource.Name),
-							"ArtifactDeployment", deployment)
-					}
+				if _, err := r.HelmReleaseReconciler.Reconcile(ctx, deployment, helmChartResource, kubeConfig); err != nil {
+					log.Error(err, fmt.Sprintf("failed to reconcile HelmRelease of OCM resource %s", ocmResource.Name),
+						"ArtifactDeployment", deployment)
 				}
 			}
 		}
@@ -128,11 +138,9 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 		log.Error(err, "failed to handle Helm artifact deployment result", "ArtifactDeployment", deployment)
 	}
 
-	if !deploymentTargetNotReady {
-		err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
-		if err != nil {
-			log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
-		}
+	err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
+	if err != nil {
+		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
 	}
 
 	// patch the deployment status updates

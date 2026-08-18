@@ -33,7 +33,8 @@ type KustomizeArtifactDeploymentReconciler struct {
 	DeploymentResultStatusUpdater StatusUpdater
 	ReadyConditionStatusUpdater   StatusUpdater
 	OCIRepositoryReconciler       fluxcd.FluxKustomizeReconciler
-	KustomizationReconciler       fluxcd.FluxKustomizeReconciler
+	KustomizationReconciler       fluxcd.FluxKustomizeWorkloadReconciler
+	DeploymentTargetResolver      DeploymentTargetResolver
 }
 
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
@@ -70,7 +71,19 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 	// preserve original deployment status for patching it later
 	originalDeployment := deployment.DeepCopy()
 	patch := client.MergeFrom(originalDeployment)
-	deploymentTargetNotReady := false
+
+	kubeConfig, err := r.DeploymentTargetResolver.GetKubeConfigRef(ctx, deployment.Namespace, deployment.Spec.Manifest.Type)
+	if err != nil {
+		if !setDeploymentTargetNotReady(deployment, err) {
+			return ctrl.Result{}, fmt.Errorf("resolve DeploymentTarget: %w", err)
+		}
+		if !reflect.DeepEqual(deployment.Status, originalDeployment.Status) {
+			if err := r.Client.Status().Patch(ctx, deployment, patch); err != nil {
+				return ctrl.Result{}, fmt.Errorf("patch ArtifactDeployment status: %w", err)
+			}
+		}
+		return ctrl.Result{}, nil
+	}
 
 	// reconcile the single OCM resource of type "kustomize"; reject spec with multiple matches
 	var matches []konfidencev1alpha1.OCMResource
@@ -112,12 +125,9 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 					"ArtifactDeployment", deployment)
 			} else {
 				if isReady {
-					if _, err := r.KustomizationReconciler.Reconcile(ctx, deployment, kustomizeResource); err != nil {
-						deploymentTargetNotReady = setDeploymentTargetNotReady(deployment, err)
-						if !deploymentTargetNotReady {
-							log.Error(err, fmt.Sprintf("failed to reconcile Kustomization of OCM resource '%s'", ocmResource.Name),
-								"ArtifactDeployment", deployment)
-						}
+					if _, err := r.KustomizationReconciler.Reconcile(ctx, deployment, kustomizeResource, kubeConfig); err != nil {
+						log.Error(err, fmt.Sprintf("failed to reconcile Kustomization of OCM resource '%s'", ocmResource.Name),
+							"ArtifactDeployment", deployment)
 					}
 				} else {
 					log.Info("OCIRepository is not ready, skipping Kustomization reconciliation")
@@ -131,11 +141,9 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 		log.Error(err, "failed to handle Kustomize deployment result", "ArtifactDeployment", deployment)
 	}
 
-	if !deploymentTargetNotReady {
-		err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
-		if err != nil {
-			log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
-		}
+	err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
+	if err != nil {
+		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
 	}
 
 	// patch the deployment status updates

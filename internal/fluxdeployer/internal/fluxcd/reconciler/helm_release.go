@@ -13,6 +13,7 @@ import (
 
 	// see https://github.com/fluxcd/helm-controller/tree/main/api/v2
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
+	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
@@ -32,10 +33,11 @@ type HelmReleaseReconciler struct {
 	ConfigProvider fluxcd.FluxConfigProvider
 }
 
-var _ fluxcd.FluxHelmReconciler = (*HelmReleaseReconciler)(nil)
+var _ fluxcd.FluxHelmWorkloadReconciler = (*HelmReleaseReconciler)(nil)
 
 func (r *HelmReleaseReconciler) Reconcile(
-	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource) (isReady bool, err error) {
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource,
+	kubeConfig *fluxmeta.KubeConfigReference) (isReady bool, err error) {
 
 	helmRelease := &helmv2.HelmRelease{
 		ObjectMeta: metav1.ObjectMeta{
@@ -44,7 +46,7 @@ func (r *HelmReleaseReconciler) Reconcile(
 		},
 	}
 
-	mutateFn := func() error { return r.mutateHelmRelease(ctx, deployment, helmChartResource, helmRelease) }
+	mutateFn := func() error { return r.mutateHelmRelease(deployment, helmChartResource, helmRelease, kubeConfig) }
 
 	// create or update the HelmRelease resource
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, helmRelease, mutateFn); err != nil {
@@ -62,10 +64,10 @@ func (r *HelmReleaseReconciler) Reconcile(
 }
 
 func (r *HelmReleaseReconciler) mutateHelmRelease(
-	ctx context.Context,
 	deployment *konfidencev1alpha1.ArtifactDeployment,
 	helmChartResource *fluxcd.HelmChartResource,
 	helmRelease *helmv2.HelmRelease,
+	kubeConfig *fluxmeta.KubeConfigReference,
 ) error {
 
 	// set owner reference (with controller:=true) if newly created
@@ -73,11 +75,6 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 		if err := controllerutil.SetControllerReference(deployment, helmRelease, r.Scheme); err != nil {
 			return fmt.Errorf("failed to set owner reference on HelmRelease: %w", err)
 		}
-	}
-
-	kubeConfig, err := r.ConfigProvider.GetKubeConfigRef(ctx, deployment.GetNamespace(), deployment.Spec.Manifest.Type)
-	if err != nil {
-		return err
 	}
 
 	// update spec

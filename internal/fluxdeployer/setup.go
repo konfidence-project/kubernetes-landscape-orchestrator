@@ -24,6 +24,7 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 		Client:                        mgr.GetClient(),
 		ReadyConditionStatusUpdater:   &internalcontroller.ReadyConditionStatusUpdater{},
 		DeploymentResultStatusUpdater: &internalcontroller.DeploymentResultStatusUpdater{Client: mgr.GetClient()},
+		DeploymentTargetResolver:      configProvider,
 		HelmRepositoryReconciler: &reconciler.HelmRepositoryReconciler{
 			Client:         mgr.GetClient(),
 			Scheme:         mgr.GetScheme(),
@@ -44,6 +45,7 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 		Client:                        mgr.GetClient(),
 		ReadyConditionStatusUpdater:   &internalcontroller.ReadyConditionStatusUpdater{},
 		DeploymentResultStatusUpdater: &internalcontroller.DeploymentResultStatusUpdater{Client: mgr.GetClient()},
+		DeploymentTargetResolver:      configProvider,
 		OCIRepositoryReconciler: &reconciler.OCIRepositoryReconciler{
 			Client:         mgr.GetClient(),
 			Scheme:         mgr.GetScheme(),

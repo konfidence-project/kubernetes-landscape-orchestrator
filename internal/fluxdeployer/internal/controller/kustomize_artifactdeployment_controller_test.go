@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 
+	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -28,7 +29,7 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 	var (
 		mockCtrl          *gomock.Controller
 		ociMock           *fluxmocks.MockFluxKustomizeReconciler
-		kustomizationMock *fluxmocks.MockFluxKustomizeReconciler
+		kustomizationMock *fluxmocks.MockFluxKustomizeWorkloadReconciler
 		drMock            *controllermocks.MockStatusUpdater
 		readyMock         *controllermocks.MockStatusUpdater
 		ctx               context.Context
@@ -38,7 +39,7 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 		ctx = context.Background()
 		mockCtrl = gomock.NewController(GinkgoT())
 		ociMock = fluxmocks.NewMockFluxKustomizeReconciler(mockCtrl)
-		kustomizationMock = fluxmocks.NewMockFluxKustomizeReconciler(mockCtrl)
+		kustomizationMock = fluxmocks.NewMockFluxKustomizeWorkloadReconciler(mockCtrl)
 		drMock = controllermocks.NewMockStatusUpdater(mockCtrl)
 		readyMock = controllermocks.NewMockStatusUpdater(mockCtrl)
 	})
@@ -73,6 +74,9 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 			ReadyConditionStatusUpdater:   readyMock,
 			OCIRepositoryReconciler:       ociMock,
 			KustomizationReconciler:       kustomizationMock,
+			DeploymentTargetResolver: deploymentTargetResolverFunc(func(context.Context, string, string) (*fluxmeta.KubeConfigReference, error) {
+				return nil, nil
+			}),
 		}
 		return r, cl, d
 	}
@@ -112,7 +116,7 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 			})
 
 			ociMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
-			kustomizationMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
+			kustomizationMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any(), nil).Return(true, nil).Times(1)
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 			readyMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).DoAndReturn(setReadyTrue).Times(1)
 
@@ -131,10 +135,9 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 				{Name: "a", Type: ocmResourceTypeKustomize, Content: rawKustomizeOCIContent()},
 			})
 
-			ociMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
-			kustomizationMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any()).Return(false,
-				&DeploymentTargetNotReadyError{Namespace: d.Namespace, DeploymentType: manifestTypeKustomize}).Times(1)
-			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			r.DeploymentTargetResolver = deploymentTargetResolverFunc(func(context.Context, string, string) (*fluxmeta.KubeConfigReference, error) {
+				return nil, &DeploymentTargetNotReadyError{Namespace: d.Namespace, DeploymentType: manifestTypeKustomize}
+			})
 
 			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Name}})
 			Expect(err).NotTo(HaveOccurred())

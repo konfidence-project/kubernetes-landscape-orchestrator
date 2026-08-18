@@ -27,7 +27,13 @@ type ConfigProvider struct {
 	Client client.Reader
 }
 
+// DeploymentTargetResolver resolves the target connection for an ArtifactDeployment.
+type DeploymentTargetResolver interface {
+	GetKubeConfigRef(ctx context.Context, landscape, deploymentType string) (*fluxmeta.KubeConfigReference, error)
+}
+
 var _ fluxcd.FluxConfigProvider = (*ConfigProvider)(nil)
+var _ DeploymentTargetResolver = (*ConfigProvider)(nil)
 
 const (
 	// ReadyDeploymentTargetTypeField indexes ready DeploymentTargets by spec.type.
