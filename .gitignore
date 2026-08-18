@@ -41,3 +41,9 @@ bin/vector-data-service
 
 # Generated ClusterRole manifests fed to charts/patch-clusterrole.sh
 config/rbac/
+
+# Generated plain CRDs used by envtest suites and sample validation
+test/data/crds/
+
+### Local development ###
+local/
