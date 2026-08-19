@@ -10,10 +10,10 @@ require (
 	github.com/fluxcd/source-controller/api v1.9.4
 	github.com/go-logr/logr v1.4.4
 	github.com/konfidence-project/konfidence v0.0.0-20260810115627-bfaad083cd28
-	github.com/onsi/ginkgo/v2 v2.32.0
+	github.com/onsi/ginkgo/v2 v2.32.1
 	github.com/onsi/gomega v1.42.1
 	github.com/spf13/cobra v1.10.2
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/sync v0.22.0
 	k8s.io/api v0.36.3
