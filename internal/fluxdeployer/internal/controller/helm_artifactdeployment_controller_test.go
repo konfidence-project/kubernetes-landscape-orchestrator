@@ -3,14 +3,12 @@ package controller
 import (
 	"context"
 
-	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	controllermocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller/mocks"
-	fluxmocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/mocks"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentclass"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,12 +23,6 @@ func newTestScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	Expect(konfidencev1alpha1.AddToScheme(s)).To(Succeed())
 	return s
-}
-
-type deploymentTargetResolverFunc func(context.Context, string, string) (*fluxmeta.KubeConfigReference, error)
-
-func (f deploymentTargetResolverFunc) GetKubeConfigRef(ctx context.Context, namespace, deploymentType string) (*fluxmeta.KubeConfigReference, error) {
-	return f(ctx, namespace, deploymentType)
 }
 
 func rawHelmOCIContent() runtime.RawExtension {
@@ -52,19 +44,17 @@ func setReadyTrue(_ context.Context, d *konfidencev1alpha1.ArtifactDeployment) e
 
 var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 	var (
-		mockCtrl    *gomock.Controller
-		repoMock    *fluxmocks.MockFluxHelmReconciler
-		releaseMock *fluxmocks.MockFluxHelmWorkloadReconciler
-		drMock      *controllermocks.MockStatusUpdater
-		readyMock   *controllermocks.MockStatusUpdater
-		ctx         context.Context
+		mockCtrl     *gomock.Controller
+		artifactMock *controllermocks.MockArtifactDeployer
+		drMock       *controllermocks.MockStatusUpdater
+		readyMock    *controllermocks.MockStatusUpdater
+		ctx          context.Context
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		mockCtrl = gomock.NewController(GinkgoT())
-		repoMock = fluxmocks.NewMockFluxHelmReconciler(mockCtrl)
-		releaseMock = fluxmocks.NewMockFluxHelmWorkloadReconciler(mockCtrl)
+		artifactMock = controllermocks.NewMockArtifactDeployer(mockCtrl)
 		drMock = controllermocks.NewMockStatusUpdater(mockCtrl)
 		readyMock = controllermocks.NewMockStatusUpdater(mockCtrl)
 	})
@@ -97,11 +87,7 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 			Client:                        cl,
 			DeploymentResultStatusUpdater: drMock,
 			ReadyConditionStatusUpdater:   readyMock,
-			HelmRepositoryReconciler:      repoMock,
-			HelmReleaseReconciler:         releaseMock,
-			DeploymentTargetResolver: deploymentTargetResolverFunc(func(context.Context, string, string) (*fluxmeta.KubeConfigReference, error) {
-				return nil, nil
-			}),
+			ArtifactDeployer:              artifactMock,
 		}
 		return r, cl, d
 	}
@@ -113,6 +99,11 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 				{Name: "b", Type: ocmResourceTypeHelmChart, Content: rawHelmOCIContent()},
 				{Name: "c", Type: "other"}, //nolint:goconst
 			})
+			artifactMock.EXPECT().Reconcile(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) error {
+					_, err := singleOCMResource(deployment, ocmResourceTypeHelmChart, "MultipleHelmChartResources")
+					return err
+				}).Times(1)
 
 			_, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Name},
@@ -139,17 +130,7 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 				{Name: "a", Type: ocmResourceTypeHelmChart, Content: rawHelmOCIContent()},
 				{Name: "b", Type: "other"}, //nolint:goconst
 			})
-			resolverCalls := 0
-			kubeConfig := &fluxmeta.KubeConfigReference{SecretRef: &fluxmeta.SecretKeyReference{Name: "target-kubeconfig"}}
-			r.DeploymentTargetResolver = deploymentTargetResolverFunc(func(_ context.Context, namespace, deploymentType string) (*fluxmeta.KubeConfigReference, error) {
-				resolverCalls++
-				Expect(namespace).To(Equal(d.Namespace))
-				Expect(deploymentType).To(Equal(manifestTypeHelm))
-				return kubeConfig, nil
-			})
-
-			repoMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
-			releaseMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any(), kubeConfig).Return(true, nil).Times(1)
+			artifactMock.EXPECT().Reconcile(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 			readyMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).DoAndReturn(setReadyTrue).Times(1)
 
@@ -157,7 +138,6 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 				NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Name},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(resolverCalls).To(Equal(1))
 
 			got := &konfidencev1alpha1.ArtifactDeployment{}
 			Expect(cl.Get(ctx, types.NamespacedName{Namespace: d.Namespace, Name: d.Name}, got)).To(Succeed())
@@ -169,9 +149,8 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 				{Name: "a", Type: ocmResourceTypeHelmChart, Content: rawHelmOCIContent()},
 			})
 
-			r.DeploymentTargetResolver = deploymentTargetResolverFunc(func(context.Context, string, string) (*fluxmeta.KubeConfigReference, error) {
-				return nil, &DeploymentTargetNotReadyError{Namespace: d.Namespace, DeploymentType: manifestTypeHelm}
-			})
+			artifactMock.EXPECT().Reconcile(gomock.Any(), gomock.Any()).Return(
+				&DeploymentTargetNotReadyError{Namespace: d.Namespace, DeploymentType: manifestTypeHelm}).Times(1)
 
 			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Name}})
 			Expect(err).NotTo(HaveOccurred())

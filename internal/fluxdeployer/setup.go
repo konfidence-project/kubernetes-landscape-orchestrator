@@ -24,17 +24,19 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 		Client:                        mgr.GetClient(),
 		ReadyConditionStatusUpdater:   &internalcontroller.ReadyConditionStatusUpdater{},
 		DeploymentResultStatusUpdater: &internalcontroller.DeploymentResultStatusUpdater{Client: mgr.GetClient()},
-		DeploymentTargetResolver:      configProvider,
-		HelmRepositoryReconciler: &reconciler.HelmRepositoryReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			ConfigProvider: configProvider,
-			Recorder:       mgr.GetEventRecorder(reconciler.HelmRepositoryControllerName),
-		},
-		HelmReleaseReconciler: &reconciler.HelmReleaseReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			ConfigProvider: configProvider,
+		ArtifactDeployer: &internalcontroller.HelmArtifactDeployer{
+			DeploymentTargetResolver: configProvider,
+			HelmRepositoryReconciler: &reconciler.HelmRepositoryReconciler{
+				Client:         mgr.GetClient(),
+				Scheme:         mgr.GetScheme(),
+				ConfigProvider: configProvider,
+				Recorder:       mgr.GetEventRecorder(reconciler.HelmRepositoryControllerName),
+			},
+			HelmReleaseReconciler: &reconciler.HelmReleaseReconciler{
+				Client:         mgr.GetClient(),
+				Scheme:         mgr.GetScheme(),
+				ConfigProvider: configProvider,
+			},
 		},
 	}).SetupWithManager(mgr); err != nil {
 		logger.Error(err, "unable to create helm controller", "controller", "ArtifactDeployment")
@@ -45,18 +47,20 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 		Client:                        mgr.GetClient(),
 		ReadyConditionStatusUpdater:   &internalcontroller.ReadyConditionStatusUpdater{},
 		DeploymentResultStatusUpdater: &internalcontroller.DeploymentResultStatusUpdater{Client: mgr.GetClient()},
-		DeploymentTargetResolver:      configProvider,
-		OCIRepositoryReconciler: &reconciler.OCIRepositoryReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			ConfigProvider: configProvider,
-			Recorder:       mgr.GetEventRecorder(reconciler.OCIRepositoryControllerName),
-		},
-		KustomizationReconciler: &reconciler.KustomizationReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			ConfigProvider: configProvider,
-			Recorder:       mgr.GetEventRecorder(reconciler.KustomizationControllerName),
+		ArtifactDeployer: &internalcontroller.KustomizeArtifactDeployer{
+			DeploymentTargetResolver: configProvider,
+			OCIRepositoryReconciler: &reconciler.OCIRepositoryReconciler{
+				Client:         mgr.GetClient(),
+				Scheme:         mgr.GetScheme(),
+				ConfigProvider: configProvider,
+				Recorder:       mgr.GetEventRecorder(reconciler.OCIRepositoryControllerName),
+			},
+			KustomizationReconciler: &reconciler.KustomizationReconciler{
+				Client:         mgr.GetClient(),
+				Scheme:         mgr.GetScheme(),
+				ConfigProvider: configProvider,
+				Recorder:       mgr.GetEventRecorder(reconciler.KustomizationControllerName),
+			},
 		},
 	}).SetupWithManager(mgr); err != nil {
 		logger.Error(err, "unable to create kustomize controller", "controller", "ArtifactDeployment")

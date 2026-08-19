@@ -33,8 +33,6 @@ type HelmReleaseReconciler struct {
 	ConfigProvider fluxcd.FluxConfigProvider
 }
 
-var _ fluxcd.FluxHelmWorkloadReconciler = (*HelmReleaseReconciler)(nil)
-
 func (r *HelmReleaseReconciler) Reconcile(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource,
 	kubeConfig *fluxmeta.KubeConfigReference) (isReady bool, err error) {

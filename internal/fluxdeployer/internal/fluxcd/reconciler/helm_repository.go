@@ -32,8 +32,6 @@ type HelmRepositoryReconciler struct {
 	Recorder       events.EventRecorder
 }
 
-var _ fluxcd.FluxHelmReconciler = (*HelmRepositoryReconciler)(nil)
-
 func (r *HelmRepositoryReconciler) Reconcile(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource) (isReady bool, err error) {
 

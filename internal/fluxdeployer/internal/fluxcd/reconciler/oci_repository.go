@@ -34,8 +34,6 @@ type OCIRepositoryReconciler struct {
 	Recorder       events.EventRecorder
 }
 
-var _ fluxcd.FluxKustomizeReconciler = (*OCIRepositoryReconciler)(nil)
-
 func (r *OCIRepositoryReconciler) Reconcile(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource) (isReady bool, err error) {
 

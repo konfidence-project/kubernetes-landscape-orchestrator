@@ -38,8 +38,6 @@ type KustomizationReconciler struct {
 	Recorder       events.EventRecorder
 }
 
-var _ fluxcd.FluxKustomizeWorkloadReconciler = (*KustomizationReconciler)(nil)
-
 func (r *KustomizationReconciler) Reconcile(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource,
 	kubeConfig *fluxmeta.KubeConfigReference) (isReady bool, err error) {
