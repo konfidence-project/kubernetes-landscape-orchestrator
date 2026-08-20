@@ -1,9 +1,11 @@
-package reconciler
+package kustomize
 
 import (
 	"context"
 	"fmt"
 
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,6 +16,7 @@ import (
 
 	// see https://github.com/fluxcd/kustomize-controller/tree/main/api/v1
 	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
+	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
@@ -28,19 +31,16 @@ import (
 // Flux API reference: https://fluxcd.io/flux/components/kustomize/api/v1/
 //
 
-const KustomizationControllerName = "flux-kustomization-controller"
-
-type KustomizationReconciler struct {
+type kustomizationReconciler struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
 	Recorder       events.EventRecorder
 }
 
-var _ fluxcd.FluxKustomizeReconciler = (*KustomizationReconciler)(nil)
-
-func (r *KustomizationReconciler) Reconcile(
-	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource) (isReady bool, err error) {
+func (r *kustomizationReconciler) Reconcile(
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource,
+	kubeConfig *fluxmeta.KubeConfigReference) (isReady bool, err error) {
 
 	kustomization := &kustomizev1.Kustomization{
 		ObjectMeta: metav1.ObjectMeta{
@@ -48,7 +48,7 @@ func (r *KustomizationReconciler) Reconcile(
 			Name:      deployment.Name,
 		},
 	}
-	mutateFn := func() error { return r.mutateKustomization(ctx, deployment, kustomizeResource, kustomization) }
+	mutateFn := func() error { return r.mutateKustomization(deployment, kustomizeResource, kustomization, kubeConfig) }
 
 	// create or update the Kustomization resource
 	operationResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, kustomization, mutateFn)
@@ -65,11 +65,11 @@ func (r *KustomizationReconciler) Reconcile(
 	return meta.IsStatusConditionTrue(kustomization.Status.Conditions, conditionTypeReady), nil
 }
 
-func (r *KustomizationReconciler) mutateKustomization(
-	ctx context.Context,
+func (r *kustomizationReconciler) mutateKustomization(
 	deployment *konfidencev1alpha1.ArtifactDeployment,
 	kustomizeResource *fluxcd.KustomizeResource,
 	kustomization *kustomizev1.Kustomization,
+	kubeConfig *fluxmeta.KubeConfigReference,
 ) error {
 
 	// set owner reference (with controller:=true) if newly created
@@ -77,11 +77,6 @@ func (r *KustomizationReconciler) mutateKustomization(
 		if err := controllerutil.SetControllerReference(deployment, kustomization, r.Scheme); err != nil {
 			return fmt.Errorf("failed to set owner reference on Kustomization: %w", err)
 		}
-	}
-
-	kubeConfig, err := r.ConfigProvider.GetKubeConfigRef(ctx, deployment.GetNamespace())
-	if err != nil {
-		return err
 	}
 
 	// update spec
@@ -108,7 +103,7 @@ func (r *KustomizationReconciler) mutateKustomization(
 	return nil
 }
 
-func (r *KustomizationReconciler) mapStatusConditions(
+func (r *kustomizationReconciler) mapStatusConditions(
 	deployment *konfidencev1alpha1.ArtifactDeployment, kustomization *kustomizev1.Kustomization) {
 
 	for _, condition := range kustomization.Status.Conditions {
@@ -134,4 +129,24 @@ func mapKustomizationConditionType(conditionType string) string {
 	default:
 		return ""
 	}
+}
+
+// TODO karsten: refactor consts
+const (
+	conditionTypeReady               = "Ready"
+	maxKustomizationNameSuffixLength = 36
+)
+
+// buildKustomizationNameSuffix builds a NameSuffix of the form -<version>-<hash>, falling
+// back to -<hash> when the combined length exceeds maxKustomizationNameSuffixLength.
+// Both values are read from annotations attached to the deployment.
+func buildKustomizationNameSuffix(deployment *konfidencev1alpha1.ArtifactDeployment) string {
+	ann := deployment.GetAnnotations()
+	version := ann[pkgctrl.ArtifactVersionAnnotation]
+	hash := ann[pkgctrl.ArtifactHashAnnotation]
+
+	if full := version + "-" + hash; len(full)+1 <= maxKustomizationNameSuffixLength {
+		return "-" + utils.SanitizeK8sResourceName(full)
+	}
+	return "-" + utils.SanitizeK8sResourceName(hash)
 }

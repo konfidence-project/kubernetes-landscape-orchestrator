@@ -1,4 +1,4 @@
-package controller
+package kustomize
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	controllermocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller/mocks"
-	fluxmocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/mocks"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentclass"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -25,19 +25,17 @@ func rawKustomizeOCIContent() runtime.RawExtension {
 
 var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dupl
 	var (
-		mockCtrl          *gomock.Controller
-		ociMock           *fluxmocks.MockFluxKustomizeReconciler
-		kustomizationMock *fluxmocks.MockFluxKustomizeReconciler
-		drMock            *controllermocks.MockStatusUpdater
-		readyMock         *controllermocks.MockStatusUpdater
-		ctx               context.Context
+		mockCtrl     *gomock.Controller
+		artifactMock *controllermocks.MockArtifactDeployer
+		drMock       *controllermocks.MockStatusUpdater
+		readyMock    *controllermocks.MockStatusUpdater
+		ctx          context.Context
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		mockCtrl = gomock.NewController(GinkgoT())
-		ociMock = fluxmocks.NewMockFluxKustomizeReconciler(mockCtrl)
-		kustomizationMock = fluxmocks.NewMockFluxKustomizeReconciler(mockCtrl)
+		artifactMock = controllermocks.NewMockArtifactDeployer(mockCtrl)
 		drMock = controllermocks.NewMockStatusUpdater(mockCtrl)
 		readyMock = controllermocks.NewMockStatusUpdater(mockCtrl)
 	})
@@ -50,21 +48,27 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 		d := &konfidencev1alpha1.ArtifactDeployment{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Generation: 3},
 			Spec: konfidencev1alpha1.ArtifactDeploymentSpec{
-				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: manifestTypeKustomize},
+				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: ManifestTypeKustomize},
 				Component: konfidencev1alpha1.OCMComponent{Resources: resources},
+			},
+		}
+		dc := &konfidencev1alpha1.DeploymentClass{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-kustomize"},
+			Spec: konfidencev1alpha1.DeploymentClassSpec{
+				Type:       ManifestTypeKustomize,
+				Controller: deploymentclass.ControllerName,
 			},
 		}
 		cl := fake.NewClientBuilder().
 			WithScheme(newTestScheme()).
-			WithObjects(d).
+			WithObjects(d, dc).
 			WithStatusSubresource(&konfidencev1alpha1.ArtifactDeployment{}).
 			Build()
 		r := &KustomizeArtifactDeploymentReconciler{
 			Client:                        cl,
 			DeploymentResultStatusUpdater: drMock,
 			ReadyConditionStatusUpdater:   readyMock,
-			OCIRepositoryReconciler:       ociMock,
-			KustomizationReconciler:       kustomizationMock,
+			ArtifactDeployer:              artifactMock,
 		}
 		return r, cl, d
 	}
@@ -76,6 +80,11 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 				{Name: "b", Type: ocmResourceTypeKustomize, Content: rawKustomizeOCIContent()},
 				{Name: "c", Type: "other"}, //nolint:goconst
 			})
+			artifactMock.EXPECT().Reconcile(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) error {
+					_, err := singleOCMResource(deployment, ocmResourceTypeKustomize, "MultipleKustomizeResources")
+					return err
+				}).Times(1)
 
 			_, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Name},
@@ -103,8 +112,7 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 				{Name: "b", Type: "other"}, //nolint:goconst
 			})
 
-			ociMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
-			kustomizationMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
+			artifactMock.EXPECT().Reconcile(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 			readyMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).DoAndReturn(setReadyTrue).Times(1)
 
@@ -116,6 +124,25 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 			got := &konfidencev1alpha1.ArtifactDeployment{}
 			Expect(cl.Get(ctx, types.NamespacedName{Namespace: d.Namespace, Name: d.Name}, got)).To(Succeed())
 			Expect(meta.IsStatusConditionTrue(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)).To(BeTrue())
+		})
+
+		It("sets Ready=False when no ready DeploymentTarget exists", func() {
+			r, cl, d := newFixture("kustomize-no-target", []konfidencev1alpha1.OCMResource{
+				{Name: "a", Type: ocmResourceTypeKustomize, Content: rawKustomizeOCIContent()},
+			})
+
+			artifactMock.EXPECT().Reconcile(gomock.Any(), gomock.Any()).Return(
+				&DeploymentTargetNotReadyError{Namespace: d.Namespace, DeploymentType: ManifestTypeKustomize}).Times(1)
+
+			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Name}})
+			Expect(err).NotTo(HaveOccurred())
+
+			got := &konfidencev1alpha1.ArtifactDeployment{}
+			Expect(cl.Get(ctx, types.NamespacedName{Namespace: d.Namespace, Name: d.Name}, got)).To(Succeed())
+			ready := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
+			Expect(ready).NotTo(BeNil())
+			Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			Expect(ready.Reason).To(Equal(ArtifactDeploymentReasonDeploymentTargetNotReady))
 		})
 	})
 })

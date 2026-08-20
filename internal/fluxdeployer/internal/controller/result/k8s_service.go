@@ -1,4 +1,4 @@
-package controller
+package result
 
 import (
 	"context"
@@ -16,43 +16,43 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type DeploymentResultStatusUpdater struct {
+// TODO karsten: move consts to correct place
+// labelArtifactDeployment is injected onto every resource of a deployment via Flux CommonMetadata, so all
+// Services of an ArtifactDeployment can be listed by it.
+const (
+	labelArtifactDeployment = "konfidence.cloud/artifact-deployment"
+
+	// annotationDeploymentResult opts a Service into the vector's deployment results. Its value is the stable
+	// result name consumers look up, independent of the deployed Service's name.
+	annotationDeploymentResult = "konfidence.cloud/deployment-result"
+)
+
+type K8sService struct {
 	client.Client
 }
 
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 
-func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) error {
+func (d *K8sService) GetDeploymentResults(ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) ([]konfidencev1alpha1.DeploymentResult, error) {
 	if !meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.ArtifactDeployedCondition) {
-		return nil
+		return nil, nil
 	}
 	// detect exposable services of flux deployment by label
 	serviceList, err := d.fetchExposableServices(ctx, deployment)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// map Services to DeploymentResult
 	deploymentResultServices, err := d.mapServicesToDeploymentResult(serviceList)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	deployment.Status.DeploymentResults = deploymentResultServices
-
-	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-		Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
-		Status:             metav1.ConditionTrue,
-		Reason:             konfidencev1alpha1.DeploymentResultCreatedCondition,
-		Message:            "Successfully created DeploymentResult",
-		ObservedGeneration: deployment.Generation,
-		LastTransitionTime: metav1.Now(),
-	})
-
-	return nil
+	return deploymentResultServices, nil
 }
 
-func (s *DeploymentResultStatusUpdater) fetchExposableServices(
+func (d *K8sService) fetchExposableServices(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment,
 ) (*corev1.ServiceList, error) {
 	serviceSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
@@ -65,7 +65,7 @@ func (s *DeploymentResultStatusUpdater) fetchExposableServices(
 	}
 
 	serviceList := &corev1.ServiceList{}
-	if err := s.List(ctx, serviceList, client.InNamespace(deployment.Namespace), client.MatchingLabelsSelector{Selector: serviceSelector}); err != nil {
+	if err := d.List(ctx, serviceList, client.InNamespace(deployment.Namespace), client.MatchingLabelsSelector{Selector: serviceSelector}); err != nil {
 		return nil, fmt.Errorf("failed to list services by label selector: %w", err)
 	}
 	return serviceList, nil
@@ -74,7 +74,7 @@ func (s *DeploymentResultStatusUpdater) fetchExposableServices(
 // mapServicesToDeploymentResult turns the opted-in Services into DeploymentResults. A Service opts in via the
 // annotationDeploymentResult annotation, whose value becomes the stable result Name; Services without it are ignored.
 // Results are identified by (Name, Type); two Services yielding the same pair is a misconfiguration and is rejected.
-func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceList *corev1.ServiceList) ([]konfidencev1alpha1.DeploymentResult, error) {
+func (d *K8sService) mapServicesToDeploymentResult(serviceList *corev1.ServiceList) ([]konfidencev1alpha1.DeploymentResult, error) {
 	deploymentResultServices := make([]konfidencev1alpha1.DeploymentResult, 0, len(serviceList.Items))
 	seen := make(map[string]string, len(serviceList.Items))
 

@@ -1,4 +1,4 @@
-package controller
+package helm
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	controllermocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller/mocks"
-	fluxmocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/mocks"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentclass"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -44,19 +44,17 @@ func setReadyTrue(_ context.Context, d *konfidencev1alpha1.ArtifactDeployment) e
 
 var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 	var (
-		mockCtrl    *gomock.Controller
-		repoMock    *fluxmocks.MockFluxHelmReconciler
-		releaseMock *fluxmocks.MockFluxHelmReconciler
-		drMock      *controllermocks.MockStatusUpdater
-		readyMock   *controllermocks.MockStatusUpdater
-		ctx         context.Context
+		mockCtrl     *gomock.Controller
+		artifactMock *controllermocks.MockArtifactDeployer
+		drMock       *controllermocks.MockStatusUpdater
+		readyMock    *controllermocks.MockStatusUpdater
+		ctx          context.Context
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		mockCtrl = gomock.NewController(GinkgoT())
-		repoMock = fluxmocks.NewMockFluxHelmReconciler(mockCtrl)
-		releaseMock = fluxmocks.NewMockFluxHelmReconciler(mockCtrl)
+		artifactMock = controllermocks.NewMockArtifactDeployer(mockCtrl)
 		drMock = controllermocks.NewMockStatusUpdater(mockCtrl)
 		readyMock = controllermocks.NewMockStatusUpdater(mockCtrl)
 	})
@@ -65,25 +63,31 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 		mockCtrl.Finish()
 	})
 
-	newFixture := func(name string, resources []konfidencev1alpha1.OCMResource) (*HelmArtifactDeploymentReconciler, client.Client, *konfidencev1alpha1.ArtifactDeployment) { //nolint:lll
+	newFixture := func(name string, resources []konfidencev1alpha1.OCMResource) (*Reconciler, client.Client, *konfidencev1alpha1.ArtifactDeployment) { //nolint:lll
 		d := &konfidencev1alpha1.ArtifactDeployment{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Generation: 3},
 			Spec: konfidencev1alpha1.ArtifactDeploymentSpec{
-				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: manifestTypeHelm},
+				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: ManifestTypeHelm},
 				Component: konfidencev1alpha1.OCMComponent{Resources: resources},
+			},
+		}
+		dc := &konfidencev1alpha1.DeploymentClass{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-helm"},
+			Spec: konfidencev1alpha1.DeploymentClassSpec{
+				Type:       ManifestTypeHelm,
+				Controller: deploymentclass.ControllerName,
 			},
 		}
 		cl := fake.NewClientBuilder().
 			WithScheme(newTestScheme()).
-			WithObjects(d).
+			WithObjects(d, dc).
 			WithStatusSubresource(&konfidencev1alpha1.ArtifactDeployment{}).
 			Build()
-		r := &HelmArtifactDeploymentReconciler{
+		r := &Reconciler{
 			Client:                        cl,
 			DeploymentResultStatusUpdater: drMock,
 			ReadyConditionStatusUpdater:   readyMock,
-			HelmRepositoryReconciler:      repoMock,
-			HelmReleaseReconciler:         releaseMock,
+			ArtifactDeployer:              artifactMock,
 		}
 		return r, cl, d
 	}
@@ -95,6 +99,11 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 				{Name: "b", Type: ocmResourceTypeHelmChart, Content: rawHelmOCIContent()},
 				{Name: "c", Type: "other"}, //nolint:goconst
 			})
+			artifactMock.EXPECT().Reconcile(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) error {
+					_, err := singleOCMResource(deployment, ocmResourceTypeHelmChart, "MultipleHelmChartResources")
+					return err
+				}).Times(1)
 
 			_, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Name},
@@ -121,9 +130,7 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 				{Name: "a", Type: ocmResourceTypeHelmChart, Content: rawHelmOCIContent()},
 				{Name: "b", Type: "other"}, //nolint:goconst
 			})
-
-			repoMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
-			releaseMock.EXPECT().Reconcile(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
+			artifactMock.EXPECT().Reconcile(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 			readyMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).DoAndReturn(setReadyTrue).Times(1)
 
@@ -135,6 +142,25 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 			got := &konfidencev1alpha1.ArtifactDeployment{}
 			Expect(cl.Get(ctx, types.NamespacedName{Namespace: d.Namespace, Name: d.Name}, got)).To(Succeed())
 			Expect(meta.IsStatusConditionTrue(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)).To(BeTrue())
+		})
+
+		It("sets Ready=False when no ready DeploymentTarget exists", func() {
+			r, cl, d := newFixture("helm-no-target", []konfidencev1alpha1.OCMResource{
+				{Name: "a", Type: ocmResourceTypeHelmChart, Content: rawHelmOCIContent()},
+			})
+
+			artifactMock.EXPECT().Reconcile(gomock.Any(), gomock.Any()).Return(
+				&DeploymentTargetNotReadyError{Namespace: d.Namespace, DeploymentType: ManifestTypeHelm}).Times(1)
+
+			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Name}})
+			Expect(err).NotTo(HaveOccurred())
+
+			got := &konfidencev1alpha1.ArtifactDeployment{}
+			Expect(cl.Get(ctx, types.NamespacedName{Namespace: d.Namespace, Name: d.Name}, got)).To(Succeed())
+			ready := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
+			Expect(ready).NotTo(BeNil())
+			Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			Expect(ready.Reason).To(Equal(ArtifactDeploymentReasonDeploymentTargetNotReady))
 		})
 	})
 })

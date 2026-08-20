@@ -1,4 +1,4 @@
-package reconciler
+package helm
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	// see https://github.com/fluxcd/helm-controller/tree/main/api/v2
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
+	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	// see https://github.com/fluxcd/source-controller/tree/main/api/v1
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
@@ -26,16 +27,17 @@ import (
 // Flux API reference: https://fluxcd.io/flux/components/helm/api/v2/
 //
 
-type HelmReleaseReconciler struct {
+const conditionTypeReady = "Ready"
+
+type releaseReconciler struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
 }
 
-var _ fluxcd.FluxHelmReconciler = (*HelmReleaseReconciler)(nil)
-
-func (r *HelmReleaseReconciler) Reconcile(
-	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource) (isReady bool, err error) {
+func (r *releaseReconciler) Reconcile(
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource,
+	kubeConfig *fluxmeta.KubeConfigReference) (isReady bool, err error) {
 
 	helmRelease := &helmv2.HelmRelease{
 		ObjectMeta: metav1.ObjectMeta{
@@ -44,13 +46,14 @@ func (r *HelmReleaseReconciler) Reconcile(
 		},
 	}
 
-	mutateFn := func() error { return r.mutateHelmRelease(ctx, deployment, helmChartResource, helmRelease) }
+	mutateFn := func() error { return r.mutateHelmRelease(deployment, helmChartResource, helmRelease, kubeConfig) }
 
 	// create or update the HelmRelease resource
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, helmRelease, mutateFn); err != nil {
 		return false, fmt.Errorf("failed to reconcile HelmRelease: %w", err)
 	}
 
+	// TODO karsten: check if we need this condition mapping; if yes, make it work again
 	// map the status conditions of the HelmChart and HelmRelease to the ArtifactDeployment
 	if helmChart := r.getHelmChart(ctx, deployment); helmChart != nil {
 		if isReady := r.mapStatusConditionsFromHelmChart(deployment, helmChart); isReady {
@@ -61,11 +64,11 @@ func (r *HelmReleaseReconciler) Reconcile(
 	return meta.IsStatusConditionTrue(helmRelease.Status.Conditions, conditionTypeReady), nil
 }
 
-func (r *HelmReleaseReconciler) mutateHelmRelease(
-	ctx context.Context,
+func (r *releaseReconciler) mutateHelmRelease(
 	deployment *konfidencev1alpha1.ArtifactDeployment,
 	helmChartResource *fluxcd.HelmChartResource,
 	helmRelease *helmv2.HelmRelease,
+	kubeConfig *fluxmeta.KubeConfigReference,
 ) error {
 
 	// set owner reference (with controller:=true) if newly created
@@ -73,11 +76,6 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 		if err := controllerutil.SetControllerReference(deployment, helmRelease, r.Scheme); err != nil {
 			return fmt.Errorf("failed to set owner reference on HelmRelease: %w", err)
 		}
-	}
-
-	kubeConfig, err := r.ConfigProvider.GetKubeConfigRef(ctx, deployment.GetNamespace())
-	if err != nil {
-		return err
 	}
 
 	// update spec
@@ -110,9 +108,10 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 	return nil
 }
 
-func (r *HelmReleaseReconciler) getHelmChart(
+func (r *releaseReconciler) getHelmChart(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) *sourcev1.HelmChart {
 
+	// TODO karsten: use helmRelease.Status.HelmChart instead of building name ourselves
 	objectKey := types.NamespacedName{
 		Namespace: deployment.GetNamespace(),
 		Name:      fmt.Sprintf("%s-%s", deployment.GetNamespace(), deployment.Name),
@@ -126,7 +125,7 @@ func (r *HelmReleaseReconciler) getHelmChart(
 	return helmChart
 }
 
-func (r *HelmReleaseReconciler) mapStatusConditionsFromHelmChart(
+func (r *releaseReconciler) mapStatusConditionsFromHelmChart(
 	deployment *konfidencev1alpha1.ArtifactDeployment, helmChart *sourcev1.HelmChart) bool {
 
 	for _, condition := range helmChart.Status.Conditions {
@@ -154,7 +153,7 @@ func mapHelmChartConditionType(conditionType string) string {
 	}
 }
 
-func (r *HelmReleaseReconciler) mapStatusConditionsFromHelmRelease(
+func (r *releaseReconciler) mapStatusConditionsFromHelmRelease(
 	deployment *konfidencev1alpha1.ArtifactDeployment, helmRelease *helmv2.HelmRelease) {
 
 	for _, condition := range helmRelease.Status.Conditions {

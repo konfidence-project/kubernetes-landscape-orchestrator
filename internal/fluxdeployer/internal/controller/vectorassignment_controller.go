@@ -43,7 +43,7 @@ func (r *VectorAssignmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		if !ok {
 			return true
 		}
-		return assignment.Spec.Manifest.Type == manifestTypeKustomize || assignment.Spec.Manifest.Type == manifestTypeHelm
+		return assignment.Spec.Manifest.Type == ManifestTypeKustomize || assignment.Spec.Manifest.Type == ManifestTypeHelm
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).

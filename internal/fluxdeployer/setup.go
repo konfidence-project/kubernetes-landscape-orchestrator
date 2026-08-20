@@ -1,55 +1,58 @@
 package fluxdeployer
 
 import (
+	"context"
+
+	helmv2 "github.com/fluxcd/helm-controller/api/v2"
+	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/go-logr/logr"
 	internalcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller"
-	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/reconciler"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller/result"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/reconciler/helm"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/reconciler/kustomize"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deployer"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
-const OperatorFlagName = "FluxDeployer"
+const (
+	OperatorFlagName = "FluxDeployer"
+	ControllerName   = "konfidence.cloud/kubernetes-landscape-orchestrator"
+)
 
 func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
-	configProvider := &internalcontroller.ConfigProvider{Client: mgr.GetClient()}
-
-	if err := (&internalcontroller.HelmArtifactDeploymentReconciler{
-		Client:                        mgr.GetClient(),
-		ReadyConditionStatusUpdater:   &internalcontroller.ReadyConditionStatusUpdater{},
-		DeploymentResultStatusUpdater: &internalcontroller.DeploymentResultStatusUpdater{Client: mgr.GetClient()},
-		HelmRepositoryReconciler: &reconciler.HelmRepositoryReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			ConfigProvider: configProvider,
-			Recorder:       mgr.GetEventRecorder(reconciler.HelmRepositoryControllerName),
-		},
-		HelmReleaseReconciler: &reconciler.HelmReleaseReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			ConfigProvider: configProvider,
-		},
-	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create helm controller", "controller", "ArtifactDeployment")
+	if err := internalcontroller.IndexReadyDeploymentTargets(context.Background(), mgr.GetFieldIndexer()); err != nil {
 		return err
 	}
 
-	if err := (&internalcontroller.KustomizeArtifactDeploymentReconciler{
-		Client:                        mgr.GetClient(),
-		ReadyConditionStatusUpdater:   &internalcontroller.ReadyConditionStatusUpdater{},
-		DeploymentResultStatusUpdater: &internalcontroller.DeploymentResultStatusUpdater{Client: mgr.GetClient()},
-		OCIRepositoryReconciler: &reconciler.OCIRepositoryReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			ConfigProvider: configProvider,
-			Recorder:       mgr.GetEventRecorder(reconciler.OCIRepositoryControllerName),
-		},
-		KustomizationReconciler: &reconciler.KustomizationReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			ConfigProvider: configProvider,
-			Recorder:       mgr.GetEventRecorder(reconciler.KustomizationControllerName),
-		},
-	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create kustomize controller", "controller", "ArtifactDeployment")
+	configProvider := &internalcontroller.ConfigProvider{
+		Client: mgr.GetClient(),
+	}
+
+	helmReconciler := helm.Reconciler{
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		ConfigProvider:     configProvider,
+		Recorder:           mgr.GetEventRecorder("helm_artifactdeployment"),
+		DeploymentResulter: &result.K8sService{Client: mgr.GetClient()},
+	}
+	helmDeployer := deployer.NewArtifactDeploymentReconciler(mgr.GetClient(), "helm_artifactdeployment", internalcontroller.ManifestTypeHelm).
+		Owns(&sourcev1.HelmRepository{}).
+		Owns(&sourcev1.HelmChart{}).
+		Owns(&helmv2.HelmRelease{}).
+		Complete(&helmReconciler)
+	if err := helmDeployer.SetupWithManager(mgr); err != nil {
+		logger.Error(err, "unable to create helm controller")
+		return err
+	}
+
+	kustomizeReconciler := kustomize.Reconciler{Client: mgr.GetClient()}
+	kustomizeDeployer := deployer.NewArtifactDeploymentReconciler(mgr.GetClient(), "kustomize_artifactdeployment", internalcontroller.ManifestTypeKustomize).
+		Owns(&sourcev1.OCIRepository{}).
+		Owns(&kustomizev1.Kustomization{}).
+		Complete(&kustomizeReconciler)
+	if err := kustomizeDeployer.SetupWithManager(mgr); err != nil {
+		logger.Error(err, "unable to create kustomize controller")
 		return err
 	}
 

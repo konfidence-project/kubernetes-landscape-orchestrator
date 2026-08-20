@@ -2,125 +2,138 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-
-	fluxmeta "github.com/fluxcd/pkg/apis/meta"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var _ = Describe("ConfigProvider", func() {
 	var (
 		ctx context.Context
 		cp  *ConfigProvider
+		c   client.Client
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		cp = &ConfigProvider{Client: k8sClient}
+		c = fake.NewClientBuilder().WithScheme(scheme.Scheme).
+			WithIndex(&konfidencev1alpha1.DeploymentTarget{}, ReadyDeploymentTargetTypeField, readyDeploymentTargetTypeIndex).
+			Build()
+		cp = &ConfigProvider{Client: c}
 	})
 
-	Context("GetKubeConfigRef from configmap", func() {
-		const (
-			systemNS   = "konfidence-system"
-			configName = "flux-deployer-configuration"
-			landscape  = "prod"
-			otherLand  = "other"
-		)
-
-		BeforeEach(func() {
-			// ensure namespace exists
-			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: systemNS}}
-			_ = k8sClient.Create(ctx, ns) // ignore error if already exists
-
-			dt := []DeploymentTarget{
-				{
-					Landscape: landscape,
-					SecretRef: &fluxmeta.SecretKeyReference{Name: "remote-secret", Key: "kubeconfig"},
-				},
-				{
-					Landscape:    otherLand,
-					ConfigMapRef: &fluxmeta.LocalObjectReference{Name: "other-cm"},
-				},
-			}
-			raw, err := json.Marshal(dt)
-			Expect(err).NotTo(HaveOccurred())
-
-			cm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{Name: configName, Namespace: systemNS},
-				Data:       map[string]string{"deploymentTargets": string(raw)},
-			}
-			// Create or Update to be resilient across tests
-			err = k8sClient.Create(ctx, cm)
-			if err != nil {
-				// try update if already exists
-				existing := &corev1.ConfigMap{}
-				Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: systemNS, Name: configName}, existing)).To(Succeed())
-				existing.Data = cm.Data
-				Expect(k8sClient.Update(ctx, existing)).To(Succeed())
-			}
+	markReady := func(dt *konfidencev1alpha1.DeploymentTarget) {
+		meta.SetStatusCondition(&dt.Status.Conditions, metav1.Condition{
+			Type:               konfidencev1alpha1.DeploymentTargetReadyCondition,
+			Status:             metav1.ConditionTrue,
+			Reason:             "Accepted",
+			ObservedGeneration: dt.Generation,
 		})
+	}
 
-		It("returns kubeconfig reference from the global configmap when matching landscape is present", func() {
-			ref, err := cp.GetKubeConfigRef(ctx, landscape)
+	Context("GetKubeConfigRef", func() {
+		It("returns the Secret ref from a matching DeploymentTarget", func() {
+			landscape := "cp-landscape-match"
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: landscape}}
+			Expect(c.Create(ctx, ns)).To(Succeed())
+
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "remote-kubeconfig", Namespace: landscape},
+				Data:       map[string][]byte{"value": []byte("dummy")},
+			}
+			Expect(c.Create(ctx, secret)).To(Succeed())
+
+			dt := &konfidencev1alpha1.DeploymentTarget{
+				ObjectMeta: metav1.ObjectMeta{Name: "target", Namespace: landscape},
+				Spec: konfidencev1alpha1.DeploymentTargetSpec{
+					Type: "konfidence.cloud/helm",
+					Connection: konfidencev1alpha1.DeploymentTargetConnection{
+						Type: "kubeconfig",
+						Ref:  &konfidencev1alpha1.ConnectionRef{Kind: "Secret", Name: "remote-kubeconfig"},
+					},
+				},
+			}
+			markReady(dt)
+			Expect(c.Create(ctx, dt)).To(Succeed())
+
+			ref, err := cp.GetKubeConfigRef(ctx, landscape, "konfidence.cloud/helm")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ref).NotTo(BeNil())
 			Expect(ref.SecretRef).NotTo(BeNil())
-			Expect(ref.SecretRef.Name).To(Equal("remote-secret"))
-			Expect(ref.SecretRef.Key).To(Equal("kubeconfig"))
-			Expect(ref.ConfigMapRef).To(BeNil())
-		})
-	})
-
-	Context("GetKubeConfigRef from namespace secret", func() {
-		const (
-			landscapeNS = "dev"
-			secretName  = "konfidence-flux-remote-cluster-kubeconfig"
-		)
-
-		BeforeEach(func() {
-			// ensure namespace exists
-			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: landscapeNS}}
-			_ = k8sClient.Create(ctx, ns)
-
-			// create the conventional secret
-			s := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: landscapeNS},
-				Type:       corev1.SecretTypeOpaque,
-				Data:       map[string][]byte{"kubeconfig": []byte("dummy")},
-			}
-			// Create or update
-			err := k8sClient.Create(ctx, s)
-			if err != nil {
-				existing := &corev1.Secret{}
-				Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: landscapeNS, Name: secretName}, existing)).To(Succeed())
-				existing.Data = s.Data
-				Expect(k8sClient.Update(ctx, existing)).To(Succeed())
-			}
-		})
-
-		It("returns kubeconfig reference from namespace secret when configmap doesn't have entry", func() {
-			// ensure global configmap either absent or without matching entry
-			ref, err := cp.GetKubeConfigRef(ctx, landscapeNS)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(ref).NotTo(BeNil())
-			Expect(ref.SecretRef).NotTo(BeNil())
-			Expect(ref.SecretRef.Name).To(Equal(secretName))
-			// Key is intentionally empty to use flux default
+			Expect(ref.SecretRef.Name).To(Equal("remote-kubeconfig"))
+			// Key is intentionally empty so Flux uses its default.
 			Expect(ref.SecretRef.Key).To(BeEmpty())
-			Expect(ref.ConfigMapRef).To(BeNil())
 		})
-	})
 
-	Context("GetKubeConfigRef with no targets", func() {
-		It("returns nil when neither configmap nor secret are present", func() {
-			ref, err := cp.GetKubeConfigRef(ctx, "nonexistent")
+		It("returns nil for a local DeploymentTarget without a Secret reference", func() {
+			landscape := "cp-landscape-local"
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: landscape}}
+			Expect(c.Create(ctx, ns)).To(Succeed())
+
+			dt := &konfidencev1alpha1.DeploymentTarget{
+				ObjectMeta: metav1.ObjectMeta{Name: "local-target", Namespace: landscape},
+				Spec: konfidencev1alpha1.DeploymentTargetSpec{
+					Type: "konfidence.cloud/helm",
+					Connection: konfidencev1alpha1.DeploymentTargetConnection{
+						Type: "local",
+					},
+				},
+			}
+			markReady(dt)
+			Expect(c.Create(ctx, dt)).To(Succeed())
+
+			ref, err := cp.GetKubeConfigRef(ctx, landscape, "konfidence.cloud/helm")
 			Expect(err).NotTo(HaveOccurred())
+			Expect(ref).To(BeNil())
+		})
+
+		It("returns an error when no ready DeploymentTarget exists in the namespace", func() {
+			landscape := "cp-landscape-not-ready"
+			dt := &konfidencev1alpha1.DeploymentTarget{
+				ObjectMeta: metav1.ObjectMeta{Name: "not-ready-target", Namespace: landscape},
+				Spec: konfidencev1alpha1.DeploymentTargetSpec{
+					Type:       "konfidence.cloud/helm",
+					Connection: konfidencev1alpha1.DeploymentTargetConnection{Type: "local"},
+				},
+			}
+			Expect(c.Create(ctx, dt)).To(Succeed())
+
+			ref, err := cp.GetKubeConfigRef(ctx, landscape, "konfidence.cloud/helm")
+			Expect(err).To(MatchError(&DeploymentTargetNotReadyError{
+				Namespace:      landscape,
+				DeploymentType: "konfidence.cloud/helm",
+			}))
+			Expect(ref).To(BeNil())
+		})
+
+		It("skips DeploymentTargets with unsupported types", func() {
+			landscape := "cp-landscape-skip"
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: landscape}}
+			Expect(c.Create(ctx, ns)).To(Succeed())
+
+			dt := &konfidencev1alpha1.DeploymentTarget{
+				ObjectMeta: metav1.ObjectMeta{Name: "other-target", Namespace: landscape},
+				Spec: konfidencev1alpha1.DeploymentTargetSpec{
+					Type: "some.other/deployer",
+					Connection: konfidencev1alpha1.DeploymentTargetConnection{
+						Type: "kubeconfig",
+						Ref:  &konfidencev1alpha1.ConnectionRef{Kind: "Secret", Name: "some-secret"},
+					},
+				},
+			}
+			markReady(dt)
+			Expect(c.Create(ctx, dt)).To(Succeed())
+
+			ref, err := cp.GetKubeConfigRef(ctx, landscape, "konfidence.cloud/helm")
+			Expect(err).To(HaveOccurred())
 			Expect(ref).To(BeNil())
 		})
 	})

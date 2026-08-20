@@ -7,6 +7,7 @@ import (
 
 	utilscmd "github.com/konfidence-project/konfidence/pkg/cmd"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/activationexecution"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/deploymenttarget"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/taskexecution"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/vectordata"
@@ -44,6 +45,9 @@ func startOperator(cmd *cobra.Command, args []string) error {
 		},
 		vectordata.OperatorFlagName: func() error {
 			return vectordata.SetupControllers(mgr, setupLog)
+		},
+		deploymenttarget.OperatorFlagName: func() error {
+			return deploymenttarget.SetupControllers(mgr, setupLog)
 		},
 	}
 

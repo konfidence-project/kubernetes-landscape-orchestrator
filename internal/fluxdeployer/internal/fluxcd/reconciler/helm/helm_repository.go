@@ -1,10 +1,11 @@
-package reconciler
+package helm
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,18 +24,14 @@ import (
 // Flux HelmRepository docs: https://fluxcd.io/flux/components/source/helmrepositories/
 // Flux API reference: https://fluxcd.io/flux/components/source/api/v1/#source.toolkit.fluxcd.io/v1.HelmRepository
 
-const HelmRepositoryControllerName = "flux-helm-repository-controller"
-
-type HelmRepositoryReconciler struct {
+type repositoryReconciler struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
 	Recorder       events.EventRecorder
 }
 
-var _ fluxcd.FluxHelmReconciler = (*HelmRepositoryReconciler)(nil)
-
-func (r *HelmRepositoryReconciler) Reconcile(
+func (r *repositoryReconciler) Reconcile(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, helmChartResource *fluxcd.HelmChartResource) (isReady bool, err error) {
 
 	helmRepository := &sourcev1.HelmRepository{
@@ -59,7 +56,7 @@ func (r *HelmRepositoryReconciler) Reconcile(
 	return true, nil
 }
 
-func (r *HelmRepositoryReconciler) mutateHelmRepository(
+func (r *repositoryReconciler) mutateHelmRepository(
 	ctx context.Context,
 	deployment *konfidencev1alpha1.ArtifactDeployment,
 	helmChartResource *fluxcd.HelmChartResource,
@@ -73,7 +70,7 @@ func (r *HelmRepositoryReconciler) mutateHelmRepository(
 		}
 	}
 
-	secretRef, err := getSecretRef(ctx, r.Client, deployment, helmChartResource.Repository)
+	secretRef, err := utils.GetSecretRef(ctx, r.Client, deployment, helmChartResource.Repository)
 	if err != nil {
 		return fmt.Errorf("failed to resolve secretRef for Helm Repository: %w", err)
 	}
@@ -82,7 +79,7 @@ func (r *HelmRepositoryReconciler) mutateHelmRepository(
 	helmRepository.Spec = sourcev1.HelmRepositorySpec{
 		Interval:  r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
 		URL:       helmChartResource.Repository,
-		Insecure:  isInsecure(deployment),
+		Insecure:  utils.AllowInsecure(deployment),
 		SecretRef: secretRef,
 	}
 

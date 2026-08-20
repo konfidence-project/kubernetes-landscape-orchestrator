@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/config"
-	corev1 "k8s.io/api/core/v1"
+	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/json"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	fluxmeta "github.com/fluxcd/pkg/apis/meta"
@@ -20,17 +18,38 @@ import (
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 )
 
+// ConfigProvider resolves Flux configuration for a given landscape namespace.
+// It queries active DeploymentClasses from the informer cache to determine which
+// spec.type values are owned by this controller, then looks up the matching
+// DeploymentTarget in the landscape namespace to determine whether Flux should deploy
+// to a remote cluster through a kubeconfig Secret or to its local cluster.
 type ConfigProvider struct {
-	Client client.Client
-}
-
-type DeploymentTarget struct {
-	Landscape    string                         `json:"landscape"`
-	SecretRef    *fluxmeta.SecretKeyReference   `json:"secretRef"`
-	ConfigMapRef *fluxmeta.LocalObjectReference `json:"configMapRef"`
+	Client client.Reader
 }
 
 var _ fluxcd.FluxConfigProvider = (*ConfigProvider)(nil)
+
+const (
+	// ReadyDeploymentTargetTypeField indexes ready DeploymentTargets by spec.type.
+	ReadyDeploymentTargetTypeField = "konfidence.cloud/ready-deployment-target-type"
+
+	connectionTypeLocal = "local"
+)
+
+// IndexReadyDeploymentTargets registers the cache index used by GetKubeConfigRef.
+func IndexReadyDeploymentTargets(ctx context.Context, indexer client.FieldIndexer) error {
+	return indexer.IndexField(ctx, &konfidencev1alpha1.DeploymentTarget{}, ReadyDeploymentTargetTypeField,
+		readyDeploymentTargetTypeIndex)
+}
+
+func readyDeploymentTargetTypeIndex(obj client.Object) []string {
+	dt := obj.(*konfidencev1alpha1.DeploymentTarget)
+	ready := meta.FindStatusCondition(dt.Status.Conditions, konfidencev1alpha1.DeploymentTargetReadyCondition)
+	if ready == nil || ready.Status != metav1.ConditionTrue || ready.ObservedGeneration != dt.Generation {
+		return nil
+	}
+	return []string{dt.Spec.Type}
+}
 
 func (r *ConfigProvider) GetReconcileInterval(landscape string) metav1.Duration {
 	return metav1.Duration{Duration: 10 * time.Second}
@@ -48,82 +67,41 @@ func (r *ConfigProvider) GetHelmDriftDetectionMode(landscape string) *helmv2.Dri
 	}
 }
 
-func (r *ConfigProvider) GetKubeConfigRef(ctx context.Context, landscape string) (*fluxmeta.KubeConfigReference, error) {
+// GetKubeConfigRef resolves the kubeconfig Secret reference for the given landscape
+// namespace and deployment type. Only targets with a Ready=True condition are returned
+// by the cache index. A local target is represented by a nil kubeconfig reference.
+func (r *ConfigProvider) GetKubeConfigRef(ctx context.Context, landscape, deploymentType string) (*fluxmeta.KubeConfigReference, error) {
 	logger := crlog.Log.WithName("ConfigProvider").WithValues("landscape", landscape)
 
-	// 1. get deployment targets from configmap (most specific)
-	deploymentTarget, err := r.readKubeConfigReferenceFromConfigMap(ctx, landscape)
-	if err != nil {
-		return nil, err
-	}
-	if deploymentTarget != nil {
-		logger.Info(fmt.Sprintf("found remote deployment target in configmap for landscape %s", landscape))
-		return deploymentTarget, nil
+	list := &konfidencev1alpha1.DeploymentTargetList{}
+	if err := r.Client.List(ctx, list,
+		client.InNamespace(landscape),
+		client.MatchingFields{ReadyDeploymentTargetTypeField: deploymentType},
+	); err != nil {
+		return nil, fmt.Errorf("list DeploymentTargets in namespace %q: %w", landscape, err)
 	}
 
-	// 2. if no TargetDeployment found in configmap, check if secret in landscape namespace exists (convention)
-	deploymentTarget, err = r.readKubeConfigReferenceFromNamespace(ctx, landscape)
-	if err != nil {
-		return nil, err
-	}
-	if deploymentTarget != nil {
-		logger.Info(fmt.Sprintf("found remote deployment target in namespace secret for landscape %s", landscape))
-		return deploymentTarget, nil
-	}
+	for i := range list.Items {
+		dt := &list.Items[i]
 
-	// 3. no remote deployment target found
-	logger.Info("no remote deployment target found")
-	return nil, nil
-}
-
-// readKubeConfigReferenceFromConfigMap reads the deployment target for the landscape from the global ConfigMap in konfidence-system namespace
-func (r *ConfigProvider) readKubeConfigReferenceFromConfigMap(ctx context.Context, landscape string) (*fluxmeta.KubeConfigReference, error) {
-	cm := &corev1.ConfigMap{}
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: "konfidence-system", Name: config.DefaultConfigMapName}, cm)
-	if err != nil {
-		return nil, client.IgnoreNotFound(err)
-	}
-
-	// Read key deploymentTargets
-	raw, ok := cm.Data["deploymentTargets"]
-	if !ok || raw == "" {
-		return nil, nil
-	}
-
-	var deploymentTargets []DeploymentTarget
-	if err := json.Unmarshal([]byte(raw), &deploymentTargets); err != nil {
-		return nil, err
-	}
-
-	for _, dt := range deploymentTargets {
-		if dt.Landscape == landscape {
-			// Build KubeConfigReference from matched deployment target
-			return &fluxmeta.KubeConfigReference{
-				SecretRef:    dt.SecretRef,
-				ConfigMapRef: dt.ConfigMapRef,
-			}, nil
+		if dt.Spec.Connection.Type == connectionTypeLocal {
+			logger.Info("found local DeploymentTarget", "name", dt.Name, "type", dt.Spec.Type)
+			return nil, nil
 		}
+
+		logger.Info("found DeploymentTarget", "name", dt.Name, "type", dt.Spec.Type,
+			"secret", dt.Spec.Connection.Ref.Name)
+
+		return &fluxmeta.KubeConfigReference{
+			SecretRef: &fluxmeta.SecretKeyReference{
+				Name: dt.Spec.Connection.Ref.Name,
+				// Key is intentionally omitted so Flux uses its default key ("value" or "value.yaml").
+				// See https://fluxcd.io/flux/components/kustomize/kustomizations/#secret-based-authentication
+			},
+		}, nil
 	}
 
-	return nil, nil
-}
-
-func (r *ConfigProvider) readKubeConfigReferenceFromNamespace(ctx context.Context, namespace string) (*fluxmeta.KubeConfigReference, error) {
-	const secretName = "konfidence-flux-remote-cluster-kubeconfig"
-
-	secret := &corev1.Secret{}
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: secretName}, secret)
-	if err != nil {
-		return nil, client.IgnoreNotFound(err)
-	}
-
-	return &fluxmeta.KubeConfigReference{
-		SecretRef: &fluxmeta.SecretKeyReference{
-			Name: secretName,
-			// don't provide Key here, so flux can use the default key.
-			// see https://fluxcd.io/flux/components/kustomize/kustomizations/#secret-based-authentication
-		},
-	}, nil
+	return nil, fmt.Errorf("no ready DeploymentTarget found in namespace %q for type %q", landscape, deploymentType)
 }
 
 func (r *ConfigProvider) GetTargetNamespace(landscape string) string {
