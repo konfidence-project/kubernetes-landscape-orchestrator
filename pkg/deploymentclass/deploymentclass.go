@@ -23,10 +23,6 @@ import (
 
 // TODO karsten: controller-name and known types needs to move to internal/ package
 
-// ControllerName is the value written into DeploymentClass.spec.controller for all
-// classes managed by this operator. It follows the vendor-prefixed naming convention.
-const ControllerName = "konfidence.cloud/kubernetes-landscape-orchestrator"
-
 // KnownTypes is the fixed set of deployment class spec.type values that this binary
 // has a concrete handler for. A DeploymentClass whose spec.type is not in this map
 // will cause DeploymentTargets to be rejected with reason "UnsupportedType", even if

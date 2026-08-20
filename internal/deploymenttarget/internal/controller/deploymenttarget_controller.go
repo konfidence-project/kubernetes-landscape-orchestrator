@@ -28,8 +28,7 @@ import (
 )
 
 const (
-	// DeploymentTargetControllerName is the name of the controller.
-	DeploymentTargetControllerName = "deployment-target-controller"
+	controllerName = "konfidence.cloud/kubernetes-landscape-orchestrator"
 
 	// DeploymentTargetReasonDeploymentClassNotFound indicates that the previously owning DeploymentClass no longer exists.
 	// It is only set when there previously was a DeploymentClass pointing to this controller and that got deleted.
@@ -73,7 +72,7 @@ func (r *DeploymentTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	// Determine which types are currently covered by an active DeploymentClass we own.
-	activeTypes, err := deploymentclass.ActiveTypes(ctx, r.Client)
+	activeTypes, err := deploymentclass.ActiveTypes(ctx, r.Client, controllerName)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -86,7 +85,7 @@ func (r *DeploymentTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		// the DeploymentClass was since deleted), we must clear it to avoid stale state.
 		if existingCond := meta.FindStatusCondition(dt.Status.Conditions, konfidencev1alpha1.DeploymentTargetReadyCondition); existingCond != nil {
 			return ctrl.Result{}, r.setReady(ctx, dt, metav1.ConditionFalse, DeploymentTargetReasonDeploymentClassNotFound,
-				fmt.Sprintf("DeploymentClass for type %q is no longer registered by controller %q", dt.Spec.Type, deploymentclass.ControllerName))
+				fmt.Sprintf("DeploymentClass for type %q is no longer registered by controller %q", dt.Spec.Type, controllerName))
 		}
 		// No prior condition — never ours. Skip silently.
 		return ctrl.Result{}, nil
@@ -183,7 +182,7 @@ func (r *DeploymentTargetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	deploymentClassMapper := handler.EnqueueRequestsFromMapFunc(
 		func(ctx context.Context, obj client.Object) []reconcile.Request {
 			dc, ok := obj.(*konfidencev1alpha1.DeploymentClass)
-			if !ok || dc.Spec.Controller != deploymentclass.ControllerName {
+			if !ok || dc.Spec.Controller != controllerName {
 				return nil
 			}
 			return deploymentclass.DeploymentTargetsForType(ctx, r.Client, dc.Spec.Type)
@@ -193,6 +192,6 @@ func (r *DeploymentTargetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&konfidencev1alpha1.DeploymentTarget{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&konfidencev1alpha1.DeploymentClass{}, deploymentClassMapper).
-		Named(DeploymentTargetControllerName).
+		Named("deployment-target-controller").
 		Complete(r)
 }

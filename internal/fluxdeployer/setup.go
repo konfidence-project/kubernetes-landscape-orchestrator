@@ -10,6 +10,7 @@ import (
 	internalcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller/result"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/reconciler/helm"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/reconciler/kustomize"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deployer"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -32,10 +33,10 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 		Client:             mgr.GetClient(),
 		Scheme:             mgr.GetScheme(),
 		ConfigProvider:     configProvider,
-		Recorder:           mgr.GetEventRecorder(ControllerName),
+		Recorder:           mgr.GetEventRecorder("helm_artifactdeployment"),
 		DeploymentResulter: &result.K8sService{Client: mgr.GetClient()},
 	}
-	helmDeployer := deployer.NewArtifactDeploymentReconciler(mgr.GetClient(), ControllerName, internalcontroller.ManifestTypeHelm).
+	helmDeployer := deployer.NewArtifactDeploymentReconciler(mgr.GetClient(), "helm_artifactdeployment", internalcontroller.ManifestTypeHelm).
 		Owns(&sourcev1.HelmRepository{}).
 		Owns(&sourcev1.HelmChart{}).
 		Owns(&helmv2.HelmRelease{}).
@@ -45,10 +46,11 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 		return err
 	}
 
-	kustomizeDeployer := deployer.NewArtifactDeploymentReconciler(mgr.GetClient(), ControllerName, internalcontroller.ManifestTypeKustomize).
+	kustomizeReconciler := kustomize.Reconciler{Client: mgr.GetClient()}
+	kustomizeDeployer := deployer.NewArtifactDeploymentReconciler(mgr.GetClient(), "kustomize_artifactdeployment", internalcontroller.ManifestTypeKustomize).
 		Owns(&sourcev1.OCIRepository{}).
 		Owns(&kustomizev1.Kustomization{}).
-		Complete(&internalcontroller.KustomizeArtifactDeploymentReconciler{Client: mgr.GetClient()})
+		Complete(&kustomizeReconciler)
 	if err := kustomizeDeployer.SetupWithManager(mgr); err != nil {
 		logger.Error(err, "unable to create kustomize controller")
 		return err

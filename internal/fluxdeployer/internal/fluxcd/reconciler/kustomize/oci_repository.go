@@ -1,9 +1,10 @@
-package reconciler
+package kustomize
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,14 +28,14 @@ import (
 
 const OCIRepositoryControllerName = "flux-oci-repository-reconciler"
 
-type OCIRepositoryReconciler struct {
+type ociRepositoryReconciler struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
 	Recorder       events.EventRecorder
 }
 
-func (r *OCIRepositoryReconciler) Reconcile(
+func (r *ociRepositoryReconciler) Reconcile(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource) (isReady bool, err error) {
 
 	ociRepository := &sourcev1.OCIRepository{
@@ -60,7 +61,7 @@ func (r *OCIRepositoryReconciler) Reconcile(
 	return meta.IsStatusConditionTrue(ociRepository.Status.Conditions, "Ready"), nil
 }
 
-func (r *OCIRepositoryReconciler) mutateOCIRepository(
+func (r *ociRepositoryReconciler) mutateOCIRepository(
 	ctx context.Context,
 	deployment *konfidencev1alpha1.ArtifactDeployment,
 	kustomizeResource *fluxcd.KustomizeResource,
@@ -74,7 +75,7 @@ func (r *OCIRepositoryReconciler) mutateOCIRepository(
 		}
 	}
 
-	secretRef, err := getSecretRef(ctx, r.Client, deployment, kustomizeResource.Repository)
+	secretRef, err := utils.GetSecretRef(ctx, r.Client, deployment, kustomizeResource.Repository)
 	if err != nil {
 		return fmt.Errorf("failed to resolve secretRef for OCI Repository: %w", err)
 	}
@@ -83,7 +84,7 @@ func (r *OCIRepositoryReconciler) mutateOCIRepository(
 	ociRepository.Spec = sourcev1.OCIRepositorySpec{
 		Interval:  r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
 		URL:       kustomizeResource.Repository,
-		Insecure:  isInsecure(deployment),
+		Insecure:  utils.AllowInsecure(deployment),
 		SecretRef: secretRef,
 		Reference: &sourcev1.OCIRepositoryRef{
 			Tag: kustomizeResource.Tag,
@@ -93,7 +94,7 @@ func (r *OCIRepositoryReconciler) mutateOCIRepository(
 	return nil
 }
 
-func (r *OCIRepositoryReconciler) mapStatusConditions(
+func (r *ociRepositoryReconciler) mapStatusConditions(
 	deployment *konfidencev1alpha1.ArtifactDeployment, ociRepository *sourcev1.OCIRepository) {
 
 	for _, condition := range ociRepository.Status.Conditions {

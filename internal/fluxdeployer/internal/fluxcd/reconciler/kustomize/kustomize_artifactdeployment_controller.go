@@ -1,4 +1,4 @@
-package helm
+package kustomize
 
 import (
 	"context"
@@ -6,16 +6,20 @@ import (
 
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deployer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// see https://github.com/konfidence-project/konfidence/tree/main/api/v1alpha1
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
-	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deployer"
 )
 
-// Reconciler reconciles ArtifactDeployment objects where manifest type is 'Helm'
+// TODO karsten: refactor consts
+const ocmResourceTypeKustomize = "kustomize"
+const ArtifactDeploymentReasonInvalidConstraint = "ArtifactDeploymentInvalidConstraint"
+
+// Reconciler reconciles ArtifactDeployment objects where manifest type is 'Kustomize'
 type Reconciler struct {
 	client.Client
 
@@ -29,9 +33,8 @@ type Reconciler struct {
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments/finalizers,verbs=update
-// +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=helmrepositories,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=helmcharts,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=ocirepositories,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=kustomize.toolkit.fluxcd.io,resources=kustomizations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
@@ -42,7 +45,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, ad *konfidencev1alpha1.Artif
 		return deployer.ReconcileResult{}, fmt.Errorf("failed to get kubeconfig for ArtifactDeployment %s/%s: %w", ad.Namespace, ad.Name, err)
 	}
 
-	resource, err := utils.SingleOCMResource(ad.Spec.Component, ocmResourceTypeHelmChart)
+	resource, err := utils.SingleOCMResource(ad.Spec.Component, ocmResourceTypeKustomize)
 	if err != nil {
 		condition := metav1.Condition{
 			Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
@@ -55,7 +58,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, ad *konfidencev1alpha1.Artif
 		return deployer.ReconcileResult{Conditions: []metav1.Condition{condition}}, nil
 	}
 
-	helmResource, err := fluxcd.Map(*resource).ToHelm()
+	kustomizeResource, err := fluxcd.Map(*resource).ToKustomize()
 	if err != nil {
 		condition := metav1.Condition{
 			Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
@@ -68,23 +71,27 @@ func (r *Reconciler) Reconcile(ctx context.Context, ad *konfidencev1alpha1.Artif
 		return deployer.ReconcileResult{Conditions: []metav1.Condition{condition}}, nil
 	}
 
-	helmRepository := &repositoryReconciler{
+	ociRepositoryReconciler := &ociRepositoryReconciler{
 		Client:         r.Client,
 		Scheme:         r.Scheme,
 		ConfigProvider: r.ConfigProvider,
 		Recorder:       r.Recorder,
 	}
-	if _, err := helmRepository.Reconcile(ctx, ad, helmResource); err != nil {
-		return deployer.ReconcileResult{}, fmt.Errorf("reconcile HelmRepository: %w", err)
+	ready, err := ociRepositoryReconciler.Reconcile(ctx, ad, kustomizeResource)
+	if err != nil {
+		return deployer.ReconcileResult{}, fmt.Errorf("reconcile OCIRepository: %w", err)
+	}
+	if !ready {
+		return deployer.ReconcileResult{}, nil
 	}
 
-	helmRelease := &releaseReconciler{
-		Client:         r.Client,
-		Scheme:         r.Scheme,
-		ConfigProvider: r.ConfigProvider,
+	kustomizationReconciler := &kustomizationReconciler{
+		Client:   r.Client,
+		Scheme:   r.Scheme,
+		Recorder: r.Recorder,
 	}
-	if _, err := helmRelease.Reconcile(ctx, ad, helmResource, kubeConfig); err != nil {
-		return deployer.ReconcileResult{}, fmt.Errorf("reconcile HelmRelease: %w", err)
+	if _, err := kustomizationReconciler.Reconcile(ctx, ad, kustomizeResource, kubeConfig); err != nil {
+		return deployer.ReconcileResult{}, fmt.Errorf("reconcile Kustomization: %w", err)
 	}
 
 	results, err := r.DeploymentResulter.GetDeploymentResults(ctx, ad)
@@ -107,6 +114,3 @@ func (r *Reconciler) Reconcile(ctx context.Context, ad *konfidencev1alpha1.Artif
 		DeploymentResults: results,
 	}, nil
 }
-
-// TODO karsten: move to proper place
-const ArtifactDeploymentReasonInvalidConstraint = "ArtifactDeploymentInvalidConstraint"

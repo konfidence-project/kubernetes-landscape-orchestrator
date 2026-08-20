@@ -1,9 +1,11 @@
-package reconciler
+package kustomize
 
 import (
 	"context"
 	"fmt"
 
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,16 +31,14 @@ import (
 // Flux API reference: https://fluxcd.io/flux/components/kustomize/api/v1/
 //
 
-const KustomizationControllerName = "flux-kustomization-controller"
-
-type KustomizationReconciler struct {
+type kustomizationReconciler struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
 	Recorder       events.EventRecorder
 }
 
-func (r *KustomizationReconciler) Reconcile(
+func (r *kustomizationReconciler) Reconcile(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, kustomizeResource *fluxcd.KustomizeResource,
 	kubeConfig *fluxmeta.KubeConfigReference) (isReady bool, err error) {
 
@@ -65,7 +65,7 @@ func (r *KustomizationReconciler) Reconcile(
 	return meta.IsStatusConditionTrue(kustomization.Status.Conditions, conditionTypeReady), nil
 }
 
-func (r *KustomizationReconciler) mutateKustomization(
+func (r *kustomizationReconciler) mutateKustomization(
 	deployment *konfidencev1alpha1.ArtifactDeployment,
 	kustomizeResource *fluxcd.KustomizeResource,
 	kustomization *kustomizev1.Kustomization,
@@ -103,7 +103,7 @@ func (r *KustomizationReconciler) mutateKustomization(
 	return nil
 }
 
-func (r *KustomizationReconciler) mapStatusConditions(
+func (r *kustomizationReconciler) mapStatusConditions(
 	deployment *konfidencev1alpha1.ArtifactDeployment, kustomization *kustomizev1.Kustomization) {
 
 	for _, condition := range kustomization.Status.Conditions {
@@ -129,4 +129,24 @@ func mapKustomizationConditionType(conditionType string) string {
 	default:
 		return ""
 	}
+}
+
+// TODO karsten: refactor consts
+const (
+	conditionTypeReady               = "Ready"
+	maxKustomizationNameSuffixLength = 36
+)
+
+// buildKustomizationNameSuffix builds a NameSuffix of the form -<version>-<hash>, falling
+// back to -<hash> when the combined length exceeds maxKustomizationNameSuffixLength.
+// Both values are read from annotations attached to the deployment.
+func buildKustomizationNameSuffix(deployment *konfidencev1alpha1.ArtifactDeployment) string {
+	ann := deployment.GetAnnotations()
+	version := ann[pkgctrl.ArtifactVersionAnnotation]
+	hash := ann[pkgctrl.ArtifactHashAnnotation]
+
+	if full := version + "-" + hash; len(full)+1 <= maxKustomizationNameSuffixLength {
+		return "-" + utils.SanitizeK8sResourceName(full)
+	}
+	return "-" + utils.SanitizeK8sResourceName(hash)
 }

@@ -116,3 +116,20 @@ func removeProtocol(stringUrl string) string {
 	}
 	return stringUrl
 }
+
+// TODO karsten: move to core/api package, method directly on konfidencev1alpha1.OCMComponent type
+func SingleOCMResource(component konfidencev1alpha1.OCMComponent, resourceType string) (*konfidencev1alpha1.OCMResource, error) {
+	var match *konfidencev1alpha1.OCMResource
+	count := 0
+	for i := range component.Resources {
+		if component.Resources[i].Type == resourceType {
+			count++
+			match = &component.Resources[i]
+		}
+	}
+	if count == 1 {
+		return match, nil
+	}
+
+	return nil, fmt.Errorf("expected exactly one OCM resource of type %q (found %d); refusing to reconcile", resourceType, count)
+}
