@@ -26,11 +26,15 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 		Client: mgr.GetClient(),
 	}
 
+	helmReconciler := internalcontroller.HelmArtifactDeploymentReconciler{
+		Client:         mgr.GetClient(),
+		ConfigProvider: configProvider,
+	}
 	helmDeployer := deployer.NewArtifactDeploymentReconciler(mgr.GetClient(), ControllerName, internalcontroller.ManifestTypeHelm).
 		Owns(&sourcev1.HelmRepository{}).
 		Owns(&sourcev1.HelmChart{}).
 		Owns(&helmv2.HelmRelease{}).
-		Complete(&internalcontroller.HelmArtifactDeploymentReconciler{Client: mgr.GetClient()})
+		Complete(&helmReconciler)
 	if err := helmDeployer.SetupWithManager(mgr); err != nil {
 		logger.Error(err, "unable to create helm controller")
 		return err

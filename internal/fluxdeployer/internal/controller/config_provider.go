@@ -27,13 +27,7 @@ type ConfigProvider struct {
 	Client client.Reader
 }
 
-// DeploymentTargetResolver resolves the target connection for an ArtifactDeployment.
-type DeploymentTargetResolver interface {
-	GetKubeConfigRef(ctx context.Context, landscape, deploymentType string) (*fluxmeta.KubeConfigReference, error)
-}
-
 var _ fluxcd.FluxConfigProvider = (*ConfigProvider)(nil)
-var _ DeploymentTargetResolver = (*ConfigProvider)(nil)
 
 const (
 	// ReadyDeploymentTargetTypeField indexes ready DeploymentTargets by spec.type.
@@ -107,7 +101,7 @@ func (r *ConfigProvider) GetKubeConfigRef(ctx context.Context, landscape, deploy
 		}, nil
 	}
 
-	return nil, &DeploymentTargetNotReadyError{Namespace: landscape, DeploymentType: deploymentType}
+	return nil, fmt.Errorf("no ready DeploymentTarget found in namespace %q for type %q", landscape, deploymentType)
 }
 
 func (r *ConfigProvider) GetTargetNamespace(landscape string) string {

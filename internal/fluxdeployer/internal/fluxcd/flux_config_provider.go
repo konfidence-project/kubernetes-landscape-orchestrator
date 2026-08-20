@@ -1,6 +1,9 @@
 package fluxcd
 
 import (
+	"context"
+
+	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
@@ -20,4 +23,6 @@ type FluxConfigProvider interface {
 
 	// GetTargetNamespace retrieves the target namespace of the landscape
 	GetTargetNamespace(landscape string) string
+
+	GetKubeConfigRef(ctx context.Context, landscape, deploymentType string) (*fluxmeta.KubeConfigReference, error)
 }

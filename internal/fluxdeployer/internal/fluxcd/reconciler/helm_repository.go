@@ -23,8 +23,6 @@ import (
 // Flux HelmRepository docs: https://fluxcd.io/flux/components/source/helmrepositories/
 // Flux API reference: https://fluxcd.io/flux/components/source/api/v1/#source.toolkit.fluxcd.io/v1.HelmRepository
 
-const HelmRepositoryControllerName = "flux-helm-repository-controller"
-
 type HelmRepositoryReconciler struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
