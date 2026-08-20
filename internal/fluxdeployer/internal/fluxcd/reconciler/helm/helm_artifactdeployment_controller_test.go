@@ -1,4 +1,4 @@
-package controller
+package helm
 
 import (
 	"context"
@@ -63,7 +63,7 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 		mockCtrl.Finish()
 	})
 
-	newFixture := func(name string, resources []konfidencev1alpha1.OCMResource) (*HelmArtifactDeploymentReconciler, client.Client, *konfidencev1alpha1.ArtifactDeployment) { //nolint:lll
+	newFixture := func(name string, resources []konfidencev1alpha1.OCMResource) (*Reconciler, client.Client, *konfidencev1alpha1.ArtifactDeployment) { //nolint:lll
 		d := &konfidencev1alpha1.ArtifactDeployment{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Generation: 3},
 			Spec: konfidencev1alpha1.ArtifactDeploymentSpec{
@@ -83,7 +83,7 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 			WithObjects(d, dc).
 			WithStatusSubresource(&konfidencev1alpha1.ArtifactDeployment{}).
 			Build()
-		r := &HelmArtifactDeploymentReconciler{
+		r := &Reconciler{
 			Client:                        cl,
 			DeploymentResultStatusUpdater: drMock,
 			ReadyConditionStatusUpdater:   readyMock,

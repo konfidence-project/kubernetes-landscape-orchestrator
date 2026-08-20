@@ -1,26 +1,26 @@
-package controller
+package helm
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
-	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/reconciler"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// see https://github.com/konfidence-project/konfidence/tree/main/api/v1alpha1
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deployer"
 )
 
-// HelmArtifactDeploymentReconciler reconciles ArtifactDeployment objects where manifest type is 'Helm'
-type HelmArtifactDeploymentReconciler struct {
+// Reconciler reconciles ArtifactDeployment objects where manifest type is 'Helm'
+type Reconciler struct {
 	client.Client
 
+	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
-
-	HelmRepositoryReconciler *reconciler.HelmRepositoryReconciler
-	HelmReleaseReconciler    *reconciler.HelmReleaseReconciler
+	Recorder       events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
@@ -32,7 +32,7 @@ type HelmArtifactDeploymentReconciler struct {
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
-func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, ad *konfidencev1alpha1.ArtifactDeployment) (deployer.ReconcileResult, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, ad *konfidencev1alpha1.ArtifactDeployment) (deployer.ReconcileResult, error) {
 	// TODO karsten: optimize how deployment targets are resolved here, errors should basically not happen
 	kubeConfig, err := r.ConfigProvider.GetKubeConfigRef(ctx, ad.Namespace, ad.Spec.Manifest.Type)
 	if err != nil {
@@ -67,16 +67,28 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, ad *ko
 
 	// TODO karsten:
 
-	if _, err := r.HelmRepositoryReconciler.Reconcile(ctx, ad, helmResource); err != nil {
-		return fmt.Errorf("reconcile HelmRepository: %w", err)
+	helmRepository := &repositoryReconciler{
+		Client:         r.Client,
+		Scheme:         r.Scheme,
+		ConfigProvider: r.ConfigProvider,
+		Recorder:       r.Recorder,
 	}
-	if _, err := r.HelmReleaseReconciler.Reconcile(ctx, ad, helmResource, kubeConfig); err != nil {
-		return fmt.Errorf("reconcile HelmRelease: %w", err)
+	if _, err := helmRepository.Reconcile(ctx, ad, helmResource); err != nil {
+		return deployer.ReconcileResult{}, fmt.Errorf("reconcile HelmRepository: %w", err)
+	}
+
+	helmRelease := &releaseReconciler{
+		Client:         r.Client,
+		Scheme:         r.Scheme,
+		ConfigProvider: r.ConfigProvider,
+	}
+	if _, err := helmRelease.Reconcile(ctx, ad, helmResource, kubeConfig); err != nil {
+		return deployer.ReconcileResult{}, fmt.Errorf("reconcile HelmRelease: %w", err)
 	}
 
 	// TODO karsten: insert deployment result status updater logic
 
-	return nil
+	return deployer.ReconcileResult{}, nil
 }
 
 func singleOCMResource(component konfidencev1alpha1.OCMComponent, resourceType string) (*konfidencev1alpha1.OCMResource, error) {

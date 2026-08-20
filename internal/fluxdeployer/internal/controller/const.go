@@ -4,7 +4,6 @@ const (
 	ManifestTypeHelm      = "konfidence.cloud/helm"
 	ManifestTypeKustomize = "konfidence.cloud/kustomize"
 
-	ocmResourceTypeHelmChart = "helmChart"
 	ocmResourceTypeKustomize = "kustomize"
 
 	// labelArtifactDeployment is injected onto every resource of a deployment via Flux CommonMetadata, so all
