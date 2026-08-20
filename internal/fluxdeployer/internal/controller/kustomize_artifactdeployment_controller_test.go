@@ -48,14 +48,14 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 		d := &konfidencev1alpha1.ArtifactDeployment{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Generation: 3},
 			Spec: konfidencev1alpha1.ArtifactDeploymentSpec{
-				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: manifestTypeKustomize},
+				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: ManifestTypeKustomize},
 				Component: konfidencev1alpha1.OCMComponent{Resources: resources},
 			},
 		}
 		dc := &konfidencev1alpha1.DeploymentClass{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-kustomize"},
 			Spec: konfidencev1alpha1.DeploymentClassSpec{
-				Type:       manifestTypeKustomize,
+				Type:       ManifestTypeKustomize,
 				Controller: deploymentclass.ControllerName,
 			},
 		}
@@ -132,7 +132,7 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 			})
 
 			artifactMock.EXPECT().Reconcile(gomock.Any(), gomock.Any()).Return(
-				&DeploymentTargetNotReadyError{Namespace: d.Namespace, DeploymentType: manifestTypeKustomize}).Times(1)
+				&DeploymentTargetNotReadyError{Namespace: d.Namespace, DeploymentType: ManifestTypeKustomize}).Times(1)
 
 			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Name}})
 			Expect(err).NotTo(HaveOccurred())

@@ -67,14 +67,14 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 		d := &konfidencev1alpha1.ArtifactDeployment{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Generation: 3},
 			Spec: konfidencev1alpha1.ArtifactDeploymentSpec{
-				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: manifestTypeHelm},
+				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: ManifestTypeHelm},
 				Component: konfidencev1alpha1.OCMComponent{Resources: resources},
 			},
 		}
 		dc := &konfidencev1alpha1.DeploymentClass{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-helm"},
 			Spec: konfidencev1alpha1.DeploymentClassSpec{
-				Type:       manifestTypeHelm,
+				Type:       ManifestTypeHelm,
 				Controller: deploymentclass.ControllerName,
 			},
 		}
@@ -150,7 +150,7 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 			})
 
 			artifactMock.EXPECT().Reconcile(gomock.Any(), gomock.Any()).Return(
-				&DeploymentTargetNotReadyError{Namespace: d.Namespace, DeploymentType: manifestTypeHelm}).Times(1)
+				&DeploymentTargetNotReadyError{Namespace: d.Namespace, DeploymentType: ManifestTypeHelm}).Times(1)
 
 			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Name}})
 			Expect(err).NotTo(HaveOccurred())

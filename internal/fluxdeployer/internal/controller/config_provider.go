@@ -42,16 +42,6 @@ const (
 	connectionTypeLocal = "local"
 )
 
-// DeploymentTargetNotReadyError indicates that no ready target exists for a deployment type.
-type DeploymentTargetNotReadyError struct {
-	Namespace      string
-	DeploymentType string
-}
-
-func (e *DeploymentTargetNotReadyError) Error() string {
-	return fmt.Sprintf("no ready DeploymentTarget for type %q found in namespace %q", e.DeploymentType, e.Namespace)
-}
-
 // IndexReadyDeploymentTargets registers the cache index used by GetKubeConfigRef.
 func IndexReadyDeploymentTargets(ctx context.Context, indexer client.FieldIndexer) error {
 	return indexer.IndexField(ctx, &konfidencev1alpha1.DeploymentTarget{}, ReadyDeploymentTargetTypeField,

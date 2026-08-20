@@ -14,8 +14,8 @@ import (
 
 //go:generate go run go.uber.org/mock/mockgen -destination=./mocks/mock_artifact_deployer.go -package=mocks github.com/konfidence-project/konfidence/pkg/deployer ArtifactDeployer
 
-var _ deployer.ArtifactDeployer = (*HelmArtifactDeployer)(nil)
-var _ deployer.ArtifactDeployer = (*KustomizeArtifactDeployer)(nil)
+var _ deployer.ArtifactReconciler = (*HelmArtifactDeployer)(nil)
+var _ deployer.ArtifactReconciler = (*KustomizeArtifactDeployer)(nil)
 
 // HelmArtifactDeployer deploys Helm artifacts through Flux.
 type HelmArtifactDeployer struct {

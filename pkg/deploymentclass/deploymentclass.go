@@ -21,6 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+// TODO karsten: controller-name and known types needs to move to internal/ package
+
 // ControllerName is the value written into DeploymentClass.spec.controller for all
 // classes managed by this operator. It follows the vendor-prefixed naming convention.
 const ControllerName = "konfidence.cloud/kubernetes-landscape-orchestrator"
@@ -37,15 +39,15 @@ var KnownTypes = map[string]struct{}{
 
 // ActiveTypes lists DeploymentClass resources through the provided client and returns
 // the spec.type values whose spec.controller matches ControllerName.
-func ActiveTypes(ctx context.Context, c client.Client) (map[string]struct{}, error) {
+func ActiveTypes(ctx context.Context, c client.Client, controllerName string) (map[string]struct{}, error) {
 	list := &konfidencev1alpha1.DeploymentClassList{}
 	if err := c.List(ctx, list); err != nil {
-		return nil, fmt.Errorf("list DeploymentClasses: %w", err)
+		return nil, fmt.Errorf("failed to list DeploymentClasses: %w", err)
 	}
 
 	active := make(map[string]struct{})
 	for _, dc := range list.Items {
-		if dc.Spec.Controller == ControllerName {
+		if dc.Spec.Controller == controllerName {
 			active[dc.Spec.Type] = struct{}{}
 		}
 	}
