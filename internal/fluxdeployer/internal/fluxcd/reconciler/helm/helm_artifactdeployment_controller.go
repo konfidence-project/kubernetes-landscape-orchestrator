@@ -21,6 +21,8 @@ type Reconciler struct {
 	Scheme         *runtime.Scheme
 	ConfigProvider fluxcd.FluxConfigProvider
 	Recorder       events.EventRecorder
+
+	DeploymentResulter deployer.DeploymentResulter
 }
 
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=artifactdeployments,verbs=get;list;watch;create;update;patch;delete
@@ -65,8 +67,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, ad *konfidencev1alpha1.Artif
 		return deployer.ReconcileResult{Conditions: []metav1.Condition{condition}}, nil
 	}
 
-	// TODO karsten:
-
 	helmRepository := &repositoryReconciler{
 		Client:         r.Client,
 		Scheme:         r.Scheme,
@@ -86,9 +86,25 @@ func (r *Reconciler) Reconcile(ctx context.Context, ad *konfidencev1alpha1.Artif
 		return deployer.ReconcileResult{}, fmt.Errorf("reconcile HelmRelease: %w", err)
 	}
 
-	// TODO karsten: insert deployment result status updater logic
+	results, err := r.DeploymentResulter.GetDeploymentResults(ctx, ad)
+	if err != nil {
+		return deployer.ReconcileResult{}, fmt.Errorf("failed to get deployment results: %w", err)
+	}
 
-	return deployer.ReconcileResult{}, nil
+	var conditions []metav1.Condition
+	conditions = append(conditions, metav1.Condition{
+		Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
+		Status:             metav1.ConditionTrue,
+		Reason:             konfidencev1alpha1.DeploymentResultCreatedCondition,
+		Message:            "Successfully created DeploymentResult",
+		ObservedGeneration: ad.Generation,
+		LastTransitionTime: metav1.Now(),
+	})
+
+	return deployer.ReconcileResult{
+		Conditions:        conditions,
+		DeploymentResults: results,
+	}, nil
 }
 
 func singleOCMResource(component konfidencev1alpha1.OCMComponent, resourceType string) (*konfidencev1alpha1.OCMResource, error) {

@@ -8,6 +8,8 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/go-logr/logr"
 	internalcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller/result"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/reconciler/helm"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deployer"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -26,9 +28,12 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 		Client: mgr.GetClient(),
 	}
 
-	helmReconciler := internalcontroller.HelmArtifactDeploymentReconciler{
-		Client:         mgr.GetClient(),
-		ConfigProvider: configProvider,
+	helmReconciler := helm.Reconciler{
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		ConfigProvider:     configProvider,
+		Recorder:           mgr.GetEventRecorder(ControllerName),
+		DeploymentResulter: &result.K8sService{Client: mgr.GetClient()},
 	}
 	helmDeployer := deployer.NewArtifactDeploymentReconciler(mgr.GetClient(), ControllerName, internalcontroller.ManifestTypeHelm).
 		Owns(&sourcev1.HelmRepository{}).
