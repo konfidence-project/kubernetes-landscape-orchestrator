@@ -97,6 +97,57 @@ func TestToHelm_InvalidOCIReference(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestToHelm_OCIArtifact_HTTPSchemeStrippedInsecure(t *testing.T) {
+	res := v1alpha1.OCMResource{
+		Type: helmChartType,
+		Content: rawJSON(t, map[string]interface{}{
+			contentTypeKey:    ociArtifactType,
+			imageReferenceKey: "http://kind-registry:5000/example-app/interviews-chart:0.1.0",
+		}),
+	}
+
+	h, err := fluxcd.Map(res).ToHelm()
+	require.NoError(t, err)
+
+	require.Equal(t, "oci://kind-registry:5000/example-app", h.Repository)
+	require.Equal(t, "interviews-chart", h.ChartName)
+	require.Equal(t, "0.1.0", h.Version)
+	require.True(t, h.Insecure)
+}
+
+func TestToKustomize_OCIArtifact_HTTPSchemeStrippedInsecure(t *testing.T) {
+	res := v1alpha1.OCMResource{
+		Type: kustomizeType,
+		Content: rawJSON(t, map[string]interface{}{
+			contentTypeKey:    ociArtifactType,
+			imageReferenceKey: "http://kind-registry:5000/example-app/candidates-kustomization:v0.1.0",
+		}),
+	}
+
+	k, err := fluxcd.Map(res).ToKustomize()
+	require.NoError(t, err)
+
+	require.Equal(t, "oci://kind-registry:5000/example-app/candidates-kustomization", k.Repository)
+	require.Equal(t, "v0.1.0", k.Tag)
+	require.True(t, k.Insecure)
+}
+
+func TestToKustomize_OCIArtifact_HTTPSSchemeSecure(t *testing.T) {
+	res := v1alpha1.OCMResource{
+		Type: kustomizeType,
+		Content: rawJSON(t, map[string]interface{}{
+			contentTypeKey:    ociArtifactType,
+			imageReferenceKey: "https://registry.example.com/app/kustomize:v1",
+		}),
+	}
+
+	k, err := fluxcd.Map(res).ToKustomize()
+	require.NoError(t, err)
+
+	require.Equal(t, "oci://registry.example.com/app/kustomize", k.Repository)
+	require.False(t, k.Insecure)
+}
+
 func TestToKustomize_OCIArtifact(t *testing.T) {
 	res := v1alpha1.OCMResource{
 		Name: "podinfo-kustomize",

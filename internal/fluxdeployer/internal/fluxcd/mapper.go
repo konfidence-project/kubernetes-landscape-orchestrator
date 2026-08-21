@@ -64,7 +64,8 @@ func (m mapper) ToHelm() (*HelmChartResource, error) {
 			return nil, fmt.Errorf("unable to unmarshal content to HelmChartResource: %w", err)
 		}
 
-		ref, err := reference.Parse(ociContent.ImageReference)
+		bareRef, insecure := splitScheme(ociContent.ImageReference)
+		ref, err := reference.Parse(bareRef)
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse kustomizeImage reference: %w", err)
 		}
@@ -79,6 +80,7 @@ func (m mapper) ToHelm() (*HelmChartResource, error) {
 			Repository:  fmt.Sprintf("oci://%s/%s", reference.Domain(namedTaggedRef), path.Dir(reference.Path(namedTaggedRef))),
 			ChartName:   path.Base(reference.Path(namedTaggedRef)),
 			Version:     namedTaggedRef.Tag(),
+			Insecure:    insecure,
 		}, nil
 	default:
 		return nil, fmt.Errorf("type '%s' not parsable to HelmChartResource (supported: helm, ociArtifact)", m.resource.Type)
@@ -102,7 +104,8 @@ func (m mapper) ToKustomize() (*KustomizeResource, error) {
 		return nil, fmt.Errorf("type '%s' not parsable to KustomizeResource", kustomizeContent.Type)
 	}
 
-	ref, err := reference.Parse(kustomizeContent.ImageReference)
+	bareRef, insecure := splitScheme(kustomizeContent.ImageReference)
+	ref, err := reference.Parse(bareRef)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse kustomizeImage reference: %w", err)
 	}
@@ -117,6 +120,7 @@ func (m mapper) ToKustomize() (*KustomizeResource, error) {
 		Path:        "./", // TODO use path from OCM (custom access type?)
 		Tag:         namedTaggedRef.Tag(),
 		Repository:  fmt.Sprintf("oci://%s/%s", reference.Domain(namedTaggedRef), reference.Path(namedTaggedRef)),
+		Insecure:    insecure,
 	}
 
 	return kustomizeResource, nil
@@ -124,4 +128,20 @@ func (m mapper) ToKustomize() (*KustomizeResource, error) {
 
 func Map(resource v1alpha1.OCMResource) mapper {
 	return mapper{resource: resource}
+}
+
+// splitScheme strips an optional http:// or https:// scheme from an OCM
+// imageReference. OCM records the scheme when a resource was pushed to a
+// plain-HTTP registry (kden opts into plain HTTP via the ref scheme); a bare
+// http:// therefore also signals an insecure registry. distribution/reference
+// rejects a scheme and Flux wants the bare host, so strip it here.
+func splitScheme(imageReference string) (bare string, insecure bool) {
+	switch {
+	case strings.HasPrefix(imageReference, "http://"):
+		return strings.TrimPrefix(imageReference, "http://"), true
+	case strings.HasPrefix(imageReference, "https://"):
+		return strings.TrimPrefix(imageReference, "https://"), false
+	default:
+		return imageReference, false
+	}
 }

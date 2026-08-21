@@ -22,4 +22,5 @@ type KustomizeResource struct {
 	Repository string
 	Path       string
 	Tag        string
+	Insecure   bool
 }

@@ -85,7 +85,7 @@ func (r *OCIRepositoryReconciler) mutateOCIRepository(
 	ociRepository.Spec = sourcev1.OCIRepositorySpec{
 		Interval:  r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
 		URL:       kustomizeResource.Repository,
-		Insecure:  isInsecure(deployment),
+		Insecure:  isInsecure(deployment) || kustomizeResource.Insecure,
 		SecretRef: secretRef,
 		Reference: &sourcev1.OCIRepositoryRef{
 			Tag: kustomizeResource.Tag,
