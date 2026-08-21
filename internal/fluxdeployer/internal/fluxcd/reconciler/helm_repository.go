@@ -82,7 +82,7 @@ func (r *HelmRepositoryReconciler) mutateHelmRepository(
 	helmRepository.Spec = sourcev1.HelmRepositorySpec{
 		Interval:  r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
 		URL:       helmChartResource.Repository,
-		Insecure:  isInsecure(deployment),
+		Insecure:  isInsecure(deployment) || helmChartResource.Insecure,
 		SecretRef: secretRef,
 	}
 

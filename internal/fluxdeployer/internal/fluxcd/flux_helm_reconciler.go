@@ -22,4 +22,5 @@ type HelmChartResource struct {
 	Repository string
 	ChartName  string
 	Version    string
+	Insecure   bool
 }
