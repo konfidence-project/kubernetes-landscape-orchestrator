@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -141,7 +142,10 @@ func (r *TaskExecutionReconciler) constructJob(taskExecution *konfidencev1alpha1
 		return nil, fmt.Errorf("unable to unmarshal taskExecution spec: %w", err)
 	}
 
-	name := fmt.Sprintf("%s-%s", taskExecution.Name, rand.String(8))
+	// Job names feed the auto-generated job-name pod label, which is capped at
+	// 63 chars. taskExecution.Name can already be that long, so bound the prefix
+	// before appending the random suffix.
+	name := boundedJobName(taskExecution.Name, rand.String(8))
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -155,6 +159,17 @@ func (r *TaskExecutionReconciler) constructJob(taskExecution *konfidencev1alpha1
 	}
 
 	return job, nil
+}
+
+// boundedJobName joins base and suffix with "-" while keeping the result within
+// the 63-char limit that applies to the auto-generated job-name pod label.
+func boundedJobName(base, suffix string) string {
+	const maxJobNameLen = 63
+	full := "-" + suffix
+	if len(base) > maxJobNameLen-len(full) {
+		base = strings.TrimRight(base[:maxJobNameLen-len(full)], "-")
+	}
+	return base + full
 }
 
 func (r *TaskExecutionReconciler) isJobFinished(job *batchv1.Job) (bool, batchv1.JobConditionType) {
