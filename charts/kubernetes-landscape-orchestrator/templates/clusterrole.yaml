@@ -124,6 +124,7 @@ rules:
   resources:
   - activationtaskexecutions/status
   - artifactdeployments/status
+  - deploymenttargets/status
   - taskexecutions/status
   - vectoractivations/status
   - vectorassignments/status
@@ -144,6 +145,8 @@ rules:
 - apiGroups:
   - konfidence.cloud
   resources:
+  - deploymentclasses
+  - deploymenttargets
   - vectorassignments
   verbs:
   - get

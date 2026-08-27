@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -69,13 +70,19 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 		d := &konfidencev1alpha1.ArtifactDeployment{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Generation: 3},
 			Spec: konfidencev1alpha1.ArtifactDeploymentSpec{
-				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: manifestTypeHelm},
+				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: internal.DeploymentClassHelm},
 				Component: konfidencev1alpha1.OCMComponent{Resources: resources},
+			},
+		}
+		class := &konfidencev1alpha1.DeploymentClass{
+			ObjectMeta: metav1.ObjectMeta{Name: internal.DeploymentClassHelm},
+			Spec: konfidencev1alpha1.DeploymentClassSpec{
+				Controller: internal.ControllerName,
 			},
 		}
 		cl := fake.NewClientBuilder().
 			WithScheme(newTestScheme()).
-			WithObjects(d).
+			WithObjects(d, class).
 			WithStatusSubresource(&konfidencev1alpha1.ArtifactDeployment{}).
 			Build()
 		r := &HelmArtifactDeploymentReconciler{

@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -42,10 +44,6 @@ type KustomizeArtifactDeploymentReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
-	log.Info("start reconciling Kustomize artifact deployment")
-
-	// get the ArtifactDeployment object
 	deployment := &konfidencev1alpha1.ArtifactDeployment{}
 	if err := r.Get(ctx, req.NamespacedName, deployment); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -53,6 +51,19 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get artifact deployment object: %w", err)
 	}
+	if deployment.Spec.Manifest.Type != internal.DeploymentClassKustomize {
+		return ctrl.Result{}, nil
+	}
+	active, err := deploymentClassActive(ctx, r.Client, deployment.Spec.Manifest.Type)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if !active {
+		return ctrl.Result{}, nil
+	}
+
+	log := logf.FromContext(ctx)
+	log.Info("start reconciling Kustomize artifact deployment")
 
 	// preserve original deployment status for patching it later
 	originalDeployment := deployment.DeepCopy()
@@ -109,7 +120,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 		}
 	}
 
-	err := r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
+	err = r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
 	if err != nil {
 		log.Error(err, "failed to handle Kustomize deployment result", "ArtifactDeployment", deployment)
 	}
@@ -132,22 +143,21 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Create a predicate to filter ...
-	manifestTypeFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		switch obj := obj.(type) {
-		case *konfidencev1alpha1.ArtifactDeployment:
-			// ... for 'Kustomize' manifest types
-			return obj.Spec.Manifest.Type == manifestTypeKustomize
-		case *sourcev1.OCIRepository, *kustomizev1.Kustomization:
-			// ... or owned resources
-			return true
-		default:
-			return false
-		}
+	kustomizeDeployment := predicate.NewPredicateFuncs(func(obj client.Object) bool {
+		deployment, ok := obj.(*konfidencev1alpha1.ArtifactDeployment)
+		return ok && deployment.Spec.Manifest.Type == internal.DeploymentClassKustomize
+	})
+	kustomizeTarget := predicate.NewPredicateFuncs(func(obj client.Object) bool {
+		target, ok := obj.(*konfidencev1alpha1.DeploymentTarget)
+		return ok && target.Spec.DeploymentClassName == internal.DeploymentClassKustomize
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(manifestTypeFilter).
+		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, kustomizeDeployment)).
+		Watches(&konfidencev1alpha1.DeploymentTarget{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
+			return artifactDeploymentsForTarget(ctx, r.Client, obj.(*konfidencev1alpha1.DeploymentTarget))
+		}), builder.WithPredicates(kustomizeTarget)).
+		Watches(&konfidencev1alpha1.DeploymentClass{}, deploymentClassEventHandler(r.Client, internal.DeploymentClassKustomize)).
 		Owns(&sourcev1.OCIRepository{}).
 		Owns(&kustomizev1.Kustomization{}).
 		Named("kustomize_artifactdeployment").

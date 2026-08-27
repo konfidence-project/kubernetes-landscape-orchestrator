@@ -1,0 +1,22 @@
+{{- if .Values.deploymentClasses.helm.enabled }}
+---
+apiVersion: konfidence.cloud/v1alpha1
+kind: DeploymentClass
+metadata:
+  name: helm.konfidence.cloud
+  labels:
+    {{- include "kubernetes-landscape-orchestrator.labels" . | nindent 4 }}
+spec:
+  controller: konfidence.cloud/kubernetes-landscape-orchestrator
+{{- end }}
+{{- if .Values.deploymentClasses.kustomize.enabled }}
+---
+apiVersion: konfidence.cloud/v1alpha1
+kind: DeploymentClass
+metadata:
+  name: kustomize.konfidence.cloud
+  labels:
+    {{- include "kubernetes-landscape-orchestrator.labels" . | nindent 4 }}
+spec:
+  controller: konfidence.cloud/kubernetes-landscape-orchestrator
+{{- end }}

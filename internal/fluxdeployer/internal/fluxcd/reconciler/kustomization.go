@@ -79,7 +79,7 @@ func (r *KustomizationReconciler) mutateKustomization(
 		}
 	}
 
-	kubeConfig, err := r.ConfigProvider.GetKubeConfigRef(ctx, deployment.GetNamespace())
+	kubeConfig, err := r.ConfigProvider.GetKubeConfigRef(ctx, deployment.GetNamespace(), deployment.Spec.Manifest.Type)
 	if err != nil {
 		return err
 	}

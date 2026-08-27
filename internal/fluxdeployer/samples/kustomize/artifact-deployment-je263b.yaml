@@ -9,7 +9,7 @@ metadata:
     konfidence.cloud/vector-deployment-id: je263b
 spec:
   manifest:
-    type: cloud.konfidence.flux.kustomize
+    type: kustomize.konfidence.cloud
     allowReuse: true
   component:
     name: podinfo
