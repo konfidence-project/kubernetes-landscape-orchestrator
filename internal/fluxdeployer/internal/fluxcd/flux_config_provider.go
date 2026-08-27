@@ -22,7 +22,7 @@ type FluxConfigProvider interface {
 	GetHelmDriftDetectionMode(landscape string) *helmv2.DriftDetection
 
 	// GetKubeConfigRef retrieves the kubeconfig for the target cluster of the landscape
-	GetKubeConfigRef(ctx context.Context, landscape string) (*meta2.KubeConfigReference, error)
+	GetKubeConfigRef(ctx context.Context, landscape, deploymentType string) (*meta2.KubeConfigReference, error)
 
 	// GetTargetNamespace retrieves the target namespace of the landscape
 	GetTargetNamespace(landscape string) string

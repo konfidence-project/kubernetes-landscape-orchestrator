@@ -10,7 +10,7 @@ metadata:
     konfidence.cloud/registry-insecure: "true"
 spec:
   manifest:
-    type: cloud.konfidence.flux.kustomize
+    type: kustomize.konfidence.cloud
     allowReuse: true
   component:
     name: podinfo

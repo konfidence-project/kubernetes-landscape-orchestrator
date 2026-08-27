@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -50,13 +51,19 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 		d := &konfidencev1alpha1.ArtifactDeployment{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Generation: 3},
 			Spec: konfidencev1alpha1.ArtifactDeploymentSpec{
-				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: manifestTypeKustomize},
+				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: internal.DeploymentClassKustomize},
 				Component: konfidencev1alpha1.OCMComponent{Resources: resources},
+			},
+		}
+		class := &konfidencev1alpha1.DeploymentClass{
+			ObjectMeta: metav1.ObjectMeta{Name: internal.DeploymentClassKustomize},
+			Spec: konfidencev1alpha1.DeploymentClassSpec{
+				Controller: internal.ControllerName,
 			},
 		}
 		cl := fake.NewClientBuilder().
 			WithScheme(newTestScheme()).
-			WithObjects(d).
+			WithObjects(d, class).
 			WithStatusSubresource(&konfidencev1alpha1.ArtifactDeployment{}).
 			Build()
 		r := &KustomizeArtifactDeploymentReconciler{

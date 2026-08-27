@@ -1,6 +1,6 @@
 # kubernetes-landscape-orchestrator
 
-![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
+![Version: 0.0.0-rc.1](https://img.shields.io/badge/Version-0.0.0--rc.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.0.0-rc.1](https://img.shields.io/badge/AppVersion-0.0.0--rc.1-informational?style=flat-square)
 
 Konfidence Kubernetes Landscape Orchestrator operator.
 
@@ -32,6 +32,9 @@ Kubernetes: `>=1.27.0-0`
 | controller.leaderElection | bool | `true` | Enable leader election for the controller. |
 | controller.leaseId | string | `"orchestrator.konfidence.cloud"` | Lease ID used for leader election. |
 | controller.metricsBindAddress | string | `":8080"` | Bind address for the Prometheus `/metrics` endpoint. Set to `"0"` to disable the metrics server entirely (also suppresses the metrics container port, Service, and ServiceMonitor). |
+| deploymentClasses | object | `{"helm":{"enabled":true},"kustomize":{"enabled":true}}` | DeploymentClass resources to install into the cluster. These are cluster-scoped resources that advertise the deployment capabilities of this operator. Each class can be enabled or disabled independently. |
+| deploymentClasses.helm.enabled | bool | `true` | Install the helm.konfidence.cloud DeploymentClass. |
+| deploymentClasses.kustomize.enabled | bool | `true` | Install the kustomize.konfidence.cloud DeploymentClass. |
 | env | list | `[]` | Additional environment variables to set on the controller container. |
 | extraArgs | list | `[]` | Additional command-line arguments to pass to the controller binary. |
 | fullnameOverride | string | `""` | Override the fully-qualified app name used in resource names. |

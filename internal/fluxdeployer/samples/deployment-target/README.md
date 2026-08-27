@@ -79,7 +79,7 @@ metadata:
   namespace: landscape-dev
 spec:
   manifest:
-    type: cloud.konfidence.flux.kustomize
+    type: kustomize.konfidence.cloud
   component:
     name: my-app
     resources:
@@ -148,7 +148,7 @@ metadata:
   namespace: landscape-dev
 spec:
   manifest:
-    type: cloud.konfidence.flux.kustomize
+    type: kustomize.konfidence.cloud
   component:
     name: my-app
     resources:
@@ -212,7 +212,7 @@ metadata:
   namespace: landscape-dev
 spec:
   manifest:
-    type: cloud.konfidence.flux.kustomize
+    type: kustomize.konfidence.cloud
   component:
     name: my-app
     resources:

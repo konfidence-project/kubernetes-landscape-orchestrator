@@ -5,7 +5,7 @@ metadata:
   namespace: target-namespace
 spec:
   manifest:
-    type: cloud.konfidence.flux.helm
+    type: helm.konfidence.cloud
     allowReuse: true
   artifactDeploymentRef:
     name: podinfo-6fa82f

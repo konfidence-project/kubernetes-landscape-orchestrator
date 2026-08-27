@@ -14,6 +14,17 @@ controller:
   # container port, Service, and ServiceMonitor).
   metricsBindAddress: ":8080"
 
+# -- DeploymentClass resources to install into the cluster.
+# These are cluster-scoped resources that advertise the deployment capabilities
+# of this operator. Each class can be enabled or disabled independently.
+deploymentClasses:
+  helm:
+    # -- Install the helm.konfidence.cloud DeploymentClass.
+    enabled: true
+  kustomize:
+    # -- Install the kustomize.konfidence.cloud DeploymentClass.
+    enabled: true
+
 # -- Override the chart name used in resource names.
 nameOverride: ""
 # -- Override the fully-qualified app name used in resource names.

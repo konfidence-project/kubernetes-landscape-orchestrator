@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -24,7 +25,7 @@ import (
 const VectorAssignmentControllerName = "flux-vector-assignment-controller"
 
 // VectorAssignmentReconciler reconciles VectorAssignment resources where manifest type is either
-// 'cloud.konfidence.flux.kustomize' or 'cloud.konfidence.flux.helm'. East-west routing is carried by deployment
+// 'kustomize.konfidence.cloud' or 'helm.konfidence.cloud'. East-west routing is carried by deployment
 // results in VectorData, so the deployer no longer creates routing objects; it only reflects whether the referenced
 // ArtifactDeployment has published its deployment results.
 type VectorAssignmentReconciler struct {
@@ -43,7 +44,7 @@ func (r *VectorAssignmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		if !ok {
 			return true
 		}
-		return assignment.Spec.Manifest.Type == manifestTypeKustomize || assignment.Spec.Manifest.Type == manifestTypeHelm
+		return assignment.Spec.Manifest.Type == internal.DeploymentClassKustomize || assignment.Spec.Manifest.Type == internal.DeploymentClassHelm
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).

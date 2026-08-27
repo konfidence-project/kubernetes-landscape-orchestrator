@@ -9,7 +9,7 @@ metadata:
     konfidence.cloud/vector-deployment-id: h3rz81
 spec:
   manifest:
-    type: cloud.konfidence.flux.helm
+    type: helm.konfidence.cloud
     allowReuse: true
   component:
     name: podinfo
