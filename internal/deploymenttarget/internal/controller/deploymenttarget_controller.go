@@ -86,7 +86,11 @@ func (r *DeploymentTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	if _, known := internal.KnownClasses[dt.Spec.DeploymentClassName]; !known {
 		// The DeploymentClass exists and is ours, but this version of KLO does not have a handler for it.
 		return ctrl.Result{}, r.setReady(ctx, dt, metav1.ConditionFalse, DeploymentTargetReasonUnsupportedType,
-			fmt.Sprintf("DeploymentClass %q is not supported by this controller version; known classes: %v", dt.Spec.DeploymentClassName, internal.KnownClasses))
+			fmt.Sprintf(
+				"DeploymentClass %q is not supported by this controller version; known classes: %s",
+				dt.Spec.DeploymentClassName,
+				internal.KnownClasses.String()),
+		)
 	}
 
 	return ctrl.Result{}, r.validate(ctx, dt)
