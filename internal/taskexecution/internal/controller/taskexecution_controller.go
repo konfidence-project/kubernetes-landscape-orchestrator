@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -22,6 +23,10 @@ import (
 )
 
 const TaskExecutionControllerName = "task-execution-controller"
+
+const (
+	jobNameSuffixLength = 8
+)
 
 // TaskExecutionReconciler reconciles a TaskExecution object
 type TaskExecutionReconciler struct {
@@ -141,7 +146,12 @@ func (r *TaskExecutionReconciler) constructJob(taskExecution *konfidencev1alpha1
 		return nil, fmt.Errorf("unable to unmarshal taskExecution spec: %w", err)
 	}
 
-	name := fmt.Sprintf("%s-%s", taskExecution.Name, rand.String(8))
+	name := taskExecution.Name
+	maxPrefixLength := validation.DNS1123LabelMaxLength - jobNameSuffixLength - 1
+	if len(name) > maxPrefixLength {
+		name = name[:maxPrefixLength]
+	}
+	name = fmt.Sprintf("%s-%s", name, rand.String(jobNameSuffixLength))
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
@@ -12,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -85,6 +87,24 @@ var _ = Describe("TaskExecution Controller", func() {
 				g.Expect(taskExecution.Status.Conditions).To(HaveLen(1))
 				g.Expect(meta.IsStatusConditionTrue(taskExecution.Status.Conditions, konfidencev1alpha1.TaskSucceeded)).To(BeTrue())
 			}, timeout, interval).Should(Succeed())
+		})
+	})
+
+	Describe("constructJob", func() {
+		It("keeps job names within 63 characters when the task execution name is already 63 characters", func() {
+			taskExecution := &konfidencev1alpha1.TaskExecution{
+				ObjectMeta: metav1.ObjectMeta{Name: strings.Repeat("a", 63)},
+				Spec: konfidencev1alpha1.TaskExecutionSpec{
+					Spec: runtime.RawExtension{Raw: []byte(TaskExecutionSpec)},
+				},
+			}
+			taskExecution.SetGroupVersionKind(konfidencev1alpha1.GroupVersion.WithKind(konfidencev1alpha1.TaskExecutionKind))
+
+			job, err := (&TaskExecutionReconciler{Scheme: reconcileScheme}).constructJob(taskExecution)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(job.Name).To(HaveLen(63))
+			Expect(job.Name).To(HavePrefix(strings.Repeat("a", 54) + "-"))
 		})
 	})
 })
