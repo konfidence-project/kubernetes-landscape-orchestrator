@@ -23,6 +23,13 @@ export PATH := $(shell pwd)/bin:$(PATH)
 
 # Kubernetes / envtest versions
 ENVTEST_K8S_VERSION ?= 1.33
+# Cluster prerequisites installed by install-deps; keep in step with go.mod.
+GATEWAY_API_VERSION ?= v1.6.1
+FLUX_VERSION ?= v2.9.5
+# Sibling konfidence clone; its chart provides the CRDs this operator reconciles.
+KONFIDENCE_DIR ?= ../konfidence
+# Target arch for docker-build; defaults to the host's so the image runs natively in kind.
+DOCKER_GOARCH ?= $(shell go env GOARCH)
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
@@ -142,8 +149,9 @@ run: hermit fmt vet ## Run the operator from your host.
 # This target is only used for local environments (not in pipeline)
 .PHONY: docker-build
 docker-build: hermit ## Build the container image (local use only).
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/kubernetes-landscape-orchestrator main.go
-	$(CONTAINER_TOOL) build -t $(IMAGE) .
+	@mkdir -p bin/linux-build
+	GOOS=linux GOARCH=$(DOCKER_GOARCH) CGO_ENABLED=0 go build -o bin/linux-build/kubernetes-landscape-orchestrator main.go
+	$(CONTAINER_TOOL) build --build-arg TARGETPLATFORM=bin/linux-build --build-arg OPERATOR_NAME=kubernetes-landscape-orchestrator -t $(IMAGE) .
 
 .PHONY: docker-bake
 docker-bake: hermit ## Build the container image with docker buildx bake.
@@ -175,6 +183,22 @@ install-git-hooks: hermit ## Install git hooks via prek.
 uninstall-git-hooks: hermit ## Uninstall git hooks via prek.
 	@echo "Uninstalling prek (pre-commit) git hooks..."
 	prek uninstall
+
+##@ Local Development
+
+.PHONY: install-deps
+install-deps: ## Install Gateway API and Flux into the current cluster.
+	$(KUBECTL) apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/$(GATEWAY_API_VERSION)/standard-install.yaml
+	$(KUBECTL) apply -f https://github.com/fluxcd/flux2/releases/download/$(FLUX_VERSION)/install.yaml
+	$(KUBECTL) -n flux-system wait deployment --all --for=condition=Available --timeout=600s
+
+.PHONY: install-konfidence-crds
+install-konfidence-crds: hermit ## Install the konfidence CRDs from a sibling clone (KONFIDENCE_DIR).
+	$(HELM) upgrade --install konfidence $(KONFIDENCE_DIR)/charts/konfidence --set controller.install=false --set api.enabled=false --set crd.keep=false
+
+.PHONY: dev-install
+dev-install: hermit ## Install the chart with the locally built image (REGISTRY/TAG).
+	$(HELM) upgrade --install kubernetes-landscape-orchestrator charts/kubernetes-landscape-orchestrator --set image.repository=$(REGISTRY)/kubernetes-landscape-orchestrator --set image.tag=$(TAG)
 
 ##@ Helm
 
