@@ -193,8 +193,12 @@ install-deps: ## Install Gateway API and Flux into the current cluster.
 	$(KUBECTL) -n flux-system wait deployment --all --for=condition=Available --timeout=600s
 
 .PHONY: install-konfidence-crds
-install-konfidence-crds: hermit ## Install the konfidence CRDs from a sibling clone (KONFIDENCE_DIR).
-	$(HELM) upgrade --install konfidence $(KONFIDENCE_DIR)/charts/konfidence --set controller.install=false --set api.enabled=false --set crd.keep=false
+install-konfidence-crds: hermit ## Install the konfidence CRDs from a sibling clone (KONFIDENCE_DIR); no-op if they exist.
+	@if $(KUBECTL) get crd landscapes.konfidence.cloud >/dev/null 2>&1; then \
+		echo "konfidence CRDs already installed, skipping"; \
+	else \
+		$(HELM) upgrade --install konfidence $(KONFIDENCE_DIR)/charts/konfidence --namespace=konfidence-system --create-namespace --set controller.install=false --set api.enabled=false --set crd.keep=false; \
+	fi
 
 .PHONY: dev-install
 dev-install: hermit ## Install the chart with the locally built image (REGISTRY/TAG).
