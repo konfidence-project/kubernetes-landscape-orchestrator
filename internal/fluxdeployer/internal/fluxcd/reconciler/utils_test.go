@@ -23,6 +23,7 @@ var _ = Describe("util functions", func() {
 		HostName                  = "test.registry.com"
 		SecretName                = "test-registry-com"
 		LabelName                 = "konfidence.cloud/registry-skip-auth"
+		DeploymentNamespace       = "kden-l-demo"
 	)
 
 	var (
@@ -39,26 +40,43 @@ var _ = Describe("util functions", func() {
 
 	Context("When resolving secret ref", func() {
 		It("should successfully extract secret from ConfigMap", func() {
-			cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{Namespace: KonfidenceSystemNamespace, Name: ConfigMapName},
-				Data:       map[string]string{AuthConfigMapKey: HostName + ": " + MappedSecretName},
-			}).Build()
+			cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: KonfidenceSystemNamespace, Name: ConfigMapName},
+					Data:       map[string]string{AuthConfigMapKey: HostName + ": " + MappedSecretName},
+				},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: DeploymentNamespace, Name: MappedSecretName}},
+			).Build()
 
 			deployment := &konfidencev1alpha1.ArtifactDeployment{}
+			deployment.SetNamespace(DeploymentNamespace)
 			secretRef, err := getSecretRef(ctx, cl, deployment, RegistryUrl)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			gomega.Expect(secretRef.Name).To(gomega.Equal(MappedSecretName))
 		})
 	})
 	It("should use domain name as secret name if config map has no matching entry", func() {
-		cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Namespace: KonfidenceSystemNamespace, Name: ConfigMapName},
-		}).Build()
+		cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+			&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Namespace: KonfidenceSystemNamespace, Name: ConfigMapName},
+			},
+			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: DeploymentNamespace, Name: SecretName}},
+		).Build()
 
 		deployment := &konfidencev1alpha1.ArtifactDeployment{}
+		deployment.SetNamespace(DeploymentNamespace)
 		secretRef, err := getSecretRef(ctx, cl, deployment, RegistryUrl)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		gomega.Expect(secretRef.Name).To(gomega.Equal(SecretName))
+	})
+	It("should return nil secretRef if the pull secret does not exist (public registry)", func() {
+		cl := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		deployment := &konfidencev1alpha1.ArtifactDeployment{}
+		deployment.SetNamespace(DeploymentNamespace)
+		secretRef, err := getSecretRef(ctx, cl, deployment, RegistryUrl)
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+		gomega.Expect(secretRef).To(gomega.BeNil())
 	})
 	It("should return nil secretRef if auth is disabled in deployment", func() {
 		cl := fake.NewClientBuilder().WithScheme(scheme).Build()

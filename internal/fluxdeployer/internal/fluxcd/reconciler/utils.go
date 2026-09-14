@@ -13,6 +13,9 @@ import (
 	"github.com/konfidence-project/konfidence/pkg/url"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/config"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -78,6 +81,18 @@ func getSecretRef(
 	if secretName == "" {
 		// alternatively use the domain name as secret name
 		secretName = sanitize.ResourceName(domain)
+	}
+
+	// Reference the pull secret only if it exists in the deployment namespace.
+	// A public registry needs no secret; referencing a missing one makes Flux
+	// fail the fetch instead of falling back to anonymous access.
+	key := types.NamespacedName{Namespace: deployment.GetNamespace(), Name: secretName}
+	if err := k8sClient.Get(ctx, key, &corev1.Secret{}); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info(fmt.Sprintf("pull secret %q not found in namespace %q; pulling anonymously", secretName, deployment.GetNamespace()))
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get pull secret %q: %w", secretName, err)
 	}
 
 	return &fluxcd.LocalObjectReference{Name: secretName}, nil
