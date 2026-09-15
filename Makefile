@@ -187,13 +187,13 @@ uninstall-git-hooks: hermit ## Uninstall git hooks via prek.
 ##@ Local Development
 
 .PHONY: install-deps
-install-deps: ## Install Gateway API and Flux into the current cluster.
+install-deps: hermit ## Install Gateway API and Flux into the current cluster.
 	$(KUBECTL) apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/$(GATEWAY_API_VERSION)/standard-install.yaml
-	$(KUBECTL) apply -f https://github.com/fluxcd/flux2/releases/download/$(FLUX_VERSION)/install.yaml
+	$(KUBECTL) apply --server-side --force-conflicts -f https://github.com/fluxcd/flux2/releases/download/$(FLUX_VERSION)/install.yaml
 	$(KUBECTL) -n flux-system wait deployment --all --for=condition=Available --timeout=600s
 
 .PHONY: install-konfidence-crds
-install-konfidence-crds: hermit ## Install the konfidence CRDs from a sibling clone (KONFIDENCE_DIR); no-op if they exist.
+install-konfidence-crds: hermit ## Install the konfidence CRDs from a sibling clone (KONFIDENCE_DIR); no-op if they exist. Uninstalling that release removes the CRDs and every custom resource.
 	@if $(KUBECTL) get crd landscapes.konfidence.cloud >/dev/null 2>&1; then \
 		echo "konfidence CRDs already installed, skipping"; \
 	else \
