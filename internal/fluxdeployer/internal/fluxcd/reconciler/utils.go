@@ -77,19 +77,24 @@ func getSecretRef(
 		return nil, err
 	}
 
+	// A ConfigMap mapping is an explicit credential configuration; the domain-name
+	// fallback is only a convention.
+	configured := secretNameByConfigMap != ""
 	secretName := secretNameByConfigMap
 	if secretName == "" {
-		// alternatively use the domain name as secret name
 		secretName = sanitize.ResourceName(domain)
 	}
 
 	// Reference the pull secret only if it exists in the deployment namespace.
-	// A public registry needs no secret; referencing a missing one makes Flux
-	// fail the fetch instead of falling back to anonymous access.
+	// A missing configured secret is a configuration error; a missing fallback
+	// secret means no credentials are configured, so pull anonymously.
 	key := types.NamespacedName{Namespace: deployment.GetNamespace(), Name: secretName}
 	if err := k8sClient.Get(ctx, key, &corev1.Secret{}); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info(fmt.Sprintf("pull secret %q not found in namespace %q; pulling anonymously", secretName, deployment.GetNamespace()))
+			if configured {
+				return nil, fmt.Errorf("pull secret %q configured for registry %q but not found in namespace %q", secretName, domain, deployment.GetNamespace())
+			}
+			log.Info(fmt.Sprintf("no pull secret %q in namespace %q; pulling anonymously", secretName, deployment.GetNamespace()))
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get pull secret %q: %w", secretName, err)
