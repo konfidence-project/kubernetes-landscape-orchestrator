@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -25,6 +26,13 @@ import (
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 )
+
+// artifactDeploymentRequeueInterval periodically re-reconciles a managed
+// ArtifactDeployment so credential changes (a configured secret appearing, or
+// a ConfigMap mapping edit) are picked up even without a watch on those
+// resources. The reconcile itself only touches cached objects and the Flux CRs;
+// the actual registry pull is done by Flux.
+const artifactDeploymentRequeueInterval = time.Minute
 
 // KustomizeArtifactDeploymentReconciler reconciles ArtifactDeployment objects where manifest type is 'Kustomize'
 type KustomizeArtifactDeploymentReconciler struct {
@@ -138,7 +146,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 	}
 
 	log.Info("finish reconciling Kustomize artifact deployment")
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: artifactDeploymentRequeueInterval}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

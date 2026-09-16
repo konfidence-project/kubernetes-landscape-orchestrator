@@ -135,7 +135,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	log.Info("finish reconciling Helm artifact deployment")
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: artifactDeploymentRequeueInterval}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
