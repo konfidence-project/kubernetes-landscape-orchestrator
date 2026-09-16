@@ -11,7 +11,7 @@ require (
 	github.com/go-logr/logr v1.4.4
 	// TODO karsten: pin correct version after https://github.com/konfidence-project/konfidence/pull/151 is merged
 	github.com/konfidence-project/konfidence v0.0.0-20260827125828-5e9b6bef36b3
-	github.com/onsi/ginkgo/v2 v2.32.1
+	github.com/onsi/ginkgo/v2 v2.32.2
 	github.com/onsi/gomega v1.43.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
