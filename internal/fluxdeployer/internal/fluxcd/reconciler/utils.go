@@ -71,9 +71,7 @@ func getSecretRef(
 		return nil, nil
 	}
 
-	// An explicit mapping in the ConfigMap always sets the secretRef; Flux then
-	// owns validation and retry (reports and recovers whether the secret is
-	// missing now or deleted later).
+	// A configured secret is always referenced; Flux owns its validation and retry.
 	secretNameByConfigMap, err := secret.GetSecretByConfigMap(ctx, k8sClient, config.DefaultConfigMapName, domain)
 	if err != nil {
 		return nil, err
@@ -82,8 +80,7 @@ func getSecretRef(
 		return &fluxcd.LocalObjectReference{Name: secretNameByConfigMap}, nil
 	}
 
-	// No credentials configured: fall back to the host-name convention only if
-	// that secret exists, otherwise pull anonymously (e.g. public registries).
+	// Otherwise use the host-name secret if it exists, else pull anonymously.
 	secretName := sanitize.ResourceName(domain)
 	key := types.NamespacedName{Namespace: deployment.GetNamespace(), Name: secretName}
 	if err := k8sClient.Get(ctx, key, &corev1.Secret{}); err != nil {

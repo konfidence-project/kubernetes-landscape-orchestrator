@@ -27,11 +27,8 @@ import (
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 )
 
-// artifactDeploymentRequeueInterval periodically re-reconciles a managed
-// ArtifactDeployment so credential changes (a configured secret appearing, or
-// a ConfigMap mapping edit) are picked up even without a watch on those
-// resources. The reconcile itself only touches cached objects and the Flux CRs;
-// the actual registry pull is done by Flux.
+// artifactDeploymentRequeueInterval re-reconciles managed ArtifactDeployments to
+// pick up out-of-band changes (e.g. credentials) not covered by a watch.
 const artifactDeploymentRequeueInterval = time.Minute
 
 // KustomizeArtifactDeploymentReconciler reconciles ArtifactDeployment objects where manifest type is 'Kustomize'
