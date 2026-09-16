@@ -88,7 +88,7 @@ func getSecretRef(
 	key := types.NamespacedName{Namespace: deployment.GetNamespace(), Name: secretName}
 	if err := k8sClient.Get(ctx, key, &corev1.Secret{}); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info(fmt.Sprintf("no pull secret %q in namespace %q; pulling anonymously", secretName, deployment.GetNamespace()))
+			log.Info(fmt.Sprintf("no pull secret %q in namespace %q; leaving secretRef unset for anonymous access", secretName, deployment.GetNamespace()))
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get pull secret %q: %w", secretName, err)
