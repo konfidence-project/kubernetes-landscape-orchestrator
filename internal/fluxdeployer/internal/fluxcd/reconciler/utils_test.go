@@ -69,7 +69,7 @@ var _ = Describe("util functions", func() {
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		gomega.Expect(secretRef.Name).To(gomega.Equal(SecretName))
 	})
-	It("should return an error if a configured secret is missing", func() {
+	It("should return the configured secret ref even if the secret is missing", func() {
 		cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
 			&corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{Namespace: KonfidenceSystemNamespace, Name: ConfigMapName},
@@ -80,8 +80,9 @@ var _ = Describe("util functions", func() {
 		deployment := &konfidencev1alpha1.ArtifactDeployment{}
 		deployment.SetNamespace(DeploymentNamespace)
 		secretRef, err := getSecretRef(ctx, cl, deployment, RegistryUrl)
-		gomega.Expect(err).To(gomega.HaveOccurred())
-		gomega.Expect(secretRef).To(gomega.BeNil())
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+		gomega.Expect(secretRef).ToNot(gomega.BeNil())
+		gomega.Expect(secretRef.Name).To(gomega.Equal(MappedSecretName))
 	})
 	It("should return nil secretRef if no secret is configured (public registry)", func() {
 		cl := fake.NewClientBuilder().WithScheme(scheme).Build()

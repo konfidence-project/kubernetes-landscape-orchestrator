@@ -71,29 +71,23 @@ func getSecretRef(
 		return nil, nil
 	}
 
-	// first try to get via default configMap
+	// An explicit mapping in the ConfigMap always sets the secretRef; Flux then
+	// owns validation and retry (reports and recovers whether the secret is
+	// missing now or deleted later).
 	secretNameByConfigMap, err := secret.GetSecretByConfigMap(ctx, k8sClient, config.DefaultConfigMapName, domain)
 	if err != nil {
 		return nil, err
 	}
-
-	// A ConfigMap mapping is an explicit credential configuration; the domain-name
-	// fallback is only a convention.
-	configured := secretNameByConfigMap != ""
-	secretName := secretNameByConfigMap
-	if secretName == "" {
-		secretName = sanitize.ResourceName(domain)
+	if secretNameByConfigMap != "" {
+		return &fluxcd.LocalObjectReference{Name: secretNameByConfigMap}, nil
 	}
 
-	// Reference the pull secret only if it exists in the deployment namespace.
-	// A missing configured secret is a configuration error; a missing fallback
-	// secret means no credentials are configured, so pull anonymously.
+	// No credentials configured: fall back to the host-name convention only if
+	// that secret exists, otherwise pull anonymously (e.g. public registries).
+	secretName := sanitize.ResourceName(domain)
 	key := types.NamespacedName{Namespace: deployment.GetNamespace(), Name: secretName}
 	if err := k8sClient.Get(ctx, key, &corev1.Secret{}); err != nil {
 		if apierrors.IsNotFound(err) {
-			if configured {
-				return nil, fmt.Errorf("pull secret %q configured for registry %q but not found in namespace %q", secretName, domain, deployment.GetNamespace())
-			}
 			log.Info(fmt.Sprintf("no pull secret %q in namespace %q; pulling anonymously", secretName, deployment.GetNamespace()))
 			return nil, nil
 		}
