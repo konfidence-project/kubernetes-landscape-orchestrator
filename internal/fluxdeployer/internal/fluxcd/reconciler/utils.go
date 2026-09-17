@@ -13,6 +13,9 @@ import (
 	"github.com/konfidence-project/konfidence/pkg/url"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/config"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -68,16 +71,24 @@ func getSecretRef(
 		return nil, nil
 	}
 
-	// first try to get via default configMap
+	// A configured secret is always referenced; Flux owns its validation and retry.
 	secretNameByConfigMap, err := secret.GetSecretByConfigMap(ctx, k8sClient, config.DefaultConfigMapName, domain)
 	if err != nil {
 		return nil, err
 	}
+	if secretNameByConfigMap != "" {
+		return &fluxcd.LocalObjectReference{Name: secretNameByConfigMap}, nil
+	}
 
-	secretName := secretNameByConfigMap
-	if secretName == "" {
-		// alternatively use the domain name as secret name
-		secretName = sanitize.ResourceName(domain)
+	// Otherwise use the host-name secret if it exists, else pull anonymously.
+	secretName := sanitize.ResourceName(domain)
+	key := types.NamespacedName{Namespace: deployment.GetNamespace(), Name: secretName}
+	if err := k8sClient.Get(ctx, key, &corev1.Secret{}); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info(fmt.Sprintf("no pull secret %q in namespace %q; leaving secretRef unset for anonymous access", secretName, deployment.GetNamespace()))
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get pull secret %q: %w", secretName, err)
 	}
 
 	return &fluxcd.LocalObjectReference{Name: secretName}, nil

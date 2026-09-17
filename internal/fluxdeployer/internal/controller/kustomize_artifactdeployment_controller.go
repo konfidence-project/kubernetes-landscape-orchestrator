@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -25,6 +26,10 @@ import (
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd"
 )
+
+// artifactDeploymentRequeueInterval re-reconciles managed ArtifactDeployments to
+// pick up out-of-band changes (e.g. credentials) not covered by a watch.
+const artifactDeploymentRequeueInterval = time.Minute
 
 // KustomizeArtifactDeploymentReconciler reconciles ArtifactDeployment objects where manifest type is 'Kustomize'
 type KustomizeArtifactDeploymentReconciler struct {
@@ -138,7 +143,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 	}
 
 	log.Info("finish reconciling Kustomize artifact deployment")
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: artifactDeploymentRequeueInterval}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
