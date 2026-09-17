@@ -18,6 +18,25 @@ For comprehensive documentation, architecture details, and getting started guide
 
 For detailed setup instructions, see the [Installation Guide](https://konfidence.cloud/docs/deploy-operate/installation.html).
 
+## Local Development
+
+The operator needs a cluster with Gateway API, Flux and the Konfidence CRDs. With a kind
+cluster and local registry from the `konfidence` repository (`make dev-cluster` there, the
+registry listens on `localhost:5001`):
+
+```sh
+source ./bin/activate-hermit
+make install-deps
+make install-konfidence-crds
+REGISTRY=localhost:5001 make docker-build docker-push dev-install
+```
+
+Install the CRDs before the chart; the controllers fail to start without them.
+`install-konfidence-crds` takes them from a sibling clone at `../konfidence` (override with
+`KONFIDENCE_DIR`). `make run` runs the operator on your host against the current kubeconfig
+instead of deploying it. The full local setup across both repositories is described in the
+[local development guide](https://konfidence.cloud/docs/extend-customize/).
+
 ## Support, Feedback, Contributing
 
 This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/issues).
