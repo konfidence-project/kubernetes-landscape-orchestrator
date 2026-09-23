@@ -6,13 +6,13 @@ require (
 	github.com/distribution/reference v0.6.0
 	github.com/fluxcd/helm-controller/api v1.6.4
 	github.com/fluxcd/kustomize-controller/api v1.9.5
-	github.com/fluxcd/pkg/apis/meta v1.31.0
+	github.com/fluxcd/pkg/apis/meta v1.32.0
 	github.com/fluxcd/source-controller/api v1.9.5
 	github.com/go-logr/logr v1.4.4
 	// TODO karsten: pin correct version after https://github.com/konfidence-project/konfidence/pull/151 is merged
 	github.com/konfidence-project/konfidence v0.0.0-20260827125828-5e9b6bef36b3
-	github.com/onsi/ginkgo/v2 v2.32.2
-	github.com/onsi/gomega v1.43.0
+	github.com/onsi/ginkgo/v2 v2.33.0
+	github.com/onsi/gomega v1.43.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0
@@ -20,7 +20,7 @@ require (
 	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
 	k8s.io/client-go v0.37.0
-	sigs.k8s.io/controller-runtime v0.25.0
+	sigs.k8s.io/controller-runtime v0.25.1
 	sigs.k8s.io/gateway-api v1.6.2
 )
 
@@ -76,7 +76,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/mod v0.38.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
