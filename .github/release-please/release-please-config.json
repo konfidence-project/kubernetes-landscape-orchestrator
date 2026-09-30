@@ -57,6 +57,7 @@
   ],
   "packages": {
     ".": {
+      "release-as": "0.1.0-alpha.1",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         {
