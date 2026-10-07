@@ -4,10 +4,10 @@ go 1.26.5
 
 require (
 	github.com/distribution/reference v0.6.0
-	github.com/fluxcd/helm-controller/api v1.6.4
-	github.com/fluxcd/kustomize-controller/api v1.9.5
+	github.com/fluxcd/helm-controller/api v1.6.5
+	github.com/fluxcd/kustomize-controller/api v1.9.6
 	github.com/fluxcd/pkg/apis/meta v1.32.0
-	github.com/fluxcd/source-controller/api v1.9.5
+	github.com/fluxcd/source-controller/api v1.9.6
 	github.com/go-logr/logr v1.4.4
 	// TODO karsten: pin correct version after https://github.com/konfidence-project/konfidence/pull/151 is merged
 	github.com/konfidence-project/konfidence v0.0.0-20260827125828-5e9b6bef36b3
@@ -20,7 +20,7 @@ require (
 	k8s.io/api v0.37.1
 	k8s.io/apimachinery v0.37.1
 	k8s.io/client-go v0.37.1
-	sigs.k8s.io/controller-runtime v0.25.1
+	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/gateway-api v1.6.2
 )
 
