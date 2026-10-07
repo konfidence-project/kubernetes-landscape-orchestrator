@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-alpha.1](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/compare/0.1.0-alpha.1...0.1.0-alpha.1) (2026-10-07)
+
+
+### Maintenance
+
+* **deps:** bump the gomod-minor-patch group with 4 updates ([0dc3e9a](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/0dc3e9ad9f835d474c238124602df9f267a92ed3))
+
 ## 0.1.0-alpha.1 (2026-09-30)
 
 
