@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
@@ -15,6 +16,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// errDeploymentResultNotUnique marks two Services declaring the same (name, type); only a change to the deployed
+// manifests resolves it.
+var errDeploymentResultNotUnique = errors.New("deployment result (name, type) is not unique")
 
 type DeploymentResultStatusUpdater struct {
 	client.Client
@@ -87,8 +92,8 @@ func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceLis
 
 		if first, dup := seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService]; dup {
 			return nil, fmt.Errorf(
-				"services %q and %q both declare deployment result (name=%q, type=%q); the pair must be unique",
-				first, service.Name, resultName, deploymentresult.TypeHTTPK8sService)
+				"%w: services %q and %q both declare (name=%q, type=%q)",
+				errDeploymentResultNotUnique, first, service.Name, resultName, deploymentresult.TypeHTTPK8sService)
 		}
 		seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService] = service.Name
 

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -86,7 +87,8 @@ func TestMapServicesToDeploymentResult_RejectsDuplicateNameType(t *testing.T) {
 		svc("candidates-b2", "shop", map[string]string{annotationDeploymentResult: candidatesResult}, corev1.ServicePort{Port: 80}),
 	}}
 
-	if _, err := u.mapServicesToDeploymentResult(list); err == nil {
-		t.Fatal("expected error for duplicate (name, type), got nil")
+	_, err := u.mapServicesToDeploymentResult(list)
+	if !errors.Is(err, errDeploymentResultNotUnique) {
+		t.Fatalf("expected errDeploymentResultNotUnique for duplicate (name, type), got %v", err)
 	}
 }
