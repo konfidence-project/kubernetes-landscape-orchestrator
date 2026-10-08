@@ -359,6 +359,17 @@ var _ = Describe("deploymentTargetSecretsStall", func() {
 		Expect(cause.message).To(ContainSubstring(`secret "remote-kubeconfig" not found`))
 	})
 
+	It("does not stall a deployment that is already Ready", func() {
+		createTarget(waitingTarget(namespace, class, deploymentTargetSecretsDeadline+time.Minute))
+		deployment.Status.Conditions = []metav1.Condition{
+			condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionTrue, "Ready"),
+		}
+
+		cause, err := deploymentTargetSecretsStall(ctx, k8sClient, deployment, time.Now())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cause).To(BeNil())
+	})
+
 	It("waits until the deadline has passed", func() {
 		createTarget(waitingTarget(namespace, class, time.Minute))
 
