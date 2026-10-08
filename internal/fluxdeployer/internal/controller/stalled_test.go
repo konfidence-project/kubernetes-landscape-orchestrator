@@ -243,6 +243,44 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 		})
 	})
 
+	It("pairs a duplicate deployment result stall with Ready=False from the real status updaters", func() {
+		d := newDeployment(internal.DeploymentClassHelm, ocmResourceTypeHelmChart, rawHelmOCIContent())
+		d.Status.Conditions = []metav1.Condition{
+			condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+			condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionTrue, "Deployed"),
+			condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionTrue, "Healthy"),
+			condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionTrue, "Created"),
+			condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionTrue, "Ready"),
+		}
+		duplicate := func(name string) *corev1.Service {
+			return &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: stalledNamespace,
+				Labels:      map[string]string{labelArtifactDeployment: stalledDeploymentName},
+				Annotations: map[string]string{annotationDeploymentResult: "web"},
+			}}
+		}
+		cl := newClient(internal.DeploymentClassHelm, d, duplicate("web-a"), duplicate("web-b"))
+		r := helmReconciler(cl)
+		r.DeploymentResultStatusUpdater = &DeploymentResultStatusUpdater{Client: cl}
+		r.ReadyConditionStatusUpdater = &ReadyConditionStatusUpdater{}
+
+		key := client.ObjectKeyFromObject(d)
+		_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
+		Expect(err).NotTo(HaveOccurred())
+
+		got := &konfidencev1alpha1.ArtifactDeployment{}
+		Expect(cl.Get(ctx, key, got)).To(Succeed())
+		stalled := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.StalledCondition)
+		Expect(stalled).NotTo(BeNil())
+		Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
+		Expect(stalled.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique))
+		Expect(meta.IsStatusConditionFalse(got.Status.Conditions, konfidencev1alpha1.DeploymentResultCreatedCondition)).To(BeTrue())
+		ready := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
+		Expect(ready).NotTo(BeNil())
+		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+		Expect(ready.Reason).To(Equal(reasonDeploymentResultInvalid))
+	})
+
 	Context("Kustomize", func() {
 		kustomizeDeployment := func() *konfidencev1alpha1.ArtifactDeployment {
 			return newDeployment(internal.DeploymentClassKustomize, ocmResourceTypeKustomize, rawKustomizeOCIContent())
