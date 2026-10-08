@@ -15,6 +15,7 @@ import (
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	controllermocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller/mocks"
 	fluxmocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/mocks"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,6 +28,7 @@ import (
 func newTestScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	Expect(konfidencev1alpha1.AddToScheme(s)).To(Succeed())
+	Expect(corev1.AddToScheme(s)).To(Succeed())
 	Expect(sourcev1.AddToScheme(s)).To(Succeed())
 	Expect(helmv2.AddToScheme(s)).To(Succeed())
 	Expect(kustomizev1.AddToScheme(s)).To(Succeed())
