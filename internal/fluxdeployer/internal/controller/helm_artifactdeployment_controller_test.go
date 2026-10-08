@@ -8,6 +8,10 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 
+	helmv2 "github.com/fluxcd/helm-controller/api/v2"
+	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	controllermocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller/mocks"
 	fluxmocks "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/mocks"
@@ -23,6 +27,9 @@ import (
 func newTestScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	Expect(konfidencev1alpha1.AddToScheme(s)).To(Succeed())
+	Expect(sourcev1.AddToScheme(s)).To(Succeed())
+	Expect(helmv2.AddToScheme(s)).To(Succeed())
+	Expect(kustomizev1.AddToScheme(s)).To(Succeed())
 	return s
 }
 

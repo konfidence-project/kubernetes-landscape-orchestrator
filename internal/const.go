@@ -11,6 +11,11 @@ const (
 
 	DeploymentClassHelm      = "helm.konfidence.cloud"
 	DeploymentClassKustomize = "kustomize.konfidence.cloud"
+
+	// DeploymentTargetReasonSecretNotFound indicates that the referenced Secret does not exist.
+	DeploymentTargetReasonSecretNotFound = "SecretNotFound"
+	// DeploymentTargetReasonInvalidSecret indicates that the referenced Secret has no recognized kubeconfig key.
+	DeploymentTargetReasonInvalidSecret = "InvalidSecret"
 )
 
 type knownClasses map[string]struct{}
