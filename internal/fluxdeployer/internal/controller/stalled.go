@@ -55,10 +55,15 @@ func setStalledCondition(deployment *konfidencev1alpha1.ArtifactDeployment, caus
 
 // deploymentTargetSecretsStall reports a stall when no DeploymentTarget for the deployment's class is ready and one
 // has been waiting for its kubeconfig Secret for longer than the deadline. The clock is the lastTransitionTime of
-// the target's Ready=False condition, which only moves when Ready flips.
+// the target's Ready=False condition, which only moves when Ready flips. A Ready deployment keeps serving without
+// the Secret and has nothing left to progress, so only the DeploymentTarget reports the loss.
 func deploymentTargetSecretsStall(
 	ctx context.Context, c client.Reader, deployment *konfidencev1alpha1.ArtifactDeployment, now time.Time,
 ) (*stallCause, error) {
+	if meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition) {
+		return nil, nil
+	}
+
 	targets := &konfidencev1alpha1.DeploymentTargetList{}
 	if err := c.List(ctx, targets, client.InNamespace(deployment.Namespace)); err != nil {
 		return nil, fmt.Errorf("list DeploymentTargets in namespace %q: %w", deployment.Namespace, err)
