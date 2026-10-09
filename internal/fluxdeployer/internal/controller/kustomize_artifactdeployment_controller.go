@@ -152,7 +152,6 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 	return ctrl.Result{RequeueAfter: artifactDeploymentRequeueInterval}, nil
 }
 
-// stallCause checks the blocking conditions in pipeline order: target credentials, source, Kustomization, results.
 func (r *KustomizeArtifactDeploymentReconciler) stallCause(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resultsErr error,
 ) (*stallCause, error) {
