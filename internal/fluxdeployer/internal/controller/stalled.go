@@ -95,6 +95,18 @@ func deploymentTargetSecretsStall(
 	}, nil
 }
 
+// resourceStall reports a stall when the artifact's deployable OCM resource is missing or cannot be mapped. The
+// ArtifactDeployment spec is immutable, so retrying cannot fix it.
+func resourceStall(resourceErr error) *stallCause {
+	if resourceErr == nil {
+		return nil
+	}
+	return &stallCause{
+		reason:  konfidencev1alpha1.ArtifactDeploymentStalledReasonResourceInvalid,
+		message: resourceErr.Error(),
+	}
+}
+
 type fluxObject interface {
 	client.Object
 	GetConditions() []metav1.Condition
@@ -111,7 +123,7 @@ func fluxStall(ctx context.Context, c client.Reader, kind string, key client.Obj
 		return nil, nil
 	}
 	return &stallCause{
-		reason:  stalled.Reason,
+		reason:  konfidencev1alpha1.StalledReasonStalled,
 		message: fmt.Sprintf("%s %s is stalled: %s", kind, key.Name, stalled.Message),
 	}, nil
 }

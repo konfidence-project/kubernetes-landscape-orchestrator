@@ -184,7 +184,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 
 			stalled := reconcileStalled(helmReconciler(cl), cl)
 			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
-			Expect(stalled.Reason).To(Equal("RetriesExceeded"))
+			Expect(stalled.Reason).To(Equal("Stalled"))
 			Expect(stalled.Message).To(Equal("HelmRelease app is stalled: flux gave up"))
 		})
 
@@ -205,7 +205,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 
 			stalled := reconcileStalled(helmReconciler(cl), cl)
 			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
-			Expect(stalled.Reason).To(Equal("InvalidChartReference"))
+			Expect(stalled.Reason).To(Equal("Stalled"))
 		})
 
 		It("reports the source stage before the release stage", func() {
@@ -216,7 +216,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			cl := newClient(internal.DeploymentClassHelm, helmDeployment(), repository, release)
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
 
-			Expect(reconcileStalled(helmReconciler(cl), cl).Reason).To(Equal("URLInvalid"))
+			Expect(reconcileStalled(helmReconciler(cl), cl).Reason).To(Equal("Stalled"))
 		})
 
 		It("reports missing DeploymentTarget secrets before any Flux stall", func() {
@@ -229,6 +229,46 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			stalled := reconcileStalled(helmReconciler(cl), cl)
 			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
 			Expect(stalled.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentTargetSecretsMissing))
+		})
+
+		It("reports an artifact without a Helm chart resource", func() {
+			d := newDeployment(internal.DeploymentClassHelm, "ociImage", rawHelmOCIContent())
+			cl := newClient(internal.DeploymentClassHelm, d)
+			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
+
+			stalled := reconcileStalled(helmReconciler(cl), cl)
+			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
+			Expect(stalled.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonResourceInvalid))
+			Expect(stalled.Message).To(ContainSubstring("no OCM resource of type"))
+		})
+
+		It("reports a Helm chart resource that cannot be mapped", func() {
+			d := newDeployment(internal.DeploymentClassHelm, ocmResourceTypeHelmChart, runtime.RawExtension{Raw: []byte(`{}`)})
+			cl := newClient(internal.DeploymentClassHelm, d)
+			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
+
+			stalled := reconcileStalled(helmReconciler(cl), cl)
+			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
+			Expect(stalled.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonResourceInvalid))
+			Expect(stalled.Message).To(ContainSubstring("failed to map OCM resource"))
+		})
+
+		It("reports more than one Helm chart resource", func() {
+			d := helmDeployment()
+			d.Spec.Component.Resources = append(d.Spec.Component.Resources, d.Spec.Component.Resources[0])
+			d.Spec.Component.Resources[1].Name = "b"
+			cl := newClient(internal.DeploymentClassHelm, d)
+
+			key := client.ObjectKeyFromObject(d)
+			_, err := helmReconciler(cl).Reconcile(ctx, ctrl.Request{NamespacedName: key})
+			Expect(err).To(HaveOccurred())
+
+			got := &konfidencev1alpha1.ArtifactDeployment{}
+			Expect(cl.Get(ctx, key, got)).To(Succeed())
+			stalled := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.StalledCondition)
+			Expect(stalled).NotTo(BeNil())
+			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
+			Expect(stalled.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonResourceInvalid))
 		})
 
 		It("reports deployment results that share a (name, type)", func() {
@@ -306,7 +346,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 		stalled := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.StalledCondition)
 		Expect(stalled).NotTo(BeNil())
 		Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
-		Expect(stalled.Reason).To(Equal("URLInvalid"))
+		Expect(stalled.Reason).To(Equal("Stalled"))
 	})
 
 	Context("Kustomize", func() {
@@ -322,7 +362,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 
 			stalled := reconcileStalled(kustomizeReconciler(cl), cl)
 			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
-			Expect(stalled.Reason).To(Equal("AccessDenied"))
+			Expect(stalled.Reason).To(Equal("Stalled"))
 			Expect(stalled.Message).To(Equal("Kustomization app is stalled: flux gave up"))
 		})
 
@@ -334,7 +374,17 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			cl := newClient(internal.DeploymentClassKustomize, kustomizeDeployment(), repository, kustomization)
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
 
-			Expect(reconcileStalled(kustomizeReconciler(cl), cl).Reason).To(Equal("URLInvalid"))
+			Expect(reconcileStalled(kustomizeReconciler(cl), cl).Reason).To(Equal("Stalled"))
+		})
+
+		It("reports a Kustomize resource that cannot be mapped", func() {
+			d := newDeployment(internal.DeploymentClassKustomize, ocmResourceTypeKustomize, runtime.RawExtension{Raw: []byte(`{}`)})
+			cl := newClient(internal.DeploymentClassKustomize, d)
+			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
+
+			stalled := reconcileStalled(kustomizeReconciler(cl), cl)
+			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
+			Expect(stalled.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonResourceInvalid))
 		})
 
 		It("writes Stalled=False when nothing blocks", func() {
