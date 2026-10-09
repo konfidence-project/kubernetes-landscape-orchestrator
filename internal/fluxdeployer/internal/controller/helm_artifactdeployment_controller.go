@@ -145,7 +145,6 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 	return ctrl.Result{RequeueAfter: artifactDeploymentRequeueInterval}, nil
 }
 
-// stallCause checks the blocking conditions in pipeline order: target credentials, chart source, release, results.
 func (r *HelmArtifactDeploymentReconciler) stallCause(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resultsErr error,
 ) (*stallCause, error) {

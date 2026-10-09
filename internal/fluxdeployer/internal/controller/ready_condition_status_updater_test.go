@@ -32,6 +32,18 @@ func TestReadyConditionStatusUpdater(t *testing.T) {
 			wantReason: konfidencev1alpha1.ArtifactDeploymentReadyCondition,
 		},
 		{
+			name: "a stall does not change Ready",
+			conditions: []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionTrue, "Deployed"),
+				condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionTrue, "Healthy"),
+				condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionTrue, "Created"),
+				condition(konfidencev1alpha1.StalledCondition, metav1.ConditionTrue, "URLInvalid"),
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: konfidencev1alpha1.ArtifactDeploymentReadyCondition,
+		},
+		{
 			name:       "nothing reported yet",
 			wantStatus: metav1.ConditionFalse,
 			wantReason: reasonPending,

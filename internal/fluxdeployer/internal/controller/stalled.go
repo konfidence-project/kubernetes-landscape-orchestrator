@@ -18,7 +18,6 @@ import (
 // ArtifactDeployments it serves are reported stalled. Secrets are often synced in asynchronously.
 const deploymentTargetSecretsDeadline = 5 * time.Minute
 
-// stallCause is a blocking condition the ArtifactDeployment cannot get past without a fix.
 type stallCause struct {
 	reason  string
 	message string
@@ -26,7 +25,6 @@ type stallCause struct {
 
 type stallCheck func() (*stallCause, error)
 
-// firstStall runs the checks in pipeline order and returns the first cause found.
 func firstStall(checks ...stallCheck) (*stallCause, error) {
 	for _, check := range checks {
 		if cause, err := check(); cause != nil || err != nil {
@@ -36,7 +34,6 @@ func firstStall(checks ...stallCheck) (*stallCause, error) {
 	return nil, nil
 }
 
-// setStalledCondition writes Stalled=True for a cause, or Stalled=False when there is none. Ready is left alone.
 func setStalledCondition(deployment *konfidencev1alpha1.ArtifactDeployment, cause *stallCause) {
 	condition := metav1.Condition{
 		Type:               konfidencev1alpha1.StalledCondition,
@@ -53,17 +50,11 @@ func setStalledCondition(deployment *konfidencev1alpha1.ArtifactDeployment, caus
 	meta.SetStatusCondition(&deployment.Status.Conditions, condition)
 }
 
-// deploymentTargetSecretsStall reports a stall when no DeploymentTarget for the deployment's class is ready and one
-// has been waiting for its kubeconfig Secret for longer than the deadline. The clock is the lastTransitionTime of
-// the target's Ready=False condition, which only moves when Ready flips. A Ready deployment keeps serving without
-// the Secret and has nothing left to progress, so only the DeploymentTarget reports the loss.
+// deploymentTargetSecretsStall times the wait from the target's Ready=False lastTransitionTime, which only moves
+// when Ready flips.
 func deploymentTargetSecretsStall(
 	ctx context.Context, c client.Reader, deployment *konfidencev1alpha1.ArtifactDeployment, now time.Time,
 ) (*stallCause, error) {
-	if meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition) {
-		return nil, nil
-	}
-
 	targets := &konfidencev1alpha1.DeploymentTargetList{}
 	if err := c.List(ctx, targets, client.InNamespace(deployment.Namespace)); err != nil {
 		return nil, fmt.Errorf("list DeploymentTargets in namespace %q: %w", deployment.Namespace, err)
@@ -125,7 +116,6 @@ func fluxStall(ctx context.Context, c client.Reader, kind string, key client.Obj
 	}, nil
 }
 
-// deploymentResultStall reports a stall when the deployment result update failed on a duplicate (name, type).
 func deploymentResultStall(resultsErr error) *stallCause {
 	if !errors.Is(resultsErr, errDeploymentResultNotUnique) {
 		return nil

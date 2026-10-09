@@ -47,7 +47,7 @@ func fluxMeta(name string, generation int64) metav1.ObjectMeta {
 	return metav1.ObjectMeta{Name: name, Namespace: stalledNamespace, Generation: generation}
 }
 
-// waitingTarget is a DeploymentTarget whose Ready=False SecretNotFound condition is waitingFor old.
+// waitingTarget is a DeploymentTarget that has lacked its kubeconfig Secret for waitingFor.
 func waitingTarget(namespace, class string, waitingFor time.Duration) *konfidencev1alpha1.DeploymentTarget {
 	return &konfidencev1alpha1.DeploymentTarget{
 		ObjectMeta: metav1.ObjectMeta{Name: "remote", Namespace: namespace, Generation: 1},
@@ -281,6 +281,34 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 		Expect(ready.Reason).To(Equal(reasonDeploymentResultInvalid))
 	})
 
+	It("reports a Flux stall on a Ready deployment and keeps it Ready", func() {
+		d := newDeployment(internal.DeploymentClassHelm, ocmResourceTypeHelmChart, rawHelmOCIContent())
+		d.Status.Conditions = []metav1.Condition{
+			condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+			condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionTrue, "Deployed"),
+			condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionTrue, "Healthy"),
+			condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionTrue, "Created"),
+		}
+		repository := &sourcev1.HelmRepository{ObjectMeta: fluxMeta(stalledDeploymentName, 1)}
+		repository.Status.Conditions = fluxStalledConditions("URLInvalid", 1)
+		cl := newClient(internal.DeploymentClassHelm, d, repository)
+		r := helmReconciler(cl)
+		r.ReadyConditionStatusUpdater = &ReadyConditionStatusUpdater{}
+		drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
+
+		key := client.ObjectKeyFromObject(d)
+		_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
+		Expect(err).NotTo(HaveOccurred())
+
+		got := &konfidencev1alpha1.ArtifactDeployment{}
+		Expect(cl.Get(ctx, key, got)).To(Succeed())
+		Expect(meta.IsStatusConditionTrue(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)).To(BeTrue())
+		stalled := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.StalledCondition)
+		Expect(stalled).NotTo(BeNil())
+		Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
+		Expect(stalled.Reason).To(Equal("URLInvalid"))
+	})
+
 	Context("Kustomize", func() {
 		kustomizeDeployment := func() *konfidencev1alpha1.ArtifactDeployment {
 			return newDeployment(internal.DeploymentClassKustomize, ocmResourceTypeKustomize, rawKustomizeOCIContent())
@@ -359,7 +387,7 @@ var _ = Describe("deploymentTargetSecretsStall", func() {
 		Expect(cause.message).To(ContainSubstring(`secret "remote-kubeconfig" not found`))
 	})
 
-	It("does not stall a deployment that is already Ready", func() {
+	It("reports a Ready deployment too, since it cannot roll out anything new", func() {
 		createTarget(waitingTarget(namespace, class, deploymentTargetSecretsDeadline+time.Minute))
 		deployment.Status.Conditions = []metav1.Condition{
 			condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionTrue, "Ready"),
@@ -367,7 +395,7 @@ var _ = Describe("deploymentTargetSecretsStall", func() {
 
 		cause, err := deploymentTargetSecretsStall(ctx, k8sClient, deployment, time.Now())
 		Expect(err).NotTo(HaveOccurred())
-		Expect(cause).To(BeNil())
+		Expect(cause).NotTo(BeNil())
 	})
 
 	It("waits until the deadline has passed", func() {
