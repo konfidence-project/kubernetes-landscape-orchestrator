@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -84,6 +85,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 
 	if len(matches) > 1 {
 		msg := fmt.Sprintf("expected exactly one OCM resource of type %q, found %d; refusing to reconcile", ocmResourceTypeKustomize, len(matches))
+		setStalledCondition(deployment, resourceStall(errors.New(msg)))
 		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
 			Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
 			Status:             metav1.ConditionFalse,
@@ -102,12 +104,17 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 		return ctrl.Result{}, fmt.Errorf("%s", msg)
 	}
 
+	var resourceErr error
+	if len(matches) == 0 {
+		resourceErr = fmt.Errorf("no OCM resource of type %q in the artifact", ocmResourceTypeKustomize)
+	}
+
 	if len(matches) == 1 {
 		ocmResource := matches[0]
 		kustomizeResource, err := fluxcd.Map(ocmResource).ToKustomize()
 		if err != nil {
-			log.Error(err, fmt.Sprintf("failed to map OCM resource %q to KustomizeResource", ocmResource.Name),
-				"ArtifactDeployment", deployment)
+			resourceErr = fmt.Errorf("failed to map OCM resource %q to KustomizeResource: %w", ocmResource.Name, err)
+			log.Error(resourceErr, "invalid artifact resource", "ArtifactDeployment", deployment)
 		} else {
 			if isReady, err := r.OCIRepositoryReconciler.Reconcile(ctx, deployment, kustomizeResource); err != nil {
 				log.Error(err, fmt.Sprintf("failed to reconcile OCIRepository of OCM resource '%s'", ocmResource.Name),
@@ -135,7 +142,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
 	}
 
-	if cause, err := r.stallCause(ctx, deployment, resultsErr); err != nil {
+	if cause, err := r.stallCause(ctx, deployment, resourceErr, resultsErr); err != nil {
 		log.Error(err, "failed to evaluate Stalled condition", "ArtifactDeployment", deployment)
 	} else {
 		setStalledCondition(deployment, cause)
@@ -153,10 +160,11 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 }
 
 func (r *KustomizeArtifactDeploymentReconciler) stallCause(
-	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resultsErr error,
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resourceErr, resultsErr error,
 ) (*stallCause, error) {
 	key := client.ObjectKeyFromObject(deployment)
 	return firstStall(
+		func() (*stallCause, error) { return resourceStall(resourceErr), nil },
 		func() (*stallCause, error) {
 			return deploymentTargetSecretsStall(ctx, r.Client, deployment, time.Now())
 		},
