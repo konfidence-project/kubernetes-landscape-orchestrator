@@ -35,9 +35,9 @@ const (
 	// DeploymentTargetReasonUnsupportedRefKind indicates that the connection reference kind is not supported.
 	DeploymentTargetReasonUnsupportedRefKind = "UnsupportedRefKind"
 	// DeploymentTargetReasonSecretNotFound indicates that the referenced Secret does not exist.
-	DeploymentTargetReasonSecretNotFound = "SecretNotFound"
+	DeploymentTargetReasonSecretNotFound = internal.DeploymentTargetReasonSecretNotFound
 	// DeploymentTargetReasonInvalidSecret indicates that the referenced Secret has no recognized kubeconfig key.
-	DeploymentTargetReasonInvalidSecret = "InvalidSecret"
+	DeploymentTargetReasonInvalidSecret = internal.DeploymentTargetReasonInvalidSecret
 	// DeploymentTargetReasonInvalidKubeconfig indicates that the referenced Secret contains an invalid kubeconfig.
 	DeploymentTargetReasonInvalidKubeconfig = "InvalidKubeconfig"
 	// DeploymentTargetReasonAccepted indicates that all validation checks passed and the DeploymentTarget is ready for use.
