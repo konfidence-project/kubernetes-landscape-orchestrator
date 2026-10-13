@@ -147,6 +147,7 @@ rules:
   resources:
   - deploymentclasses
   - deploymenttargets
+  - stageversions
   - vectorassignments
   verbs:
   - get
@@ -155,6 +156,7 @@ rules:
 - apiGroups:
   - konfidence.cloud
   resources:
+  - stages
   - vectordata
   verbs:
   - get

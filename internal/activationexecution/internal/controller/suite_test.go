@@ -86,10 +86,24 @@ var _ = BeforeSuite(func() {
 
 	reconcileScheme = k8sManager.GetScheme()
 
+	landscape := &LandscapeClientProvider{
+		Local:  k8sManager.GetClient(),
+		Reader: k8sManager.GetAPIReader(),
+		Scheme: k8sManager.GetScheme(),
+	}
+
 	err = (&ActivationTaskExecutionReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorder(ActivationTaskExecutionControllerName),
+		Client:    k8sManager.GetClient(),
+		Scheme:    k8sManager.GetScheme(),
+		Recorder:  k8sManager.GetEventRecorder(ActivationTaskExecutionControllerName),
+		Landscape: landscape,
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	err = (&StageRouteCleanupReconciler{
+		Client:    k8sManager.GetClient(),
+		Scheme:    k8sManager.GetScheme(),
+		Landscape: landscape,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
