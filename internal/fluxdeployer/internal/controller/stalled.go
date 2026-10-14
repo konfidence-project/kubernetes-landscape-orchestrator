@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -128,12 +127,16 @@ func fluxStall(ctx context.Context, c client.Reader, kind string, key client.Obj
 	}, nil
 }
 
-func deploymentResultStall(resultsErr error) *stallCause {
-	if !errors.Is(resultsErr, errDeploymentResultNotUnique) {
+// deploymentResultStall reads DeploymentResultCreated rather than this pass's error. The results check is skipped
+// while ArtifactDeployed is not True, which kustomize-controller causes at the start of every reconcile.
+func deploymentResultStall(deployment *konfidencev1alpha1.ArtifactDeployment) *stallCause {
+	created := meta.FindStatusCondition(deployment.Status.Conditions, konfidencev1alpha1.DeploymentResultCreatedCondition)
+	if created == nil || created.Status != metav1.ConditionFalse ||
+		created.Reason != konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique {
 		return nil
 	}
 	return &stallCause{
 		reason:  konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique,
-		message: resultsErr.Error(),
+		message: created.Message,
 	}
 }

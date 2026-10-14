@@ -44,10 +44,14 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 	deploymentResultServices, err := d.mapServicesToDeploymentResult(serviceList)
 	if err != nil {
 		deployment.Status.DeploymentResults = nil
+		reason := reasonDeploymentResultInvalid
+		if errors.Is(err, errDeploymentResultNotUnique) {
+			reason = konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique
+		}
 		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
 			Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
 			Status:             metav1.ConditionFalse,
-			Reason:             reasonDeploymentResultInvalid,
+			Reason:             reason,
 			Message:            err.Error(),
 			ObservedGeneration: deployment.Generation,
 		})

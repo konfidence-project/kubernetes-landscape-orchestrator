@@ -135,7 +135,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
 	}
 
-	if cause, err := r.stallCause(ctx, deployment, resourceErr, resultsErr); err != nil {
+	if cause, err := r.stallCause(ctx, deployment, resourceErr); err != nil {
 		log.Error(err, "failed to evaluate Stalled condition", "ArtifactDeployment", deployment)
 	} else {
 		setStalledCondition(deployment, cause)
@@ -153,7 +153,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 }
 
 func (r *HelmArtifactDeploymentReconciler) stallCause(
-	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resourceErr, resultsErr error,
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resourceErr error,
 ) (*stallCause, error) {
 	key := client.ObjectKeyFromObject(deployment)
 	release := helmv2.HelmRelease{ObjectMeta: metav1.ObjectMeta{Namespace: key.Namespace, Name: key.Name}}
@@ -172,7 +172,7 @@ func (r *HelmArtifactDeploymentReconciler) stallCause(
 		func() (*stallCause, error) {
 			return fluxStall(ctx, r.Client, helmv2.HelmReleaseKind, key, &helmv2.HelmRelease{})
 		},
-		func() (*stallCause, error) { return deploymentResultStall(resultsErr), nil },
+		func() (*stallCause, error) { return deploymentResultStall(deployment), nil },
 	)
 }
 

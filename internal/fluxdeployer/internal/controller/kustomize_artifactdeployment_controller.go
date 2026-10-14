@@ -142,7 +142,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
 	}
 
-	if cause, err := r.stallCause(ctx, deployment, resourceErr, resultsErr); err != nil {
+	if cause, err := r.stallCause(ctx, deployment, resourceErr); err != nil {
 		log.Error(err, "failed to evaluate Stalled condition", "ArtifactDeployment", deployment)
 	} else {
 		setStalledCondition(deployment, cause)
@@ -160,7 +160,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 }
 
 func (r *KustomizeArtifactDeploymentReconciler) stallCause(
-	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resourceErr, resultsErr error,
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resourceErr error,
 ) (*stallCause, error) {
 	key := client.ObjectKeyFromObject(deployment)
 	return firstStall(
@@ -174,7 +174,7 @@ func (r *KustomizeArtifactDeploymentReconciler) stallCause(
 		func() (*stallCause, error) {
 			return fluxStall(ctx, r.Client, kustomizev1.KustomizationKind, key, &kustomizev1.Kustomization{})
 		},
-		func() (*stallCause, error) { return deploymentResultStall(resultsErr), nil },
+		func() (*stallCause, error) { return deploymentResultStall(deployment), nil },
 	)
 }
 

@@ -272,9 +272,16 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 		})
 
 		It("reports deployment results that share a (name, type)", func() {
-			cl := newClient(internal.DeploymentClassHelm, helmDeployment())
-			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).
-				Return(fmt.Errorf("%w: services %q and %q both declare it", errDeploymentResultNotUnique, "a", "b"))
+			d := helmDeployment()
+			d.Status.Conditions = []metav1.Condition{{
+				Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
+				Status:             metav1.ConditionFalse,
+				Reason:             konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique,
+				Message:            `services "a" and "b" both declare it`,
+				LastTransitionTime: metav1.Now(),
+			}}
+			cl := newClient(internal.DeploymentClassHelm, d)
+			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
 
 			stalled := reconcileStalled(helmReconciler(cl), cl)
 			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
@@ -320,7 +327,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 		ready := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
 		Expect(ready).NotTo(BeNil())
 		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
-		Expect(ready.Reason).To(Equal(reasonDeploymentResultInvalid))
+		Expect(ready.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique))
 	})
 
 	It("reports a Flux stall on a Ready deployment and keeps it Ready", func() {
@@ -349,6 +356,30 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 		Expect(stalled).NotTo(BeNil())
 		Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
 		Expect(stalled.Reason).To(Equal("Stalled"))
+	})
+
+	It("keeps a duplicate deployment result stall while Flux reports the deployment in progress", func() {
+		d := newDeployment(internal.DeploymentClassKustomize, ocmResourceTypeKustomize, rawKustomizeOCIContent())
+		d.Status.Conditions = []metav1.Condition{
+			condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionUnknown, "Progressing"),
+			condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionFalse,
+				konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique),
+			{
+				Type: konfidencev1alpha1.StalledCondition, Status: metav1.ConditionTrue, ObservedGeneration: 3,
+				Reason: konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique, LastTransitionTime: metav1.Now(),
+			},
+		}
+		cl := newClient(internal.DeploymentClassKustomize, d)
+		r := kustomizeReconciler(cl)
+		r.DeploymentResultStatusUpdater = &DeploymentResultStatusUpdater{Client: cl}
+
+		key := client.ObjectKeyFromObject(d)
+		_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
+		Expect(err).NotTo(HaveOccurred())
+
+		got := &konfidencev1alpha1.ArtifactDeployment{}
+		Expect(cl.Get(ctx, key, got)).To(Succeed())
+		Expect(meta.IsStatusConditionTrue(got.Status.Conditions, konfidencev1alpha1.StalledCondition)).To(BeTrue())
 	})
 
 	Context("Kustomize", func() {
