@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
@@ -52,7 +54,7 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 			Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
 			Status:             metav1.ConditionFalse,
 			Reason:             reason,
-			Message:            err.Error(),
+			Message:            truncateMessage(err.Error()),
 			ObservedGeneration: deployment.Generation,
 		})
 		return err
@@ -98,8 +100,14 @@ func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceLis
 	deploymentResultServices := make([]konfidencev1alpha1.DeploymentResult, 0, len(serviceList.Items))
 	seen := make(map[string]string, len(serviceList.Items))
 
+	// sorted so a duplicate is always reported with the same pair of Services
+	services := make([]*corev1.Service, 0, len(serviceList.Items))
 	for i := range serviceList.Items {
-		service := &serviceList.Items[i]
+		services = append(services, &serviceList.Items[i])
+	}
+	slices.SortFunc(services, func(a, b *corev1.Service) int { return strings.Compare(a.Name, b.Name) })
+
+	for _, service := range services {
 		resultName, ok := service.Annotations[annotationDeploymentResult]
 		if !ok {
 			continue

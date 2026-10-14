@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -83,12 +84,15 @@ func TestMapServicesToDeploymentResult_MultiplePerDeployment(t *testing.T) {
 func TestMapServicesToDeploymentResult_RejectsDuplicateNameType(t *testing.T) {
 	u := &DeploymentResultStatusUpdater{}
 	list := &corev1.ServiceList{Items: []corev1.Service{
-		svc("candidates-a1", "shop", map[string]string{annotationDeploymentResult: candidatesResult}, corev1.ServicePort{Port: 80}),
 		svc("candidates-b2", "shop", map[string]string{annotationDeploymentResult: candidatesResult}, corev1.ServicePort{Port: 80}),
+		svc("candidates-a1", "shop", map[string]string{annotationDeploymentResult: candidatesResult}, corev1.ServicePort{Port: 80}),
 	}}
 
 	_, err := u.mapServicesToDeploymentResult(list)
 	if !errors.Is(err, errDeploymentResultNotUnique) {
 		t.Fatalf("expected errDeploymentResultNotUnique for duplicate (name, type), got %v", err)
+	}
+	if !strings.Contains(err.Error(), `services "candidates-a1" and "candidates-b2"`) {
+		t.Errorf("expected the Services named in sorted order, got %v", err)
 	}
 }

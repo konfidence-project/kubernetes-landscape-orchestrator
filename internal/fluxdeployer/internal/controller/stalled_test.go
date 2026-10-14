@@ -176,7 +176,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			Expect(stalled.Reason).To(Equal(konfidencev1alpha1.StalledReasonNotStalled))
 		})
 
-		It("mirrors a Stalled HelmRelease with Flux's reason", func() {
+		It("mirrors a Stalled HelmRelease with Flux's message", func() {
 			release := &helmv2.HelmRelease{ObjectMeta: fluxMeta(stalledDeploymentName, 2)}
 			release.Status.Conditions = fluxStalledConditions("RetriesExceeded", 2)
 			cl := newClient(internal.DeploymentClassHelm, helmDeployment(), release)
@@ -206,6 +206,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			stalled := reconcileStalled(helmReconciler(cl), cl)
 			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
 			Expect(stalled.Reason).To(Equal("Stalled"))
+			Expect(stalled.Message).To(HavePrefix("HelmChart "))
 		})
 
 		It("reports the source stage before the release stage", func() {
@@ -216,7 +217,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			cl := newClient(internal.DeploymentClassHelm, helmDeployment(), repository, release)
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
 
-			Expect(reconcileStalled(helmReconciler(cl), cl).Reason).To(Equal("Stalled"))
+			Expect(reconcileStalled(helmReconciler(cl), cl).Message).To(HavePrefix("HelmRepository "))
 		})
 
 		It("reports missing DeploymentTarget secrets before any Flux stall", func() {
@@ -379,7 +380,10 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 
 		got := &konfidencev1alpha1.ArtifactDeployment{}
 		Expect(cl.Get(ctx, key, got)).To(Succeed())
-		Expect(meta.IsStatusConditionTrue(got.Status.Conditions, konfidencev1alpha1.StalledCondition)).To(BeTrue())
+		stalled := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.StalledCondition)
+		Expect(stalled).NotTo(BeNil())
+		Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
+		Expect(stalled.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique))
 	})
 
 	Context("Kustomize", func() {
@@ -387,7 +391,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			return newDeployment(internal.DeploymentClassKustomize, ocmResourceTypeKustomize, rawKustomizeOCIContent())
 		}
 
-		It("mirrors a Stalled Kustomization with Flux's reason", func() {
+		It("mirrors a Stalled Kustomization with Flux's message", func() {
 			kustomization := &kustomizev1.Kustomization{ObjectMeta: fluxMeta(stalledDeploymentName, 1)}
 			kustomization.Status.Conditions = fluxStalledConditions("AccessDenied", 1)
 			cl := newClient(internal.DeploymentClassKustomize, kustomizeDeployment(), kustomization)
@@ -407,7 +411,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			cl := newClient(internal.DeploymentClassKustomize, kustomizeDeployment(), repository, kustomization)
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
 
-			Expect(reconcileStalled(kustomizeReconciler(cl), cl).Reason).To(Equal("Stalled"))
+			Expect(reconcileStalled(kustomizeReconciler(cl), cl).Message).To(HavePrefix("OCIRepository "))
 		})
 
 		It("reports a Kustomize resource that cannot be mapped", func() {

@@ -59,6 +59,27 @@ func TestReadyConditionStatusUpdater(t *testing.T) {
 			wantReason: "InstallFailed",
 		},
 		{
+			name: "stays ready while Flux reconciles",
+			conditions: []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionUnknown, "Progressing"),
+				condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionUnknown, "Progressing"),
+				condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionTrue, "Created"),
+				condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionTrue, "Ready"),
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: "Ready",
+		},
+		{
+			name: "an unknown step is not ready on the first deploy",
+			conditions: []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionUnknown, "Progressing"),
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: "Progressing",
+		},
+		{
 			name: "goes false again when the deployment results break",
 			conditions: []metav1.Condition{
 				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),

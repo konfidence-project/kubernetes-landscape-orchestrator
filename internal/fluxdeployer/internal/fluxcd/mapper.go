@@ -83,7 +83,7 @@ func (m mapper) ToHelm() (*HelmChartResource, error) {
 			Insecure:    insecure,
 		}, nil
 	default:
-		return nil, fmt.Errorf("type '%s' not parsable to HelmChartResource (supported: helm, ociArtifact)", m.resource.Type)
+		return nil, fmt.Errorf("access type '%s' not parsable to HelmChartResource (supported: helm, ociArtifact)", accessType.Type)
 	}
 }
 

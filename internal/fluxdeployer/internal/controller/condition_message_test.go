@@ -11,10 +11,11 @@ func TestTruncateMessage(t *testing.T) {
 		t.Errorf("short message changed: %q", got)
 	}
 
-	long := strings.Repeat("é", maxConditionMessageLength)
+	// the leading ASCII byte puts the limit in the middle of a two-byte "é"
+	long := "a" + strings.Repeat("é", maxConditionMessageLength)
 	got := truncateMessage(long)
-	if len(got) > maxConditionMessageLength {
-		t.Errorf("got %d bytes, want at most %d", len(got), maxConditionMessageLength)
+	if len(got) != maxConditionMessageLength-1 {
+		t.Errorf("got %d bytes, want %d", len(got), maxConditionMessageLength-1)
 	}
 	if !utf8.ValidString(got) {
 		t.Error("truncation split a multi-byte character")

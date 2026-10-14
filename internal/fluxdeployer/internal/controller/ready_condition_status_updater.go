@@ -25,7 +25,8 @@ type ReadyConditionStatusUpdater struct {
 }
 
 // MutateStatus sets Ready=True once the app is healthy and its deployment results are created, and Ready=False
-// otherwise, carrying the reason of the first pipeline step that is not True.
+// otherwise, carrying the reason of the first pipeline step that is not True. An Unknown step keeps Ready=True,
+// since Flux marks its conditions Unknown at the start of every reconcile.
 func (r *ReadyConditionStatusUpdater) MutateStatus(_ context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) error {
 	if meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.AppHealthyCondition) &&
 		meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.DeploymentResultCreatedCondition) {
@@ -40,7 +41,10 @@ func (r *ReadyConditionStatusUpdater) MutateStatus(_ context.Context, deployment
 		return nil
 	}
 
-	reason, message := notReadyCause(deployment.Status.Conditions)
+	reason, message, unknown := notReadyCause(deployment.Status.Conditions)
+	if unknown && meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition) {
+		return nil
+	}
 	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
 		Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
 		Status:             metav1.ConditionFalse,
@@ -51,16 +55,17 @@ func (r *ReadyConditionStatusUpdater) MutateStatus(_ context.Context, deployment
 	return nil
 }
 
-func notReadyCause(conditions []metav1.Condition) (reason, message string) {
+func notReadyCause(conditions []metav1.Condition) (reason, message string, unknown bool) {
 	for _, conditionType := range pipelineConditions {
 		condition := meta.FindStatusCondition(conditions, conditionType)
 		if condition == nil {
-			return reasonPending, fmt.Sprintf("%s has not been reported yet", conditionType)
+			return reasonPending, fmt.Sprintf("%s has not been reported yet", conditionType), false
 		}
 		if condition.Status != metav1.ConditionTrue {
-			return condition.Reason, fmt.Sprintf("%s is %s: %s", conditionType, condition.Status, condition.Message)
+			return condition.Reason, fmt.Sprintf("%s is %s: %s", conditionType, condition.Status, condition.Message),
+				condition.Status == metav1.ConditionUnknown
 		}
 	}
 	// unreachable: MutateStatus only asks when AppHealthy or DeploymentResultCreated is not True
-	return reasonPending, "waiting for the deployment pipeline"
+	return reasonPending, "waiting for the deployment pipeline", false
 }
