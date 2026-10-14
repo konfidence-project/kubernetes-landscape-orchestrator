@@ -215,19 +215,16 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 })
 
 func verifyRule(rule gwapiv1.HTTPRouteRule, stage, resultName, serviceName string, port gwapiv1.PortNumber, vectorDeployment string) {
-	Expect(rule.Matches).To(HaveLen(2))
-
-	// match 0: stage header + path prefix /<result-name>
-	Expect(rule.Matches[0].Headers).To(HaveLen(1))
+	// Header-only selection: stage + service. Any path is the API-defaulted catch-all "/".
+	Expect(rule.Matches).To(HaveLen(1))
+	if rule.Matches[0].Path != nil {
+		Expect(*rule.Matches[0].Path.Value).To(Equal("/"))
+	}
+	Expect(rule.Matches[0].Headers).To(HaveLen(2))
 	Expect(rule.Matches[0].Headers[0].Name).To(Equal(gwapiv1.HTTPHeaderName(headerStage)))
 	Expect(rule.Matches[0].Headers[0].Value).To(Equal(stage))
-	Expect(rule.Matches[0].Path).ToNot(BeNil())
-	Expect(*rule.Matches[0].Path.Value).To(Equal("/" + resultName))
-
-	// match 1: stage header + service header
-	Expect(rule.Matches[1].Headers).To(HaveLen(2))
-	Expect(rule.Matches[1].Headers[1].Name).To(Equal(gwapiv1.HTTPHeaderName(headerService)))
-	Expect(rule.Matches[1].Headers[1].Value).To(Equal(resultName))
+	Expect(rule.Matches[0].Headers[1].Name).To(Equal(gwapiv1.HTTPHeaderName(headerService)))
+	Expect(rule.Matches[0].Headers[1].Value).To(Equal(resultName))
 
 	Expect(rule.Filters).To(HaveLen(1))
 	hm := rule.Filters[0].RequestHeaderModifier

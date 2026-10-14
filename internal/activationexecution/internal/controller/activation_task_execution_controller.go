@@ -254,9 +254,11 @@ func (r *ActivationTaskExecutionReconciler) applyStageRoute(
 	return nil
 }
 
-// buildRouteRules builds one rule per http-k8s-service deployment result. Each rule matches the stage header together
-// with either the request path (/<result-name>) or the service header, injects the routing-key header for the active
-// vector, and backs the result's Service.
+// buildRouteRules builds one rule per http-k8s-service deployment result. Each rule matches the stage header plus the
+// service header (x-konfidence-service=<result-name>), injects the routing-key header for the active vector, and backs
+// the result's Service. Selection is header-only and therefore authoritative: the admin edge sets x-konfidence-service
+// (e.g. derived from the request path). Gateway API ranks path above headers and cannot match a missing header, so a
+// path match here could never be overridden by the service header.
 func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDeployment) []gwapiv1.HTTPRouteRule {
 	type routeTarget struct {
 		name    string
@@ -287,19 +289,13 @@ func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDe
 
 	sort.Slice(targets, func(i, j int) bool { return targets[i].name < targets[j].name })
 
-	pathType := gwapiv1.PathMatchPathPrefix
 	stageHeader := gwapiv1.HTTPHeaderMatch{Name: headerStage, Value: stage}
 
 	rules := make([]gwapiv1.HTTPRouteRule, 0, len(targets))
 	for _, t := range targets {
-		pathPrefix := "/" + t.name
 		port := t.port
 		rules = append(rules, gwapiv1.HTTPRouteRule{
 			Matches: []gwapiv1.HTTPRouteMatch{
-				{
-					Headers: []gwapiv1.HTTPHeaderMatch{stageHeader},
-					Path:    &gwapiv1.HTTPPathMatch{Type: &pathType, Value: &pathPrefix},
-				},
 				{
 					Headers: []gwapiv1.HTTPHeaderMatch{stageHeader, {Name: headerService, Value: t.name}},
 				},
