@@ -292,6 +292,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionTrue, "Created"),
 			condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionTrue, "Ready"),
 		}
+		d.Status.DeploymentResults = []konfidencev1alpha1.DeploymentResult{{Name: "stale", Type: "http-k8s-service"}}
 		duplicate := func(name string) *corev1.Service {
 			return &corev1.Service{ObjectMeta: metav1.ObjectMeta{
 				Name: name, Namespace: stalledNamespace,
@@ -315,6 +316,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 		Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
 		Expect(stalled.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique))
 		Expect(meta.IsStatusConditionFalse(got.Status.Conditions, konfidencev1alpha1.DeploymentResultCreatedCondition)).To(BeTrue())
+		Expect(got.Status.DeploymentResults).To(BeEmpty(), "results from an earlier pass must not stay published")
 		ready := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
 		Expect(ready).NotTo(BeNil())
 		Expect(ready.Status).To(Equal(metav1.ConditionFalse))

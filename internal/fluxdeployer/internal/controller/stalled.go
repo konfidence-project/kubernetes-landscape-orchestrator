@@ -45,7 +45,7 @@ func setStalledCondition(deployment *konfidencev1alpha1.ArtifactDeployment, caus
 	if cause != nil {
 		condition.Status = metav1.ConditionTrue
 		condition.Reason = cause.reason
-		condition.Message = cause.message
+		condition.Message = truncateMessage(cause.message)
 	}
 	meta.SetStatusCondition(&deployment.Status.Conditions, condition)
 }

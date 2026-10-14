@@ -43,6 +43,7 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 	// map Services to DeploymentResult
 	deploymentResultServices, err := d.mapServicesToDeploymentResult(serviceList)
 	if err != nil {
+		deployment.Status.DeploymentResults = nil
 		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
 			Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
 			Status:             metav1.ConditionFalse,

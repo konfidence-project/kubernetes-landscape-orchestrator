@@ -45,7 +45,7 @@ func (r *ReadyConditionStatusUpdater) MutateStatus(_ context.Context, deployment
 		Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
 		Status:             metav1.ConditionFalse,
 		Reason:             reason,
-		Message:            message,
+		Message:            truncateMessage(message),
 		ObservedGeneration: deployment.Generation,
 	})
 	return nil
