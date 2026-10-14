@@ -127,8 +127,7 @@ func fluxStall(ctx context.Context, c client.Reader, kind string, key client.Obj
 	}, nil
 }
 
-// deploymentResultStall reads DeploymentResultCreated rather than this pass's error. The results check is skipped
-// while ArtifactDeployed is not True, which kustomize-controller causes at the start of every reconcile.
+// deploymentResultStall reads the stored condition, as the results check is skipped unless ArtifactDeployed is True.
 func deploymentResultStall(deployment *konfidencev1alpha1.ArtifactDeployment) *stallCause {
 	created := meta.FindStatusCondition(deployment.Status.Conditions, konfidencev1alpha1.DeploymentResultCreatedCondition)
 	if created == nil || created.Status != metav1.ConditionFalse ||

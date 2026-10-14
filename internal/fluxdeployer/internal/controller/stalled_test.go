@@ -429,8 +429,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 	})
 })
 
-// These run against the envtest API server so the Ready condition's lastTransitionTime, the deadline's clock,
-// goes through a real status round trip.
+// envtest, so lastTransitionTime goes through a real status round trip.
 var _ = Describe("deploymentTargetSecretsStall", func() {
 	const class = "sample.konfidence.cloud"
 
