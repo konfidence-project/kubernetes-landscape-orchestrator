@@ -307,7 +307,10 @@ func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDe
 			Filters: []gwapiv1.HTTPRouteFilter{{
 				Type: gwapiv1.HTTPRouteFilterRequestHeaderModifier,
 				RequestHeaderModifier: &gwapiv1.HTTPHeaderFilter{
-					Add: []gwapiv1.HTTPHeader{{Name: headerRoutingKey, Value: vectorDeployment.Name}},
+					// Overwrite (not append) the routing key so a client-supplied value cannot be
+					// spoofed; strip the match-only headers so they do not leak to the backend.
+					Set:    []gwapiv1.HTTPHeader{{Name: headerRoutingKey, Value: vectorDeployment.Name}},
+					Remove: []string{headerStage, headerService},
 				},
 			}},
 			BackendRefs: []gwapiv1.HTTPBackendRef{{

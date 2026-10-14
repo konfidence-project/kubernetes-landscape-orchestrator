@@ -130,7 +130,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			Eventually(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, routeKey, route)).To(Succeed())
 				g.Expect(route.Spec.Rules).To(HaveLen(1))
-				g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Value).To(Equal(VectorDeployment))
+				g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Set[0].Value).To(Equal(VectorDeployment))
 			}, timeout, interval).Should(Succeed())
 
 			// flip: new VD + new activation + new execution
@@ -145,7 +145,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			Eventually(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, routeKey, route)).To(Succeed())
 				g.Expect(route.Spec.Rules).To(HaveLen(1))
-				g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Value).To(Equal(vd2))
+				g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Set[0].Value).To(Equal(vd2))
 				g.Expect(*route.Spec.Rules[0].BackendRefs[0].Port).To(Equal(gwapiv1.PortNumber(ServicePort2)))
 			}, timeout, interval).Should(Succeed())
 
@@ -230,8 +230,11 @@ func verifyRule(rule gwapiv1.HTTPRouteRule, stage, resultName, serviceName strin
 	Expect(rule.Matches[1].Headers[1].Value).To(Equal(resultName))
 
 	Expect(rule.Filters).To(HaveLen(1))
-	Expect(rule.Filters[0].RequestHeaderModifier.Add[0].Name).To(Equal(gwapiv1.HTTPHeaderName(headerRoutingKey)))
-	Expect(rule.Filters[0].RequestHeaderModifier.Add[0].Value).To(Equal(vectorDeployment))
+	hm := rule.Filters[0].RequestHeaderModifier
+	Expect(hm.Set).To(HaveLen(1))
+	Expect(hm.Set[0].Name).To(Equal(gwapiv1.HTTPHeaderName(headerRoutingKey)))
+	Expect(hm.Set[0].Value).To(Equal(vectorDeployment))
+	Expect(hm.Remove).To(ConsistOf(headerStage, headerService))
 
 	Expect(rule.BackendRefs).To(HaveLen(1))
 	Expect(rule.BackendRefs[0].Name).To(Equal(gwapiv1.ObjectName(serviceName)))
