@@ -3,7 +3,10 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/utils"
@@ -15,6 +18,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// errDeploymentResultNotUnique marks two Services declaring the same (name, type); only a change to the deployed
+// manifests resolves it.
+var errDeploymentResultNotUnique = errors.New("deployment result (name, type) is not unique")
+
+// reasonDeploymentResultInvalid is the DeploymentResultCreated=False reason when the opted-in Services can't be mapped.
+const reasonDeploymentResultInvalid = "DeploymentResultInvalid"
 
 type DeploymentResultStatusUpdater struct {
 	client.Client
@@ -35,6 +45,18 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 	// map Services to DeploymentResult
 	deploymentResultServices, err := d.mapServicesToDeploymentResult(serviceList)
 	if err != nil {
+		deployment.Status.DeploymentResults = nil
+		reason := reasonDeploymentResultInvalid
+		if errors.Is(err, errDeploymentResultNotUnique) {
+			reason = konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique
+		}
+		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
+			Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
+			Status:             metav1.ConditionFalse,
+			Reason:             reason,
+			Message:            truncateMessage(err.Error()),
+			ObservedGeneration: deployment.Generation,
+		})
 		return err
 	}
 
@@ -78,8 +100,14 @@ func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceLis
 	deploymentResultServices := make([]konfidencev1alpha1.DeploymentResult, 0, len(serviceList.Items))
 	seen := make(map[string]string, len(serviceList.Items))
 
+	// sorted so a duplicate is always reported with the same pair of Services
+	services := make([]*corev1.Service, 0, len(serviceList.Items))
 	for i := range serviceList.Items {
-		service := &serviceList.Items[i]
+		services = append(services, &serviceList.Items[i])
+	}
+	slices.SortFunc(services, func(a, b *corev1.Service) int { return strings.Compare(a.Name, b.Name) })
+
+	for _, service := range services {
 		resultName, ok := service.Annotations[annotationDeploymentResult]
 		if !ok {
 			continue
@@ -87,8 +115,8 @@ func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceLis
 
 		if first, dup := seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService]; dup {
 			return nil, fmt.Errorf(
-				"services %q and %q both declare deployment result (name=%q, type=%q); the pair must be unique",
-				first, service.Name, resultName, deploymentresult.TypeHTTPK8sService)
+				"%w: services %q and %q both declare (name=%q, type=%q)",
+				errDeploymentResultNotUnique, first, service.Name, resultName, deploymentresult.TypeHTTPK8sService)
 		}
 		seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService] = service.Name
 
