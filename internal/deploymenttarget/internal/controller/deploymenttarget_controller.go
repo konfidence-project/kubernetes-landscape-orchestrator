@@ -34,10 +34,6 @@ const (
 	DeploymentTargetReasonUnsupportedConnectionType = "UnsupportedConnectionType"
 	// DeploymentTargetReasonUnsupportedRefKind indicates that the connection reference kind is not supported.
 	DeploymentTargetReasonUnsupportedRefKind = "UnsupportedRefKind"
-	// DeploymentTargetReasonSecretNotFound indicates that the referenced Secret does not exist.
-	DeploymentTargetReasonSecretNotFound = internal.DeploymentTargetReasonSecretNotFound
-	// DeploymentTargetReasonInvalidSecret indicates that the referenced Secret has no recognized kubeconfig key.
-	DeploymentTargetReasonInvalidSecret = internal.DeploymentTargetReasonInvalidSecret
 	// DeploymentTargetReasonInvalidKubeconfig indicates that the referenced Secret contains an invalid kubeconfig.
 	DeploymentTargetReasonInvalidKubeconfig = "InvalidKubeconfig"
 	// DeploymentTargetReasonAccepted indicates that all validation checks passed and the DeploymentTarget is ready for use.
@@ -120,7 +116,7 @@ func (r *DeploymentTargetReconciler) validate(ctx context.Context, dt *konfidenc
 	secretKey := types.NamespacedName{Namespace: dt.Namespace, Name: dt.Spec.Connection.Ref.Name}
 	if err := r.Get(ctx, secretKey, secret); err != nil {
 		if apierrors.IsNotFound(err) {
-			return r.setReady(ctx, dt, metav1.ConditionFalse, DeploymentTargetReasonSecretNotFound,
+			return r.setReady(ctx, dt, metav1.ConditionFalse, internal.DeploymentTargetReasonSecretNotFound,
 				fmt.Sprintf("secret %q not found in namespace %q", dt.Spec.Connection.Ref.Name, dt.Namespace))
 		}
 		return fmt.Errorf("get secret %s: %w", secretKey, err)
@@ -128,7 +124,7 @@ func (r *DeploymentTargetReconciler) validate(ctx context.Context, dt *konfidenc
 
 	kubeconfigBytes, err := kubeconfigFromSecret(secret)
 	if err != nil {
-		return r.setReady(ctx, dt, metav1.ConditionFalse, DeploymentTargetReasonInvalidSecret, err.Error())
+		return r.setReady(ctx, dt, metav1.ConditionFalse, internal.DeploymentTargetReasonInvalidSecret, err.Error())
 	}
 
 	if _, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigBytes); err != nil {
