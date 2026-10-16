@@ -9,16 +9,19 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// Retained for the follow-up in konfidence-project/konfidence#391 / ADR-0036.
 const (
+	//nolint:unused // see TODO on ClientFor.
 	connectionTypeLocal = "local"
 )
 
 // acceptedKubeconfigKeys mirrors the keys the DeploymentTarget controller accepts in a kubeconfig Secret.
+//
+//nolint:unused // see TODO on ClientFor.
 var acceptedKubeconfigKeys = []string{"value", "value.yaml"}
 
 // LandscapeClientProvider returns the client used to apply routing resources into a landscape. The landscape runtime
@@ -33,39 +36,34 @@ type LandscapeClientProvider struct {
 	// Scheme is used for remote clients; must include the Gateway API and core types.
 	Scheme *runtime.Scheme
 
-	mu    sync.Mutex
+	//nolint:unused // see TODO on ClientFor.
+	mu sync.Mutex
+	//nolint:unused // see TODO on ClientFor.
 	cache map[string]cachedClient
 }
 
+//nolint:unused // see TODO on ClientFor.
 type cachedClient struct {
 	resourceVersion string
 	client          client.Client
 }
 
-// ClientFor resolves the ready DeploymentTarget in the landscape namespace and returns the client to apply routing
-// resources with. deploymentClassName selects the target when more than one connection exists; it may be empty when
-// the landscape has a single connection.
-func (p *LandscapeClientProvider) ClientFor(ctx context.Context, landscapeNs, deploymentClassName string) (client.Client, error) {
-	target, err := p.resolveTarget(ctx, landscapeNs, deploymentClassName)
-	if err != nil {
-		return nil, err
-	}
-
-	if target.Spec.Connection.Type == connectionTypeLocal || target.Spec.Connection.Ref == nil {
-		return p.Local, nil
-	}
-
-	secret := &corev1.Secret{}
-	secretKey := types.NamespacedName{Namespace: landscapeNs, Name: target.Spec.Connection.Ref.Name}
-	if err := p.Reader.Get(ctx, secretKey, secret); err != nil {
-		return nil, fmt.Errorf("get kubeconfig secret %s: %w", secretKey, err)
-	}
-
-	return p.remoteClient(secretKey.String(), secret)
+// ClientFor returns the client to apply routing resources with.
+//
+// TODO(konfidence-project/konfidence#391, ADR-0036): resolve the DeploymentTarget and apply routes through it instead
+// of short-circuiting to the control-plane client. Deferred until the DeploymentTarget reshape (artifactType +
+// parameters, DeploymentClass CRD removal) lands and routing config has a home on the target.
+func (p *LandscapeClientProvider) ClientFor(_ context.Context, _ string) (client.Client, error) {
+	return p.Local, nil
 }
 
 // resolveTarget returns the single ready DeploymentTarget to apply through. With deploymentClassName set it must match;
 // otherwise all ready targets must share one connection (e.g. helm and kustomize on the same cluster).
+//
+// Currently unused: ClientFor short-circuits to the control-plane client. Retained for the follow-up in
+// konfidence-project/konfidence#391 / ADR-0036.
+//
+//nolint:unused // see TODO on ClientFor.
 func (p *LandscapeClientProvider) resolveTarget(ctx context.Context, landscapeNs, deploymentClassName string) (*konfidencev1alpha1.DeploymentTarget, error) {
 	targets := &konfidencev1alpha1.DeploymentTargetList{}
 	if err := p.Reader.List(ctx, targets, client.InNamespace(landscapeNs)); err != nil {
@@ -100,6 +98,7 @@ func (p *LandscapeClientProvider) resolveTarget(ctx context.Context, landscapeNs
 	return first, nil
 }
 
+//nolint:unused // see TODO on ClientFor.
 func sameConnection(a, b *konfidencev1alpha1.DeploymentTarget) bool {
 	if a.Spec.Connection.Type != b.Spec.Connection.Type {
 		return false
@@ -112,6 +111,8 @@ func sameConnection(a, b *konfidencev1alpha1.DeploymentTarget) bool {
 }
 
 // remoteClient builds (and caches by Secret resourceVersion) a client for the target cluster.
+//
+//nolint:unused // see TODO on ClientFor.
 func (p *LandscapeClientProvider) remoteClient(cacheKey string, secret *corev1.Secret) (client.Client, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -142,6 +143,7 @@ func (p *LandscapeClientProvider) remoteClient(cacheKey string, secret *corev1.S
 	return cl, nil
 }
 
+//nolint:unused // see TODO on ClientFor.
 func kubeconfigFromSecret(secret *corev1.Secret) ([]byte, error) {
 	for _, key := range acceptedKubeconfigKeys {
 		if data, ok := secret.Data[key]; ok {

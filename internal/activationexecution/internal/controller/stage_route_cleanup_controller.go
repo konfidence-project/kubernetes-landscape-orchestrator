@@ -54,7 +54,7 @@ func (r *StageRouteCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 }
 
 func (r *StageRouteCleanupReconciler) deleteStageRoute(ctx context.Context, namespace, stage string) error {
-	landscapeClient, err := r.Landscape.ClientFor(ctx, namespace, "")
+	landscapeClient, err := r.Landscape.ClientFor(ctx, namespace)
 	if err != nil {
 		return fmt.Errorf("resolve landscape client for stage %s cleanup: %w", stage, err)
 	}

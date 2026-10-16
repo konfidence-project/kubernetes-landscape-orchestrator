@@ -40,14 +40,14 @@ type ActivationTaskExecutionReconciler struct {
 
 // gatewayRouteConfig is the optional per-landscape configuration carried verbatim in the ActivationTaskRegistration
 // (hence the ActivationTaskExecution) Spec.Spec.
+//
+// TODO(konfidence-project/konfidence#391, ADR-0036): move this configuration onto the DeploymentTarget once it carries
+// per-landscape routing parameters. The current registration-blob location is interim.
 type gatewayRouteConfig struct {
 	// GatewayName is the Gateway the HTTPRoutes attach to; defaults to konfidence-router.
 	GatewayName string `json:"gatewayName,omitempty"`
 	// GatewayNamespace is the Gateway namespace; defaults to the landscape namespace.
 	GatewayNamespace string `json:"gatewayNamespace,omitempty"`
-	// DeploymentClassName selects the Kubernetes DeploymentTarget to apply routes through when the landscape has more
-	// than one connection; optional otherwise.
-	DeploymentClassName string `json:"deploymentClassName,omitempty"`
 }
 
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=activationtaskexecutions,verbs=get;list;watch;create;update;patch;delete
@@ -148,7 +148,7 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 		return err
 	}
 
-	landscapeClient, err := r.Landscape.ClientFor(ctx, req.Namespace, config.DeploymentClassName)
+	landscapeClient, err := r.Landscape.ClientFor(ctx, req.Namespace)
 	if err != nil {
 		return fmt.Errorf("resolve landscape client: %w", err)
 	}
