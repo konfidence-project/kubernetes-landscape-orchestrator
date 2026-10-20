@@ -1,26 +1,17 @@
 package internal
 
-import (
-	"fmt"
-	"maps"
-	"slices"
-)
+import konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 
 const (
 	ControllerName = "konfidence.cloud/kubernetes-landscape-orchestrator"
-
-	DeploymentClassHelm      = "helm.konfidence.cloud"
-	DeploymentClassKustomize = "kustomize.konfidence.cloud"
 )
 
-type knownClasses map[string]struct{}
+var (
+	DeploymentClassHelm      = konfidencev1alpha1.MustArtifactType("helm.konfidence.cloud")
+	DeploymentClassKustomize = konfidencev1alpha1.MustArtifactType("kustomize.konfidence.cloud")
 
-var KnownClasses = knownClasses{
-	DeploymentClassHelm:      {},
-	DeploymentClassKustomize: {},
-}
-
-func (c knownClasses) String() string {
-	// return comma-separated map keys
-	return fmt.Sprintf("%v", slices.Sorted(maps.Keys(c)))
-}
+	SupportedArtifactTypes = konfidencev1alpha1.ArtifactTypeSet{
+		DeploymentClassHelm:      {},
+		DeploymentClassKustomize: {},
+	}
+)
