@@ -44,7 +44,7 @@ func (r *VectorAssignmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		if !ok {
 			return true
 		}
-		return assignment.Spec.Manifest.Type == internal.DeploymentClassKustomize || assignment.Spec.Manifest.Type == internal.DeploymentClassHelm
+		return konfidencev1alpha1.ArtifactType(assignment.Spec.Manifest.Type) == internal.DeploymentClassKustomize || konfidencev1alpha1.ArtifactType(assignment.Spec.Manifest.Type) == internal.DeploymentClassHelm
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).

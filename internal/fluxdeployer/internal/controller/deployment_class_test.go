@@ -16,35 +16,35 @@ var _ = Describe("DeploymentClass ownership", func() {
 	It("is inactive when no matching class exists", func() {
 		client := fake.NewClientBuilder().WithScheme(newTestScheme()).Build()
 
-		active, err := deploymentClassActive(context.Background(), client, internal.DeploymentClassHelm)
+		active, err := deploymentClassActive(context.Background(), client, string(internal.DeploymentClassHelm))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(active).To(BeFalse())
 	})
 
 	It("accepts a class when name and controller match", func() {
 		class := &konfidencev1alpha1.DeploymentClass{
-			ObjectMeta: metav1.ObjectMeta{Name: internal.DeploymentClassHelm},
+			ObjectMeta: metav1.ObjectMeta{Name: string(internal.DeploymentClassHelm)},
 			Spec: konfidencev1alpha1.DeploymentClassSpec{
 				Controller: internal.ControllerName,
 			},
 		}
 		client := fake.NewClientBuilder().WithScheme(newTestScheme()).WithObjects(class).Build()
 
-		active, err := deploymentClassActive(context.Background(), client, internal.DeploymentClassHelm)
+		active, err := deploymentClassActive(context.Background(), client, string(internal.DeploymentClassHelm))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(active).To(BeTrue())
 	})
 
 	It("rejects a class owned by another controller", func() {
 		class := &konfidencev1alpha1.DeploymentClass{
-			ObjectMeta: metav1.ObjectMeta{Name: internal.DeploymentClassHelm},
+			ObjectMeta: metav1.ObjectMeta{Name: string(internal.DeploymentClassHelm)},
 			Spec: konfidencev1alpha1.DeploymentClassSpec{
 				Controller: "example.com/other-controller",
 			},
 		}
 		client := fake.NewClientBuilder().WithScheme(newTestScheme()).WithObjects(class).Build()
 
-		active, err := deploymentClassActive(context.Background(), client, internal.DeploymentClassHelm)
+		active, err := deploymentClassActive(context.Background(), client, string(internal.DeploymentClassHelm))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(active).To(BeFalse())
 	})

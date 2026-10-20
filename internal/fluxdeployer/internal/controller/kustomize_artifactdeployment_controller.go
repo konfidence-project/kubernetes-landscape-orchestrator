@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/konfidence-project/konfidence/pkg/deployer"
+	"github.com/konfidence-project/konfidence/pkg/deployer/deployment-target"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -13,7 +15,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -56,7 +57,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get artifact deployment object: %w", err)
 	}
-	if deployment.Spec.Manifest.Type != internal.DeploymentClassKustomize {
+	if deployment.ArtifactType() != internal.DeploymentClassKustomize {
 		return ctrl.Result{}, nil
 	}
 	active, err := deploymentClassActive(ctx, r.Client, deployment.Spec.Manifest.Type)
@@ -148,21 +149,10 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	kustomizeDeployment := predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		deployment, ok := obj.(*konfidencev1alpha1.ArtifactDeployment)
-		return ok && deployment.Spec.Manifest.Type == internal.DeploymentClassKustomize
-	})
-	kustomizeTarget := predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		target, ok := obj.(*konfidencev1alpha1.DeploymentTarget)
-		return ok && target.Spec.DeploymentClassName == internal.DeploymentClassKustomize
-	})
-
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, kustomizeDeployment)).
-		Watches(&konfidencev1alpha1.DeploymentTarget{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
-			return artifactDeploymentsForTarget(ctx, r.Client, obj.(*konfidencev1alpha1.DeploymentTarget))
-		}), builder.WithPredicates(kustomizeTarget)).
-		Watches(&konfidencev1alpha1.DeploymentClass{}, deploymentClassEventHandler(r.Client, internal.DeploymentClassKustomize)).
+		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, deployer.ArtifactTypePredicate(internal.DeploymentClassKustomize))).
+		Watches(&konfidencev1alpha1.DeploymentTarget{}, deploymenttarget.EnqueueArtifactDeploymentsForTarget(internal.DeploymentClassKustomize, r.Client), builder.WithPredicates(deployer.ArtifactTypePredicate(internal.DeploymentClassKustomize))).
+		Watches(&konfidencev1alpha1.DeploymentClass{}, deploymentClassEventHandler(r.Client, string(internal.DeploymentClassKustomize))).
 		Owns(&sourcev1.OCIRepository{}).
 		Owns(&kustomizev1.Kustomization{}).
 		Named("kustomize_artifactdeployment").
