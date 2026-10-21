@@ -10,7 +10,10 @@ import (
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentresult"
 )
 
-const candidatesResult = "candidates"
+const (
+	candidatesResult              = "candidates"
+	ingressExposedAnnotationValue = "true"
+)
 
 func svc(name, ns string, annotations map[string]string, ports ...corev1.ServicePort) corev1.Service {
 	return corev1.Service{
@@ -24,10 +27,13 @@ func svc(name, ns string, annotations map[string]string, ports ...corev1.Service
 func TestMapServicesToDeploymentResult_OptInByAnnotation(t *testing.T) {
 	u := &DeploymentResultStatusUpdater{}
 	list := &corev1.ServiceList{Items: []corev1.Service{
-		svc("candidates-7f3a", "landscape", map[string]string{annotationDeploymentResult: candidatesResult},
+		svc("candidates-7f3a", "landscape", map[string]string{
+			annotationDeploymentResult: candidatesResult,
+			annotationIngressExposed:   ingressExposedAnnotationValue,
+		},
 			corev1.ServicePort{Name: "http", Port: 80},
 			corev1.ServicePort{Name: "grpc", Port: 9090}),
-		svc("no-optin", "landscape", nil, corev1.ServicePort{Port: 80}),
+		svc("no-optin", "landscape", map[string]string{annotationIngressExposed: ingressExposedAnnotationValue}, corev1.ServicePort{Port: 80}),
 	}}
 
 	results, err := u.mapServicesToDeploymentResult(list)
@@ -52,6 +58,49 @@ func TestMapServicesToDeploymentResult_OptInByAnnotation(t *testing.T) {
 	}
 	if len(spec.ServicePorts) != 2 {
 		t.Errorf("multi-port not preserved: got %d ports, want 2", len(spec.ServicePorts))
+	}
+	if !spec.IngressExposed {
+		t.Error("IngressExposed: got false, want true")
+	}
+}
+
+func TestMapServicesToDeploymentResult_IngressExposureRequiresTrue(t *testing.T) {
+	u := &DeploymentResultStatusUpdater{}
+	list := &corev1.ServiceList{Items: []corev1.Service{
+		svc("missing", "landscape", map[string]string{annotationDeploymentResult: "missing"}),
+		svc("false", "landscape", map[string]string{
+			annotationDeploymentResult: "false",
+			annotationIngressExposed:   "false",
+		}),
+		svc("not-exact", "landscape", map[string]string{
+			annotationDeploymentResult: "not-exact",
+			annotationIngressExposed:   "TRUE",
+		}),
+	}}
+
+	results, err := u.mapServicesToDeploymentResult(list)
+	if err != nil {
+		t.Fatalf("mapServicesToDeploymentResult: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("results: got %d, want 3", len(results))
+	}
+	for _, result := range results {
+		var spec deploymentresult.ServiceSpec
+		if err := json.Unmarshal(result.Spec.Raw, &spec); err != nil {
+			t.Fatalf("unmarshal spec for %q: %v", result.Name, err)
+		}
+		if spec.IngressExposed {
+			t.Errorf("IngressExposed for %q: got true, want false", result.Name)
+		}
+
+		var rawSpec map[string]any
+		if err := json.Unmarshal(result.Spec.Raw, &rawSpec); err != nil {
+			t.Fatalf("unmarshal raw spec for %q: %v", result.Name, err)
+		}
+		if value, ok := rawSpec["IngressExposed"]; !ok || value != false {
+			t.Errorf("serialized IngressExposed for %q: got %v (present=%t), want false", result.Name, value, ok)
+		}
 	}
 }
 

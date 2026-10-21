@@ -93,9 +93,10 @@ func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceLis
 		seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService] = service.Name
 
 		deploymentResultServiceSpecRaw, err := json.Marshal(deploymentresult.ServiceSpec{
-			Namespace:    service.Namespace,
-			K8sName:      service.Name,
-			ServicePorts: service.Spec.Ports,
+			Namespace:      service.Namespace,
+			K8sName:        service.Name,
+			ServicePorts:   service.Spec.Ports,
+			IngressExposed: service.Annotations[annotationIngressExposed] == "true",
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal deploymentResultServiceSpec: %w", err)
