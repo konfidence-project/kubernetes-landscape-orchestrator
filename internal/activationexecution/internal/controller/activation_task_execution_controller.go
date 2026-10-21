@@ -48,12 +48,18 @@ type gatewayRouteConfig struct {
 	GatewayName string `json:"gatewayName,omitempty"`
 	// GatewayNamespace is the Gateway namespace; defaults to the landscape namespace.
 	GatewayNamespace string `json:"gatewayNamespace,omitempty"`
+	// GatewayClassName lets Konfidence provision a cluster-internal konfidence-router when the landscape has none.
+	// It has no effect when GatewayName or GatewayNamespace names an admin-provided Gateway.
+	GatewayClassName string `json:"gatewayClassName,omitempty"`
+
+	provisionsGateway bool
 }
 
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=activationtaskexecutions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=activationtaskexecutions/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=vectoractivations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=vectoractivations/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=vectordeployments,verbs=get;list;watch;create;update;patch;delete
@@ -151,6 +157,12 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 	landscapeClient, err := r.Landscape.ClientFor(ctx, req.Namespace)
 	if err != nil {
 		return fmt.Errorf("resolve landscape client: %w", err)
+	}
+
+	if config.provisionsGateway {
+		if err := ensureRouterGateway(ctx, landscapeClient, req.Namespace, config.GatewayClassName); err != nil {
+			return err
+		}
 	}
 
 	if err := r.applyStageRoute(ctx, landscapeClient, req.Namespace, vectorActivation.Spec.Stage, config, rules); err != nil {
@@ -329,6 +341,7 @@ func parseGatewayRouteConfig(activationTaskExecution *konfidencev1alpha1.Activat
 			return config, fmt.Errorf("parse gateway-route config: %w", err)
 		}
 	}
+	config.provisionsGateway = config.GatewayClassName != "" && config.GatewayName == "" && config.GatewayNamespace == ""
 	if config.GatewayName == "" {
 		config.GatewayName = defaultGatewayName
 	}

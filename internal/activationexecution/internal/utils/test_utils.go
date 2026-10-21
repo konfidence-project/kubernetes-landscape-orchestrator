@@ -96,6 +96,29 @@ func CleanupHttpRoutes(k8sClient client.Client) {
 	}
 }
 
+func GetGateways(ctx context.Context, k8sClient client.Client) *gwapiv1.GatewayList {
+	gateways := &gwapiv1.GatewayList{}
+	err := k8sClient.List(ctx, gateways)
+
+	Expect(err).ToNot(HaveOccurred(), "Failed to fetch gateways")
+	return gateways
+}
+
+func CleanupGateways(k8sClient client.Client) {
+	ctx := context.Background()
+	gateways := GetGateways(ctx, k8sClient)
+
+	for _, gateway := range gateways.Items {
+		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &gateway))).To(Succeed(), "Failed to delete gateway: %s", gateway.Name)
+	}
+}
+
+// SetGatewayAddresses stands in for the Gateway implementation, which envtest does not run.
+func SetGatewayAddresses(ctx context.Context, k8sClient client.Client, gateway *gwapiv1.Gateway, addresses ...gwapiv1.GatewayStatusAddress) {
+	gateway.Status.Addresses = addresses
+	Expect(k8sClient.Status().Update(ctx, gateway)).To(Succeed())
+}
+
 func CreateVectorActivation(
 	ctx context.Context, k8sClient client.Client,
 	name string, namespace string, stageName string, stageVersionName, vectorName string, vectorDeploymentName string,
