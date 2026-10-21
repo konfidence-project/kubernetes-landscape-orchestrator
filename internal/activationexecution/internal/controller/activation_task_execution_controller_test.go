@@ -9,6 +9,7 @@ import (
 	testutil "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/activationexecution/internal/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -50,13 +51,13 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 	BeforeEach(cleanup)
 	AfterEach(cleanup)
 
-	deploymentResult := func(name, k8sName string, port int32) konfidencev1alpha1.DeploymentResult {
+	deploymentResult := func(name, k8sName string, port int32, ingressExposed bool) konfidencev1alpha1.DeploymentResult {
 		return konfidencev1alpha1.DeploymentResult{
 			Name: name,
 			Type: "http-k8s-service",
 			Spec: runtime.RawExtension{
-				Raw: []byte(fmt.Sprintf(`{"Namespace":"%s","K8sName":"%s","ServicePorts":[{"name":"http","port":%d,"targetPort":"http"}]}`,
-					Namespace, k8sName, port)),
+				Raw: []byte(fmt.Sprintf(`{"Namespace":"%s","K8sName":"%s","ServicePorts":[{"name":"http","port":%d,"targetPort":"http"}],"IngressExposed":%t}`,
+					Namespace, k8sName, port, ingressExposed)),
 			},
 		}
 	}
@@ -73,14 +74,48 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 	}
 
 	Context("When reconciling a gateway-route activation", func() {
-		It("creates a single per-stage HTTPRoute with a rule per deployment result", func() {
+		It("builds route rules only for explicitly ingress-exposed deployment results", func() {
+			exposed := deploymentResult(ServiceName1, ServiceName1, ServicePort1, true)
+			unexposed := deploymentResult(ServiceName2, ServiceName2, ServicePort2, false)
+			legacy := deploymentResult("legacy", "legacy", ServicePort1, false)
+			legacy.Spec.Raw = []byte(fmt.Sprintf(
+				`{"Namespace":"%s","K8sName":"legacy","ServicePorts":[{"name":"http","port":%d,"targetPort":"http"}]}`,
+				Namespace, ServicePort1,
+			))
+			noPorts := deploymentResult("no-ports", "no-ports", ServicePort1, true)
+			noPorts.Spec.Raw = []byte(fmt.Sprintf(
+				`{"Namespace":"%s","K8sName":"no-ports","ServicePorts":[],"IngressExposed":true}`,
+				Namespace,
+			))
+			malformed := deploymentResult("malformed", "malformed", ServicePort1, true)
+			malformed.Spec.Raw = []byte(`{"IngressExposed":true`)
+			otherType := deploymentResult("other-type", "other-type", ServicePort1, true)
+			otherType.Type = "other"
+
+			vectorDeployment := &konfidencev1alpha1.VectorDeployment{}
+			vectorDeployment.Name = VectorDeployment
+			vectorDeployment.Status.DeploymentResults = map[string]konfidencev1alpha1.ComponentDeploymentResults{
+				compA: {exposed, unexposed, legacy},
+				compB: {noPorts, malformed, otherType},
+			}
+
+			rules := buildRouteRules(Stage, vectorDeployment)
+
+			Expect(rules).To(HaveLen(1))
+			verifyRule(rules[0], Stage, ServiceName1, ServiceName1, ServicePort1, VectorDeployment)
+		})
+
+		It("creates a single per-stage HTTPRoute with a rule per ingress-exposed deployment result", func() {
 			ctx := context.Background()
 			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
 			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1)},
-				compB: {deploymentResult(ServiceName2, ServiceName2, ServicePort2)},
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, true)},
+				compB: {
+					deploymentResult(ServiceName2, ServiceName2, ServicePort2, true),
+					deploymentResult("internal", "internal", ServicePort1, false),
+				},
 			})
 
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
@@ -122,7 +157,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1)},
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, true)},
 			})
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
 				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-001")
@@ -139,7 +174,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			const vd2 = "vector-deployment-002"
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-002", Namespace, Stage, StageVersion+"-2", Vector001, vd2)
 			createVectorDeploymentWithResults(ctx, vd2, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort2)},
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort2, true)},
 			})
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, "activation-execution-002", Namespace,
 				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-002")
@@ -157,6 +192,62 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			testutil.CleanupActivationTaskExecution(k8sClient, "activation-execution-002", Namespace)
 		})
 
+		It("removes the existing stage route when no result is ingress-exposed", func() {
+			ctx := context.Background()
+			stage := testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
+			controllerutil.AddFinalizer(stage, stageRouteFinalizer)
+			Expect(k8sClient.Update(ctx, stage)).To(Succeed())
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+
+			routeKey := types.NamespacedName{Name: StageRouteName(Stage), Namespace: Namespace}
+			route := &gwapiv1.HTTPRoute{}
+			route.Name = routeKey.Name
+			route.Namespace = routeKey.Namespace
+			route.Spec.ParentRefs = []gwapiv1.ParentReference{{Name: defaultGatewayName}}
+			Expect(k8sClient.Create(ctx, route)).To(Succeed())
+
+			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
+			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, false)},
+			})
+			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
+				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-001")
+
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, routeKey, &gwapiv1.HTTPRoute{})
+				return k8serrors.IsNotFound(err)
+			}, timeout, interval).Should(BeTrue())
+
+			ate := &konfidencev1alpha1.ActivationTaskExecution{}
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ActivationTaskExecution, Namespace: Namespace}, ate)).To(Succeed())
+				g.Expect(meta.IsStatusConditionTrue(ate.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionSucceeded)).To(BeTrue())
+			}, timeout, interval).Should(Succeed())
+
+			stage = testutil.GetStage(ctx, k8sClient, Stage, Namespace)
+			Expect(controllerutil.ContainsFinalizer(stage, stageRouteFinalizer)).To(BeTrue())
+		})
+
+		It("succeeds when no route exists and no result is ingress-exposed", func() {
+			ctx := context.Background()
+			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
+			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, false)},
+			})
+
+			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
+				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-001")
+
+			ate := &konfidencev1alpha1.ActivationTaskExecution{}
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ActivationTaskExecution, Namespace: Namespace}, ate)).To(Succeed())
+				g.Expect(meta.IsStatusConditionTrue(ate.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionSucceeded)).To(BeTrue())
+				g.Expect(testutil.GetHttpRoutes(ctx, k8sClient).Items).To(BeEmpty())
+			}, timeout, interval).Should(Succeed())
+		})
+
 		It("skips a superseded execution without touching the route", func() {
 			ctx := context.Background()
 			stage := testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
@@ -170,7 +261,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, "sv-old", Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1)},
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, true)},
 			})
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
 				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-001")
@@ -422,6 +513,21 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: Stage, Namespace: Namespace}, &konfidencev1alpha1.Stage{})
 				g.Expect(err).To(HaveOccurred())
 			}, timeout, interval).Should(Succeed())
+		})
+
+		It("releases the finalizer when the per-stage route is already absent", func() {
+			ctx := context.Background()
+			stage := testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
+			controllerutil.AddFinalizer(stage, stageRouteFinalizer)
+			Expect(k8sClient.Update(ctx, stage)).To(Succeed())
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+
+			Expect(k8sClient.Delete(ctx, stage)).To(Succeed())
+
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: Stage, Namespace: Namespace}, &konfidencev1alpha1.Stage{})
+				return k8serrors.IsNotFound(err)
+			}, timeout, interval).Should(BeTrue())
 		})
 	})
 })
