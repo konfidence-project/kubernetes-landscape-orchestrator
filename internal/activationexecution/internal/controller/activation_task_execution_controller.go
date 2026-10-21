@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"time"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentresult"
@@ -60,6 +61,7 @@ type gatewayRouteConfig struct {
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gatewayclasses,verbs=get;list;watch
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=vectoractivations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=vectoractivations/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=vectordeployments,verbs=get;list;watch;create;update;patch;delete
@@ -86,7 +88,7 @@ func (r *ActivationTaskExecutionReconciler) Reconcile(ctx context.Context, req c
 
 	originalActivationTaskExecution := activationTaskExecution.DeepCopy()
 	patch := client.MergeFrom(originalActivationTaskExecution)
-	err := r.reconcileActivationTaskExecution(ctx, req, activationTaskExecution)
+	result, err := r.reconcileActivationTaskExecution(ctx, req, activationTaskExecution)
 
 	if !reflect.DeepEqual(activationTaskExecution.Status, originalActivationTaskExecution.Status) {
 		if patchError := r.Client.Status().Patch(ctx, activationTaskExecution, patch); patchError != nil {
@@ -101,36 +103,41 @@ func (r *ActivationTaskExecutionReconciler) Reconcile(ctx context.Context, req c
 		}
 	}
 
-	return ctrl.Result{}, err
+	return result, err
 }
 
 func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 	ctx context.Context, req ctrl.Request, activationTaskExecution *konfidencev1alpha1.ActivationTaskExecution,
-) error {
+) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
+
+	// A failed execution fails its VectorActivation; a new activation creates a new execution to retry.
+	if meta.IsStatusConditionTrue(activationTaskExecution.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionFailed) {
+		return ctrl.Result{}, nil
+	}
 
 	vectorActivation := &konfidencev1alpha1.VectorActivation{}
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: req.Namespace,
 		Name:      activationTaskExecution.Spec.VectorActivation,
 	}, vectorActivation); err != nil {
-		return fmt.Errorf("unable to fetch vectorActivation: %w", err)
+		return ctrl.Result{}, fmt.Errorf("unable to fetch vectorActivation: %w", err)
 	}
 
 	// A superseded execution (an older activation re-reconciled, e.g. on restart) must not revert the stage's route.
 	superseded, err := r.isSuperseded(ctx, req.Namespace, vectorActivation)
 	if err != nil {
-		return err
+		return ctrl.Result{}, err
 	}
 	if superseded {
 		log.Info("skipping superseded activationTaskExecution", "stage", vectorActivation.Spec.Stage)
 		r.markSucceeded(activationTaskExecution)
-		return nil
+		return ctrl.Result{}, nil
 	}
 
 	config, err := parseGatewayRouteConfig(activationTaskExecution)
 	if err != nil {
-		return err
+		return ctrl.Result{}, err
 	}
 
 	vectorDeployment := &konfidencev1alpha1.VectorDeployment{}
@@ -138,42 +145,47 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 		Namespace: req.Namespace,
 		Name:      vectorActivation.Spec.VectorDeployment,
 	}, vectorDeployment); err != nil {
-		return fmt.Errorf("failed to get VectorDeployment %s: %w", vectorActivation.Spec.VectorDeployment, err)
+		return ctrl.Result{}, fmt.Errorf("failed to get VectorDeployment %s: %w", vectorActivation.Spec.VectorDeployment, err)
 	}
 
 	rules := buildRouteRules(vectorActivation.Spec.Stage, vectorDeployment)
 	if len(rules) == 0 {
 		log.Info("no routable deployment results, skipping route", "stage", vectorActivation.Spec.Stage)
 		r.markSucceeded(activationTaskExecution)
-		return nil
+		return ctrl.Result{}, nil
 	}
 
 	// Bind the route lifecycle to the Stage before creating it: the route may live on another cluster, so cleanup is
 	// driven by a Stage finalizer rather than owner references.
 	if err := r.ensureStageFinalizer(ctx, req.Namespace, vectorActivation.Spec.Stage); err != nil {
-		return err
+		return ctrl.Result{}, err
 	}
 
 	landscapeClient, err := r.Landscape.ClientFor(ctx, req.Namespace)
 	if err != nil {
-		return fmt.Errorf("resolve landscape client: %w", err)
+		return ctrl.Result{}, fmt.Errorf("resolve landscape client: %w", err)
 	}
 
 	if config.provisionsGateway {
-		if err := ensureRouterGateway(ctx, landscapeClient, req.Namespace, config.GatewayClassName); err != nil {
-			return err
+		state, err := ensureRouterGateway(ctx, landscapeClient, req.Namespace, config.GatewayClassName,
+			activationTaskExecution.CreationTimestamp.Time, time.Now())
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if state.phase != routerGatewayReady {
+			return r.reportRouterGateway(activationTaskExecution, state), nil
 		}
 	}
 
 	if err := r.applyStageRoute(ctx, landscapeClient, req.Namespace, vectorActivation.Spec.Stage, config, rules); err != nil {
-		return err
+		return ctrl.Result{}, err
 	}
 
 	r.Recorder.Eventf(activationTaskExecution, nil, corev1.EventTypeNormal, "RouteApplied", "RouteApplied",
 		"Applied HTTPRoute for stage %s", vectorActivation.Spec.Stage)
 	r.markSucceeded(activationTaskExecution)
 	log.Info("ActivationTaskExecution reconciled", "stage", vectorActivation.Spec.Stage)
-	return nil
+	return ctrl.Result{}, nil
 }
 
 // isSuperseded reports whether a newer StageVersion is already active for the stage than the one this execution
@@ -349,7 +361,37 @@ func parseGatewayRouteConfig(activationTaskExecution *konfidencev1alpha1.Activat
 	return config, nil
 }
 
+// reportRouterGateway surfaces a Gateway that is not ready yet on the execution, so a waiting or failed activation is
+// visible with kubectl instead of only in the controller log. Status changes do not trigger a reconcile, so a pending
+// Gateway is polled.
+func (r *ActivationTaskExecutionReconciler) reportRouterGateway(
+	activationTaskExecution *konfidencev1alpha1.ActivationTaskExecution, state routerGatewayState,
+) ctrl.Result {
+	if state.phase == routerGatewayPending {
+		meta.SetStatusCondition(&activationTaskExecution.Status.Conditions, metav1.Condition{
+			Type:               konfidencev1alpha1.ActivationTaskExecutionInProgress,
+			Status:             metav1.ConditionTrue,
+			Reason:             state.reason,
+			Message:            state.message,
+			ObservedGeneration: activationTaskExecution.Generation,
+		})
+		return ctrl.Result{RequeueAfter: routerGatewayPollInterval}
+	}
+
+	meta.RemoveStatusCondition(&activationTaskExecution.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionInProgress)
+	meta.SetStatusCondition(&activationTaskExecution.Status.Conditions, metav1.Condition{
+		Type:               konfidencev1alpha1.ActivationTaskExecutionFailed,
+		Status:             metav1.ConditionTrue,
+		Reason:             state.reason,
+		Message:            state.message,
+		ObservedGeneration: activationTaskExecution.Generation,
+	})
+	r.Recorder.Eventf(activationTaskExecution, nil, corev1.EventTypeWarning, state.reason, "ProvisionGateway", "%s", state.message)
+	return ctrl.Result{}
+}
+
 func (r *ActivationTaskExecutionReconciler) markSucceeded(activationTaskExecution *konfidencev1alpha1.ActivationTaskExecution) {
+	meta.RemoveStatusCondition(&activationTaskExecution.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionInProgress)
 	meta.SetStatusCondition(&activationTaskExecution.Status.Conditions, metav1.Condition{
 		Type:               konfidencev1alpha1.ActivationTaskExecutionSucceeded,
 		Status:             metav1.ConditionTrue,

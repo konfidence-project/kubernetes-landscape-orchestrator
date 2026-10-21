@@ -113,10 +113,31 @@ func CleanupGateways(k8sClient client.Client) {
 	}
 }
 
-// SetGatewayAddresses stands in for the Gateway implementation, which envtest does not run.
-func SetGatewayAddresses(ctx context.Context, k8sClient client.Client, gateway *gwapiv1.Gateway, addresses ...gwapiv1.GatewayStatusAddress) {
+// SetGatewayStatus stands in for the Gateway implementation, which envtest does not run.
+func SetGatewayStatus(
+	ctx context.Context, k8sClient client.Client, gateway *gwapiv1.Gateway, conditions []metav1.Condition, addresses ...gwapiv1.GatewayStatusAddress,
+) {
+	gateway.Status.Conditions = conditions
 	gateway.Status.Addresses = addresses
 	Expect(k8sClient.Status().Update(ctx, gateway)).To(Succeed())
+}
+
+func CreateGatewayClass(ctx context.Context, k8sClient client.Client, name string) {
+	gatewayClass := &gwapiv1.GatewayClass{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec:       gwapiv1.GatewayClassSpec{ControllerName: "example.com/gateway-controller"},
+	}
+	Expect(k8sClient.Create(ctx, gatewayClass)).To(Succeed())
+}
+
+func CleanupGatewayClasses(k8sClient client.Client) {
+	ctx := context.Background()
+	gatewayClasses := &gwapiv1.GatewayClassList{}
+	Expect(k8sClient.List(ctx, gatewayClasses)).To(Succeed())
+
+	for _, gatewayClass := range gatewayClasses.Items {
+		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &gatewayClass))).To(Succeed(), "Failed to delete gatewayClass: %s", gatewayClass.Name)
+	}
 }
 
 func CreateVectorActivation(
