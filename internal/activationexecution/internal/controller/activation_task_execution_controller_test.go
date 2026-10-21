@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -193,6 +194,11 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		routeKey := types.NamespacedName{Name: StageRouteName(Stage), Namespace: Namespace}
 		ateKey := types.NamespacedName{Name: ActivationTaskExecution, Namespace: Namespace}
 
+		BeforeEach(func() {
+			testutil.CreateGatewayClass(context.Background(), k8sClient, "eg")
+			DeferCleanup(testutil.CleanupGatewayClasses, k8sClient)
+		})
+
 		activate := func(ctx context.Context, spec string) {
 			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
 			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
@@ -211,65 +217,109 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			return gateway
 		}
 
+		eventuallyCondition := func(ctx context.Context, conditionType, reason string) *metav1.Condition {
+			var condition *metav1.Condition
+			Eventually(func(g Gomega) {
+				ate := &konfidencev1alpha1.ActivationTaskExecution{}
+				g.Expect(k8sClient.Get(ctx, ateKey, ate)).To(Succeed())
+				condition = meta.FindStatusCondition(ate.Status.Conditions, conditionType)
+				g.Expect(condition).ToNot(BeNil())
+				g.Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+				g.Expect(condition.Reason).To(Equal(reason))
+			}, routerGatewayPollInterval+timeout, interval).Should(Succeed())
+			return condition
+		}
+
 		expectNoRoute := func(ctx context.Context) {
 			Consistently(func(g Gomega) {
 				g.Expect(testutil.GetHttpRoutes(ctx, k8sClient).Items).To(BeEmpty())
 			}, time.Second*2, interval).Should(Succeed())
-			ate := &konfidencev1alpha1.ActivationTaskExecution{}
-			Expect(k8sClient.Get(ctx, ateKey, ate)).To(Succeed())
-			Expect(meta.IsStatusConditionTrue(ate.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionSucceeded)).To(BeFalse())
 		}
 
 		clusterAddress := func(value string) gwapiv1.GatewayStatusAddress {
-			routability := gwapiv1.GatewayAddressRoutabilityCluster
-			return gwapiv1.GatewayStatusAddress{Value: value, Routability: &routability}
+			return gwapiv1.GatewayStatusAddress{Value: value, Routability: ptrTo(gwapiv1.GatewayAddressRoutabilityCluster)}
 		}
 
-		It("provisions a cluster-routable konfidence-router and attaches the route once its address is cluster-only", func() {
+		It("reports InProgress while waiting and attaches the route once the address is cluster-only", func() {
 			ctx := context.Background()
 			activate(ctx, provisionSpec)
 
 			gateway := eventuallyRouter(ctx)
-			Expect(gateway.Labels).To(HaveKeyWithValue(labelManagedBy, managedByKonfidence))
+			Expect(gateway.Labels).To(HaveKeyWithValue(labelProvisionedBy, provisionedByOrchestrator))
 			Expect(gateway.Spec.GatewayClassName).To(Equal(gwapiv1.ObjectName("eg")))
 			Expect(gateway.Spec.Addresses).To(HaveLen(1))
 			Expect(gateway.Spec.Addresses[0].Routability).To(Equal(gwapiv1.GatewayAddressRoutabilityCluster))
 			Expect(gateway.Spec.Listeners).To(HaveLen(1))
 			Expect(gateway.Spec.Listeners[0].Protocol).To(Equal(gwapiv1.HTTPProtocolType))
 
+			waiting := eventuallyCondition(ctx, konfidencev1alpha1.ActivationTaskExecutionInProgress, reasonWaitingForClusterAddress)
+			Expect(waiting.Message).To(ContainSubstring(defaultGatewayName))
 			expectNoRoute(ctx)
 
-			testutil.SetGatewayAddresses(ctx, k8sClient, gateway, clusterAddress("10.96.0.10"))
+			testutil.SetGatewayStatus(ctx, k8sClient, gateway, nil, clusterAddress("10.96.0.10"))
 
 			Eventually(func(g Gomega) {
 				route := &gwapiv1.HTTPRoute{}
 				g.Expect(k8sClient.Get(ctx, routeKey, route)).To(Succeed())
 				g.Expect(route.Spec.ParentRefs).To(HaveLen(1))
 				g.Expect(route.Spec.ParentRefs[0].Name).To(Equal(gwapiv1.ObjectName(defaultGatewayName)))
-				ate := &konfidencev1alpha1.ActivationTaskExecution{}
-				g.Expect(k8sClient.Get(ctx, ateKey, ate)).To(Succeed())
-				g.Expect(meta.IsStatusConditionTrue(ate.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionSucceeded)).To(BeTrue())
-			}, timeout*3, interval).Should(Succeed())
+			}, routerGatewayPollInterval+timeout, interval).Should(Succeed())
+			eventuallyCondition(ctx, konfidencev1alpha1.ActivationTaskExecutionSucceeded, konfidencev1alpha1.ActivationTaskExecutionSucceeded)
+
+			ate := &konfidencev1alpha1.ActivationTaskExecution{}
+			Expect(k8sClient.Get(ctx, ateKey, ate)).To(Succeed())
+			Expect(meta.FindStatusCondition(ate.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionInProgress)).To(BeNil())
 		})
 
-		It("withholds the route while any address of the provisioned Gateway is not cluster-routable", func() {
+		It("fails the execution and deletes the Gateway when the implementation programs a non-cluster address", func() {
 			ctx := context.Background()
 			activate(ctx, provisionSpec)
 
 			gateway := eventuallyRouter(ctx)
-			testutil.SetGatewayAddresses(ctx, k8sClient, gateway,
+			testutil.SetGatewayStatus(ctx, k8sClient, gateway,
+				[]metav1.Condition{gatewayCondition(gwapiv1.GatewayConditionProgrammed, metav1.ConditionTrue, "Programmed", "")},
 				clusterAddress("10.96.0.10"),
-				gwapiv1.GatewayStatusAddress{Value: "203.0.113.7"},
+				gwapiv1.GatewayStatusAddress{Value: publicAddress},
 			)
 
+			failed := eventuallyCondition(ctx, konfidencev1alpha1.ActivationTaskExecutionFailed, reasonAddressNotClusterRoutable)
+			Expect(failed.Message).To(ContainSubstring(publicAddress))
+			Eventually(func(g Gomega) {
+				g.Expect(testutil.GetGateways(ctx, k8sClient).Items).To(BeEmpty())
+			}, timeout, interval).Should(Succeed())
 			expectNoRoute(ctx)
 		})
 
-		It("uses an admin-provided konfidence-router without modifying it", func() {
+		It("fails the execution with the implementation's reason when the Gateway is not accepted", func() {
+			ctx := context.Background()
+			activate(ctx, provisionSpec)
+
+			gateway := eventuallyRouter(ctx)
+			testutil.SetGatewayStatus(ctx, k8sClient, gateway,
+				[]metav1.Condition{gatewayCondition(gwapiv1.GatewayConditionAccepted, metav1.ConditionFalse, "InvalidParameters", "listener port 80 is reserved")},
+			)
+
+			failed := eventuallyCondition(ctx, konfidencev1alpha1.ActivationTaskExecutionFailed, reasonGatewayNotAccepted)
+			Expect(failed.Message).To(ContainSubstring("listener port 80 is reserved"))
+			expectNoRoute(ctx)
+		})
+
+		It("reports a missing GatewayClass without creating a Gateway", func() {
+			ctx := context.Background()
+			activate(ctx, `{"gatewayClassName":"missing"}`)
+
+			waiting := eventuallyCondition(ctx, konfidencev1alpha1.ActivationTaskExecutionInProgress, reasonGatewayClassNotFound)
+			Expect(waiting.Message).To(ContainSubstring("missing"))
+			Expect(testutil.GetGateways(ctx, k8sClient).Items).To(BeEmpty())
+			expectNoRoute(ctx)
+		})
+
+		It("uses an admin-provided konfidence-router without modifying it, even with a generic managed-by label", func() {
 			ctx := context.Background()
 			admin := &gwapiv1.Gateway{}
 			admin.Name = defaultGatewayName
 			admin.Namespace = Namespace
+			admin.Labels = map[string]string{"app.kubernetes.io/managed-by": "konfidence"}
 			admin.Spec.GatewayClassName = "admin-class"
 			admin.Spec.Listeners = []gwapiv1.Listener{{Name: "http", Protocol: gwapiv1.HTTPProtocolType, Port: 80}}
 			Expect(k8sClient.Create(ctx, admin)).To(Succeed())
@@ -281,7 +331,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			gateway := eventuallyRouter(ctx)
-			Expect(gateway.Labels).ToNot(HaveKey(labelManagedBy))
+			Expect(gateway.Labels).ToNot(HaveKey(labelProvisionedBy))
 			Expect(gateway.Spec.GatewayClassName).To(Equal(gwapiv1.ObjectName("admin-class")))
 			Expect(gateway.Spec.Addresses).To(BeEmpty())
 		})
@@ -299,29 +349,52 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		})
 	})
 
-	DescribeTable("isClusterRoutable",
-		func(spec []gwapiv1.GatewaySpecAddress, status []gwapiv1.GatewayStatusAddress, expected bool) {
-			gateway := &gwapiv1.Gateway{}
-			gateway.Spec.Addresses = spec
-			gateway.Status.Addresses = status
-			Expect(isClusterRoutable(gateway)).To(Equal(expected))
+	DescribeTable("evaluateRouterGateway",
+		func(gateway *gwapiv1.Gateway, age time.Duration, phase routerGatewayPhase, reason string) {
+			now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+			gateway.CreationTimestamp = metav1.NewTime(now.Add(-age))
+			state := evaluateRouterGateway(gateway, now)
+			Expect(state.phase).To(Equal(phase))
+			Expect(state.reason).To(Equal(reason))
+			Expect(state.exposed).To(Equal(reason == reasonRoutabilityNotPersisted || reason == reasonAddressNotClusterRoutable))
+			if phase != routerGatewayReady {
+				Expect(state.message).ToNot(BeEmpty())
+			}
 		},
 		Entry("pruned spec routability (standard-channel CRDs)",
-			[]gwapiv1.GatewaySpecAddress{{}},
-			[]gwapiv1.GatewayStatusAddress{{Value: "10.96.0.10", Routability: ptrTo(gwapiv1.GatewayAddressRoutabilityCluster)}},
-			false),
+			routerGateway(nil, nil, []gwapiv1.GatewaySpecAddress{{}}),
+			time.Second, routerGatewayFailed, reasonRoutabilityNotPersisted),
+		Entry("Gateway rejected by the implementation",
+			routerGateway([]metav1.Condition{gatewayCondition(gwapiv1.GatewayConditionAccepted, metav1.ConditionFalse, "InvalidParameters", "bad")}, nil, nil),
+			time.Second, routerGatewayFailed, reasonGatewayNotAccepted),
 		Entry("no status address assigned yet",
-			[]gwapiv1.GatewaySpecAddress{{Routability: gwapiv1.GatewayAddressRoutabilityCluster}},
-			nil,
-			false),
-		Entry("implementation ignores routability",
-			[]gwapiv1.GatewaySpecAddress{{Routability: gwapiv1.GatewayAddressRoutabilityCluster}},
-			[]gwapiv1.GatewayStatusAddress{{Value: "203.0.113.7"}},
-			false),
+			routerGateway(nil, nil, nil),
+			time.Second, routerGatewayPending, reasonWaitingForClusterAddress),
+		Entry("public address that is not programmed yet",
+			routerGateway(nil, []gwapiv1.GatewayStatusAddress{{Value: publicAddress}}, nil),
+			time.Second, routerGatewayPending, reasonWaitingForClusterAddress),
+		Entry("programmed with an address that ignores routability",
+			routerGateway([]metav1.Condition{gatewayCondition(gwapiv1.GatewayConditionProgrammed, metav1.ConditionTrue, "Programmed", "")},
+				[]gwapiv1.GatewayStatusAddress{{Value: publicAddress}}, nil),
+			time.Second, routerGatewayFailed, reasonAddressNotClusterRoutable),
+		Entry("no address after the readiness timeout (no controller serves the class)",
+			routerGateway(nil, nil, nil),
+			routerGatewayReadyTimeout+time.Second, routerGatewayFailed, reasonGatewayNotReady),
 		Entry("every status address is cluster-routable",
-			[]gwapiv1.GatewaySpecAddress{{Routability: gwapiv1.GatewayAddressRoutabilityCluster}},
-			[]gwapiv1.GatewayStatusAddress{{Value: "10.96.0.10", Routability: ptrTo(gwapiv1.GatewayAddressRoutabilityCluster)}},
-			true),
+			routerGateway(nil, []gwapiv1.GatewayStatusAddress{{Value: "10.96.0.10", Routability: ptrTo(gwapiv1.GatewayAddressRoutabilityCluster)}}, nil),
+			time.Second, routerGatewayReady, ""),
+	)
+
+	DescribeTable("missingGatewayClassState",
+		func(waited time.Duration, phase routerGatewayPhase) {
+			now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+			state := missingGatewayClassState("eg", now.Add(-waited), now)
+			Expect(state.phase).To(Equal(phase))
+			Expect(state.reason).To(Equal(reasonGatewayClassNotFound))
+			Expect(state.message).To(ContainSubstring("eg"))
+		},
+		Entry("within the readiness timeout", time.Second, routerGatewayPending),
+		Entry("after the readiness timeout", routerGatewayReadyTimeout+time.Second, routerGatewayFailed),
 	)
 
 	Context("When a Stage is deleted", func() {
@@ -353,7 +426,31 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 	})
 })
 
+// publicAddress is a TEST-NET-3 address standing in for an externally reachable Gateway address.
+const publicAddress = "203.0.113.7"
+
 func ptrTo[T any](v T) *T { return &v }
+
+func gatewayCondition(conditionType gwapiv1.GatewayConditionType, status metav1.ConditionStatus, reason, message string) metav1.Condition {
+	return metav1.Condition{
+		Type:               string(conditionType),
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: metav1.Now(),
+	}
+}
+
+// routerGateway builds a provisioned konfidence-router; nil spec addresses mean the request persisted.
+func routerGateway(conditions []metav1.Condition, addresses []gwapiv1.GatewayStatusAddress, specAddresses []gwapiv1.GatewaySpecAddress) *gwapiv1.Gateway {
+	gateway := newRouterGateway("default", "eg")
+	if specAddresses != nil {
+		gateway.Spec.Addresses = specAddresses
+	}
+	gateway.Status.Conditions = conditions
+	gateway.Status.Addresses = addresses
+	return gateway
+}
 
 func verifyRule(rule gwapiv1.HTTPRouteRule, stage, resultName, serviceName string, port gwapiv1.PortNumber, vectorDeployment string) {
 	// Header-only selection: stage + service. Any path is the API-defaulted catch-all "/".

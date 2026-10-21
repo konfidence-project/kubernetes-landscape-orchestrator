@@ -26,8 +26,9 @@ const (
 	// stageRouteNamePrefix prefixes the per-stage HTTPRoute name.
 	stageRouteNamePrefix = "konfidence-stage-"
 
-	// labelManagedBy marks the konfidence-router Gateway that Konfidence provisioned. A Gateway of that name without
-	// the label belongs to the admin and is never modified.
-	labelManagedBy      = "app.kubernetes.io/managed-by"
-	managedByKonfidence = "konfidence"
+	// labelProvisionedBy marks the konfidence-router Gateway that the orchestrator provisioned. A Gateway of that name
+	// without the label belongs to the admin and is never modified or deleted. The key is Konfidence-specific because
+	// generic labels such as app.kubernetes.io/managed-by are commonly stamped onto every resource by GitOps tooling.
+	labelProvisionedBy        = "konfidence.cloud/provisioned-by"
+	provisionedByOrchestrator = "kubernetes-landscape-orchestrator"
 )
