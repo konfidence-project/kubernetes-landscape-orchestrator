@@ -10,176 +10,230 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var _ = Describe("ActivationTaskExecution Controller", func() {
 	const (
-		ActivationTaskExecution     = "activation-execution-001"
-		ActivationTaskExecutionType = HttpActivationTaskExecutionType
-		ActivationTaskExecutionSpec = "{}"
-		GatewayName                 = Gateway
-		ServiceName1                = "example-service-1"
-		ServicePort1                = 80
-		ServiceName2                = "example-service-2"
-		ServicePort2                = 81
-		Namespace                   = "default"
-		Stage                       = "stage-dev"
-		StageVersion                = "stage-version-stage-dev-068945876"
-		VectorActivation            = "vector-activation-001"
-		Vector001                   = "https://registry.kdenv.lab/ocm/vector//common.konfidence.cloud/example/vector:0.0.1"
-		VectorDeployment            = "vector-deployment-001"
-		HttpRouteName1              = ServiceName1 + "-" + VectorDeployment + "-" + "activation"
-		HttpRouteName2              = ServiceName2 + "-" + VectorDeployment + "-" + "activation"
-		HostName1                   = ServiceName1 + "." + Stage + "." + DefaultDomain
-		HostName2                   = ServiceName2 + "." + Stage + "." + DefaultDomain
-		timeout                     = time.Second * 10
-		interval                    = time.Millisecond * 250
+		ActivationTaskExecution = "activation-execution-001"
+		ActivationTaskExecSpec  = "{}"
+		ServiceName1            = "candidates"
+		ServicePort1            = 80
+		ServiceName2            = "interviews"
+		ServicePort2            = 81
+		Namespace               = "default"
+		Stage                   = "stage-dev"
+		StageVersion            = "stage-version-stage-dev-068945876"
+		Vector001               = "https://registry.kdenv.lab/ocm/vector//common.konfidence.cloud/example/vector:0.0.1"
+		VectorDeployment        = "vector-deployment-001"
+		compA                   = "comp-a"
+		compB                   = "comp-b"
+		timeout                 = time.Second * 10
+		interval                = time.Millisecond * 250
 	)
 
-	BeforeEach(func() {
+	cleanup := func() {
 		testutil.CleanupActivationTaskExecution(k8sClient, ActivationTaskExecution, Namespace)
 		testutil.CleanupHttpRoutes(k8sClient)
 		testutil.CleanupVectorActivations(k8sClient)
 		testutil.CleanupVectorDeployments(k8sClient)
-	})
+		testutil.CleanupStages(k8sClient)
+		testutil.CleanupStageVersions(k8sClient)
+		testutil.CleanupDeploymentTargets(k8sClient)
+	}
 
-	AfterEach(func() {
-		testutil.CleanupActivationTaskExecution(k8sClient, ActivationTaskExecution, Namespace)
-		testutil.CleanupHttpRoutes(k8sClient)
-		testutil.CleanupVectorActivations(k8sClient)
-		testutil.CleanupVectorDeployments(k8sClient)
-	})
+	BeforeEach(cleanup)
+	AfterEach(cleanup)
 
-	Context("When reconciling a activationTaskExecution", func() {
-		It("should successfully reconcile the activationTaskExecution", func() {
+	deploymentResult := func(name, k8sName string, port int32) konfidencev1alpha1.DeploymentResult {
+		return konfidencev1alpha1.DeploymentResult{
+			Name: name,
+			Type: "http-k8s-service",
+			Spec: runtime.RawExtension{
+				Raw: []byte(fmt.Sprintf(`{"Namespace":"%s","K8sName":"%s","ServicePorts":[{"name":"http","port":%d,"targetPort":"http"}]}`,
+					Namespace, k8sName, port)),
+			},
+		}
+	}
+
+	createVectorDeploymentWithResults := func(ctx context.Context, name string, results map[string]konfidencev1alpha1.ComponentDeploymentResults) {
+		testutil.CreateVectorDeployment(ctx, k8sClient, name, Namespace, Vector001)
+		vd := &konfidencev1alpha1.VectorDeployment{}
+		key := types.NamespacedName{Name: name, Namespace: Namespace}
+		Eventually(func(g Gomega) {
+			g.Expect(k8sClient.Get(ctx, key, vd)).To(Succeed())
+		}, timeout, interval).Should(Succeed())
+		vd.Status.DeploymentResults = results
+		testutil.UpdateVectorDeploymentStatus(ctx, k8sClient, vd)
+	}
+
+	Context("When reconciling a gateway-route activation", func() {
+		It("creates a single per-stage HTTPRoute with a rule per deployment result", func() {
 			ctx := context.Background()
-			testutil.CreateVectorActivation(ctx, k8sClient, VectorActivation, Namespace, Stage, StageVersion, Vector001, VectorDeployment)
+			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
+			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1)},
+				compB: {deploymentResult(ServiceName2, ServiceName2, ServicePort2)},
+			})
 
-			// check that the vectorActivation has been created and has valid properties
-			vectorActivation := &konfidencev1alpha1.VectorActivation{}
-			vectorActivationLookupKey := types.NamespacedName{Name: VectorActivation, Namespace: Namespace}
+			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
+				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-001")
+
+			route := &gwapiv1.HTTPRoute{}
+			routeKey := types.NamespacedName{Name: StageRouteName(Stage), Namespace: Namespace}
 			Eventually(func(g Gomega) {
-				g.Expect(k8sClient.Get(ctx, vectorActivationLookupKey, vectorActivation)).To(Succeed())
-				g.Expect(vectorActivation.Name).To(Equal(VectorActivation))
+				g.Expect(k8sClient.Get(ctx, routeKey, route)).To(Succeed())
+				g.Expect(route.Spec.ParentRefs).To(HaveLen(1))
+				g.Expect(route.Spec.ParentRefs[0].Name).To(Equal(gwapiv1.ObjectName(defaultGatewayName)))
+				g.Expect(route.Spec.ParentRefs[0].Namespace).To(BeNil())
+				g.Expect(route.Spec.Hostnames).To(BeEmpty())
+				g.Expect(route.GetOwnerReferences()).To(BeEmpty())
+				g.Expect(route.Spec.Rules).To(HaveLen(2))
 			}, timeout, interval).Should(Succeed())
 
-			testutil.CreateVectorDeployment(ctx, k8sClient, VectorDeployment, Namespace, Vector001)
+			// rules are sorted by deployment-result name: candidates, interviews
+			verifyRule(route.Spec.Rules[0], Stage, ServiceName1, ServiceName1, ServicePort1, VectorDeployment)
+			verifyRule(route.Spec.Rules[1], Stage, ServiceName2, ServiceName2, ServicePort2, VectorDeployment)
 
-			// check that the vectorDeployment has been created and has valid properties
-			vectorDeployment := &konfidencev1alpha1.VectorDeployment{}
-			vectorDeploymentLookupKey := types.NamespacedName{Name: VectorDeployment, Namespace: Namespace}
+			ate := &konfidencev1alpha1.ActivationTaskExecution{}
 			Eventually(func(g Gomega) {
-				g.Expect(k8sClient.Get(ctx, vectorDeploymentLookupKey, vectorDeployment)).To(Succeed())
-				g.Expect(vectorDeployment.Name).To(Equal(VectorDeployment))
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ActivationTaskExecution, Namespace: Namespace}, ate)).To(Succeed())
+				g.Expect(meta.IsStatusConditionTrue(ate.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionSucceeded)).To(BeTrue())
 			}, timeout, interval).Should(Succeed())
 
-			// create deploymentResults
-			deploymentResults := make(map[string]konfidencev1alpha1.ComponentDeploymentResults)
-			deploymentResults[ServiceName1] = []konfidencev1alpha1.DeploymentResult{{
-				Name: ServiceName1,
-				Type: HttpActivationTaskExecutionType,
-				Spec: runtime.RawExtension{
-					Raw: []byte(fmt.Sprintf(
-						"{\"K8sName\": \"%s\", \"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}",
-						ServiceName1, HttpRouteName1, ServicePort1,
-					)),
-				},
-			}}
-
-			deploymentResults[ServiceName2] = []konfidencev1alpha1.DeploymentResult{{
-				Name: ServiceName2,
-				Type: HttpActivationTaskExecutionType,
-				Spec: runtime.RawExtension{
-					Raw: []byte(fmt.Sprintf(
-						"{\"K8sName\": \"%s\", \"servicePorts\": [{\"name\": \"%s\", \"port\": %d, \"targetPort\": \"http\"}]}",
-						ServiceName2, HttpRouteName2, ServicePort2,
-					)),
-				},
-			}}
-
-			// and update status
-			vectorDeployment.Status.DeploymentResults = deploymentResults
-			testutil.UpdateVectorDeploymentStatus(ctx, k8sClient, vectorDeployment)
-
-			// check that the status has actually been updated
+			// the stage carries the cleanup finalizer
 			Eventually(func(g Gomega) {
-				g.Expect(k8sClient.Get(ctx, vectorDeploymentLookupKey, vectorDeployment)).To(Succeed())
-				g.Expect(vectorDeployment.Status.DeploymentResults).To(HaveLen(2))
+				stage := testutil.GetStage(ctx, k8sClient, Stage, Namespace)
+				g.Expect(controllerutil.ContainsFinalizer(stage, stageRouteFinalizer)).To(BeTrue())
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("patches the existing per-stage route in place on a flip", func() {
+			ctx := context.Background()
+			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+
+			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
+			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1)},
+			})
+			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
+				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-001")
+
+			routeKey := types.NamespacedName{Name: StageRouteName(Stage), Namespace: Namespace}
+			route := &gwapiv1.HTTPRoute{}
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, routeKey, route)).To(Succeed())
+				g.Expect(route.Spec.Rules).To(HaveLen(1))
+				g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Set[0].Value).To(Equal(VectorDeployment))
 			}, timeout, interval).Should(Succeed())
 
-			testutil.CreateActivationTaskExecution(
-				ctx, k8sClient, ActivationTaskExecution, Namespace,
-				ActivationTaskExecutionType, ActivationTaskExecutionSpec, VectorActivation,
-			)
+			// flip: new VD + new activation + new execution
+			const vd2 = "vector-deployment-002"
+			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-002", Namespace, Stage, StageVersion+"-2", Vector001, vd2)
+			createVectorDeploymentWithResults(ctx, vd2, map[string]konfidencev1alpha1.ComponentDeploymentResults{
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort2)},
+			})
+			testutil.CreateActivationTaskExecution(ctx, k8sClient, "activation-execution-002", Namespace,
+				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-002")
 
-			// check that the activationTaskExecution has been created and has valid properties
-			activationTaskExecution := &konfidencev1alpha1.ActivationTaskExecution{}
-			activationTaskExecutionLookupKey := types.NamespacedName{Name: ActivationTaskExecution, Namespace: Namespace}
 			Eventually(func(g Gomega) {
-				g.Expect(k8sClient.Get(ctx, activationTaskExecutionLookupKey, activationTaskExecution)).To(Succeed())
-				g.Expect(activationTaskExecution.Name).To(Equal(ActivationTaskExecution))
-				g.Expect(activationTaskExecution.Spec.Type).To(Equal(ActivationTaskExecutionType))
-				g.Expect(activationTaskExecution.Spec.VectorActivation).To(Equal(VectorActivation))
+				g.Expect(k8sClient.Get(ctx, routeKey, route)).To(Succeed())
+				g.Expect(route.Spec.Rules).To(HaveLen(1))
+				g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Set[0].Value).To(Equal(vd2))
+				g.Expect(*route.Spec.Rules[0].BackendRefs[0].Port).To(Equal(gwapiv1.PortNumber(ServicePort2)))
 			}, timeout, interval).Should(Succeed())
 
-			// check that the httpRoutes have been created and have valid properties
-			port1 := int32(ServicePort1)
-			httpRoute1 := &gwapiv1.HTTPRoute{}
-			httpRouteLookupKey1 := types.NamespacedName{Name: HttpRouteName1, Namespace: Namespace}
-			verifyHTTPRoute(ctx, httpRouteLookupKey1, httpRoute1, GatewayName, HostName1, ServiceName1, VectorDeployment, VectorActivation, &port1, timeout, interval)
+			// still exactly one route for the stage
+			routes := testutil.GetHttpRoutes(ctx, k8sClient)
+			Expect(routes.Items).To(HaveLen(1))
+			testutil.CleanupActivationTaskExecution(k8sClient, "activation-execution-002", Namespace)
+		})
 
-			httpRoute2 := &gwapiv1.HTTPRoute{}
-			httpRouteLookupKey2 := types.NamespacedName{Name: HttpRouteName2, Namespace: Namespace}
-			port2 := int32(ServicePort2)
-			verifyHTTPRoute(ctx, httpRouteLookupKey2, httpRoute2, GatewayName, HostName2, ServiceName2, VectorDeployment, VectorActivation, &port2, timeout, interval)
+		It("skips a superseded execution without touching the route", func() {
+			ctx := context.Background()
+			stage := testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
 
-			// check that the activationTaskExecution has been marked as successful
+			// older StageVersion first, then a strictly newer active one
+			testutil.CreateStageVersion(ctx, k8sClient, "sv-old", Namespace, Stage, Vector001)
+			time.Sleep(1100 * time.Millisecond)
+			testutil.CreateStageVersion(ctx, k8sClient, "sv-new", Namespace, Stage, Vector001)
+			testutil.SetStageActiveVersion(ctx, k8sClient, stage, "sv-new")
+
+			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, "sv-old", Vector001, VectorDeployment)
+			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1)},
+			})
+			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
+				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-001")
+
+			ate := &konfidencev1alpha1.ActivationTaskExecution{}
 			Eventually(func(g Gomega) {
-				g.Expect(k8sClient.Get(ctx, activationTaskExecutionLookupKey, activationTaskExecution)).To(Succeed())
-				g.Expect(activationTaskExecution.Status.Conditions).To(HaveLen(1))
-				g.Expect(meta.IsStatusConditionTrue(activationTaskExecution.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionSucceeded)).To(BeTrue())
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ActivationTaskExecution, Namespace: Namespace}, ate)).To(Succeed())
+				g.Expect(meta.IsStatusConditionTrue(ate.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionSucceeded)).To(BeTrue())
+			}, timeout, interval).Should(Succeed())
+
+			Consistently(func(g Gomega) {
+				g.Expect(testutil.GetHttpRoutes(ctx, k8sClient).Items).To(BeEmpty())
+			}, time.Second*2, interval).Should(Succeed())
+		})
+	})
+
+	Context("When a Stage is deleted", func() {
+		It("removes the per-stage route and releases the finalizer", func() {
+			ctx := context.Background()
+			stage := testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
+			controllerutil.AddFinalizer(stage, stageRouteFinalizer)
+			Expect(k8sClient.Update(ctx, stage)).To(Succeed())
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+
+			route := &gwapiv1.HTTPRoute{}
+			route.Name = StageRouteName(Stage)
+			route.Namespace = Namespace
+			route.Spec.ParentRefs = []gwapiv1.ParentReference{{Name: defaultGatewayName}}
+			Expect(k8sClient.Create(ctx, route)).To(Succeed())
+
+			Expect(k8sClient.Delete(ctx, stage)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: StageRouteName(Stage), Namespace: Namespace}, &gwapiv1.HTTPRoute{})
+				g.Expect(err).To(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: Stage, Namespace: Namespace}, &konfidencev1alpha1.Stage{})
+				g.Expect(err).To(HaveOccurred())
 			}, timeout, interval).Should(Succeed())
 		})
 	})
 })
 
-func verifyHTTPRoute(
-	ctx context.Context,
-	lookupKey types.NamespacedName,
-	route *gwapiv1.HTTPRoute,
-	gatewayName string,
-	hostname string,
-	serviceName string,
-	vectorDeployment string,
-	vectorActivation string,
-	port *gwapiv1.PortNumber,
-	timeout time.Duration,
-	interval time.Duration,
-) {
-	Eventually(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, lookupKey, route)).To(Succeed())
-		g.Expect(route.Spec.CommonRouteSpec.ParentRefs).To(HaveLen(1))
-		g.Expect(route.Spec.CommonRouteSpec.ParentRefs[0].Name).To(Equal(gwapiv1.ObjectName(gatewayName)))
-		g.Expect(route.Spec.Hostnames).To(HaveLen(1))
-		g.Expect(route.Spec.Hostnames[0]).To(Equal(gwapiv1.Hostname(hostname)))
-		g.Expect(route.Spec.Rules).To(HaveLen(1))
-		g.Expect(route.Spec.Rules[0].Filters).To(HaveLen(1))
-		g.Expect(route.Spec.Rules[0].Filters[0].Type).To(Equal(gwapiv1.HTTPRouteFilterRequestHeaderModifier))
-		g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier).To(Not(BeNil()))
-		g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add).To(HaveLen(1))
-		g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Name).To(Equal(gwapiv1.HTTPHeaderName(XVectorId)))
-		g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Add[0].Value).To(Equal(vectorDeployment))
-		g.Expect(route.Spec.Rules[0].BackendRefs).To(HaveLen(1))
-		g.Expect(route.Spec.Rules[0].BackendRefs[0].BackendRef.Name).To(Equal(gwapiv1.ObjectName(serviceName)))
-		g.Expect(route.Spec.Rules[0].BackendRefs[0].BackendRef.Port).To(Equal(port))
-		g.Expect(route.GetOwnerReferences()).To(HaveLen(1))
-		g.Expect(testutil.HasOwnerReference(route.GetOwnerReferences(), metav1.OwnerReference{
-			Kind: konfidencev1alpha1.VectorActivationKind,
-			Name: vectorActivation,
-		})).To(BeTrue())
-	}, timeout, interval).Should(Succeed())
+func verifyRule(rule gwapiv1.HTTPRouteRule, stage, resultName, serviceName string, port gwapiv1.PortNumber, vectorDeployment string) {
+	// Header-only selection: stage + service. Any path is the API-defaulted catch-all "/".
+	Expect(rule.Matches).To(HaveLen(1))
+	if rule.Matches[0].Path != nil {
+		Expect(*rule.Matches[0].Path.Value).To(Equal("/"))
+	}
+	Expect(rule.Matches[0].Headers).To(HaveLen(2))
+	Expect(rule.Matches[0].Headers[0].Name).To(Equal(gwapiv1.HTTPHeaderName(headerStage)))
+	Expect(rule.Matches[0].Headers[0].Value).To(Equal(stage))
+	Expect(rule.Matches[0].Headers[1].Name).To(Equal(gwapiv1.HTTPHeaderName(headerService)))
+	Expect(rule.Matches[0].Headers[1].Value).To(Equal(resultName))
+
+	Expect(rule.Filters).To(HaveLen(1))
+	hm := rule.Filters[0].RequestHeaderModifier
+	Expect(hm.Set).To(HaveLen(1))
+	Expect(hm.Set[0].Name).To(Equal(gwapiv1.HTTPHeaderName(headerRoutingKey)))
+	Expect(hm.Set[0].Value).To(Equal(vectorDeployment))
+	Expect(hm.Remove).To(ConsistOf(headerStage, headerService))
+
+	Expect(rule.BackendRefs).To(HaveLen(1))
+	Expect(rule.BackendRefs[0].Name).To(Equal(gwapiv1.ObjectName(serviceName)))
+	Expect(*rule.BackendRefs[0].Port).To(Equal(port))
 }

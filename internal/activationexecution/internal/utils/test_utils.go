@@ -7,10 +7,12 @@ import (
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -189,4 +191,87 @@ func HasOwnerReference(ownerReferences []metav1.OwnerReference, ref metav1.Owner
 	}
 
 	return false
+}
+
+func CreateStage(ctx context.Context, k8sClient client.Client, name string, namespace string) *konfidencev1alpha1.Stage {
+	stage := &konfidencev1alpha1.Stage{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+	}
+	Expect(k8sClient.Create(ctx, stage)).To(Succeed())
+	return stage
+}
+
+func GetStage(ctx context.Context, k8sClient client.Client, name, namespace string) *konfidencev1alpha1.Stage {
+	stage := &konfidencev1alpha1.Stage{}
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, stage)
+	Expect(err).ToNot(HaveOccurred(), "Failed to fetch stage: %s", name)
+	return stage
+}
+
+func SetStageActiveVersion(ctx context.Context, k8sClient client.Client, stage *konfidencev1alpha1.Stage, stageVersionName string) {
+	stage.Status.ActiveStageVersion = &konfidencev1alpha1.StageVersionReference{Name: stageVersionName}
+	Expect(k8sClient.Status().Update(ctx, stage)).To(Succeed())
+}
+
+func CleanupStages(k8sClient client.Client) {
+	ctx := context.Background()
+	stages := &konfidencev1alpha1.StageList{}
+	Expect(k8sClient.List(ctx, stages)).To(Succeed())
+	for i := range stages.Items {
+		s := &stages.Items[i]
+		controllerutil.RemoveFinalizer(s, "konfidence.cloud/gateway-route-cleanup")
+		_ = k8sClient.Update(ctx, s)
+		_ = k8sClient.Delete(ctx, s)
+	}
+}
+
+func CreateStageVersion(ctx context.Context, k8sClient client.Client, name, namespace, stageName, vector string) {
+	stageVersion := &konfidencev1alpha1.StageVersion{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Spec: konfidencev1alpha1.StageVersionSpec{
+			Vector:          vector,
+			StageGeneration: 1,
+			StageRef:        &konfidencev1alpha1.StageReference{Name: stageName},
+		},
+	}
+	Expect(k8sClient.Create(ctx, stageVersion)).To(Succeed())
+}
+
+func CleanupStageVersions(k8sClient client.Client) {
+	ctx := context.Background()
+	list := &konfidencev1alpha1.StageVersionList{}
+	Expect(k8sClient.List(ctx, list)).To(Succeed())
+	for i := range list.Items {
+		_ = k8sClient.Delete(ctx, &list.Items[i])
+	}
+}
+
+// CreateReadyLocalDeploymentTarget creates a "local" DeploymentTarget and marks it Ready so the activation executor
+// resolves the in-cluster client.
+func CreateReadyLocalDeploymentTarget(ctx context.Context, k8sClient client.Client, name, namespace, deploymentClassName string) {
+	target := &konfidencev1alpha1.DeploymentTarget{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Spec: konfidencev1alpha1.DeploymentTargetSpec{
+			DeploymentClassName: deploymentClassName,
+			Connection:          konfidencev1alpha1.DeploymentTargetConnection{Type: "local"},
+		},
+	}
+	Expect(k8sClient.Create(ctx, target)).To(Succeed())
+	meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
+		Type:               konfidencev1alpha1.DeploymentTargetReadyCondition,
+		Status:             metav1.ConditionTrue,
+		Reason:             "Accepted",
+		Message:            "test",
+		LastTransitionTime: metav1.Now(),
+	})
+	Expect(k8sClient.Status().Update(ctx, target)).To(Succeed())
+}
+
+func CleanupDeploymentTargets(k8sClient client.Client) {
+	ctx := context.Background()
+	list := &konfidencev1alpha1.DeploymentTargetList{}
+	Expect(k8sClient.List(ctx, list)).To(Succeed())
+	for i := range list.Items {
+		_ = k8sClient.Delete(ctx, &list.Items[i])
+	}
 }
