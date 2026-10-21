@@ -19,4 +19,6 @@ type ServiceSpec struct {
 	K8sName string `json:"K8sName"`
 	// ServicePorts are the Service's ports.
 	ServicePorts []corev1.ServicePort `json:"ServicePorts"`
+	// IngressExposed indicates whether the Service may be used for north-south routing.
+	IngressExposed bool `json:"IngressExposed"`
 }

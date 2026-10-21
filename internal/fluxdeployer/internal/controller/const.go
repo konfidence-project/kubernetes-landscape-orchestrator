@@ -11,4 +11,7 @@ const (
 	// annotationDeploymentResult opts a Service into the vector's deployment results. Its value is the stable
 	// result name consumers look up, independent of the deployed Service's name.
 	annotationDeploymentResult = "konfidence.cloud/deployment-result"
+
+	// annotationIngressExposed opts a deployment-result Service into north-south routing when set to "true".
+	annotationIngressExposed = "konfidence.cloud/ingress-exposed"
 )
