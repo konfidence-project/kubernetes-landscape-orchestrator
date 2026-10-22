@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/konfidence-project/konfidence/pkg/deployer"
-	"github.com/konfidence-project/konfidence/pkg/deployer/deployment-target"
+	deploymenttarget "github.com/konfidence-project/konfidence/pkg/deployer/deployment-target"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -142,9 +142,14 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	artifactTypePredicate := deployer.ArtifactTypePredicate(internal.ArtifactTypeKustomize)
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, deployer.ArtifactTypePredicate(internal.ArtifactTypeKustomize))).
-		Watches(&konfidencev1alpha1.DeploymentTarget{}, deploymenttarget.EnqueueArtifactDeploymentsForTarget(internal.ArtifactTypeKustomize, r.Client), builder.WithPredicates(deployer.ArtifactTypePredicate(internal.ArtifactTypeKustomize))).
+		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, artifactTypePredicate)).
+		Watches(
+			&konfidencev1alpha1.DeploymentTarget{},
+			deploymenttarget.EnqueueArtifactDeploymentsForTarget(internal.ArtifactTypeKustomize, r.Client),
+			builder.WithPredicates(artifactTypePredicate),
+		).
 		Owns(&sourcev1.OCIRepository{}).
 		Owns(&kustomizev1.Kustomization{}).
 		Named("kustomize_artifactdeployment").

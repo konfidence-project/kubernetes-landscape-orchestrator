@@ -70,7 +70,7 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 		d := &konfidencev1alpha1.ArtifactDeployment{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Generation: 3},
 			Spec: konfidencev1alpha1.ArtifactDeploymentSpec{
-				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: string(internal.ArtifactTypeHelm)},
+				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: internal.ArtifactTypeHelm},
 				Component: konfidencev1alpha1.OCMComponent{Resources: resources},
 			},
 		}

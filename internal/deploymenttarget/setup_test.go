@@ -31,6 +31,12 @@ users:
     token: test-token
 `
 
+const (
+	secretKind  = "Secret"
+	landscapeNs = "landscape"
+	remoteName  = "remote"
+)
+
 func TestValidate(t *testing.T) {
 	scheme := runtime.NewScheme()
 	if err := corev1.AddToScheme(scheme); err != nil {
@@ -46,21 +52,24 @@ func TestValidate(t *testing.T) {
 		{name: "local target", params: nil},
 		{
 			name:   "valid kubeconfig",
-			params: &konfidencev1alpha1.Parameters{Kind: "Secret", Name: "remote"},
-			secret: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "remote", Namespace: "landscape"}, Data: map[string][]byte{"value": []byte(validKubeconfig)}},
+			params: &konfidencev1alpha1.Parameters{Kind: secretKind, Name: remoteName},
+			secret: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: remoteName, Namespace: landscapeNs}, Data: map[string][]byte{"value": []byte(validKubeconfig)}},
 		},
-		{name: "unsupported reference", params: &konfidencev1alpha1.Parameters{Kind: "ConfigMap", Name: "remote"}, wantErr: true},
-		{name: "missing secret", params: &konfidencev1alpha1.Parameters{Kind: "Secret", Name: "missing"}, wantErr: true},
+		{name: "unsupported reference", params: &konfidencev1alpha1.Parameters{Kind: "ConfigMap", Name: remoteName}, wantErr: true},
+		{name: "missing secret", params: &konfidencev1alpha1.Parameters{Kind: secretKind, Name: "missing"}, wantErr: true},
 		{
 			name:    "secret without kubeconfig",
-			params:  &konfidencev1alpha1.Parameters{Kind: "Secret", Name: "empty"},
-			secret:  &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "empty", Namespace: "landscape"}, Data: map[string][]byte{"other": []byte("value")}},
+			params:  &konfidencev1alpha1.Parameters{Kind: secretKind, Name: "empty"},
+			secret:  &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "empty", Namespace: landscapeNs}, Data: map[string][]byte{"other": []byte("value")}},
 			wantErr: true,
 		},
 		{
-			name:    "invalid kubeconfig",
-			params:  &konfidencev1alpha1.Parameters{Kind: "Secret", Name: "invalid"},
-			secret:  &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "invalid", Namespace: "landscape"}, Data: map[string][]byte{"value": []byte("not a kubeconfig")}},
+			name:   "invalid kubeconfig",
+			params: &konfidencev1alpha1.Parameters{Kind: secretKind, Name: "invalid"},
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "invalid", Namespace: landscapeNs},
+				Data:       map[string][]byte{"value": []byte("not a kubeconfig")},
+			},
 			wantErr: true,
 		},
 	}
@@ -73,8 +82,11 @@ func TestValidate(t *testing.T) {
 			}
 			c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
 			dt := &konfidencev1alpha1.DeploymentTarget{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "landscape"},
-				Spec:       konfidencev1alpha1.DeploymentTargetSpec{Parameters: tt.params},
+				ObjectMeta: metav1.ObjectMeta{Namespace: landscapeNs},
+				Spec: konfidencev1alpha1.DeploymentTargetSpec{
+					ArtifactType: konfidencev1alpha1.MustArtifactType("test.konfidence.cloud"),
+					Parameters:   tt.params,
+				},
 			}
 			err := validate(context.Background(), c, dt)
 			if (err != nil) != tt.wantErr {
