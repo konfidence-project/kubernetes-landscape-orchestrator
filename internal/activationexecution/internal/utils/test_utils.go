@@ -248,12 +248,11 @@ func CleanupStageVersions(k8sClient client.Client) {
 
 // CreateReadyLocalDeploymentTarget creates a "local" DeploymentTarget and marks it Ready so the activation executor
 // resolves the in-cluster client.
-func CreateReadyLocalDeploymentTarget(ctx context.Context, k8sClient client.Client, name, namespace, deploymentClassName string) {
+func CreateReadyLocalDeploymentTarget(ctx context.Context, k8sClient client.Client, name, namespace, artifactType string) {
 	target := &konfidencev1alpha1.DeploymentTarget{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
 		Spec: konfidencev1alpha1.DeploymentTargetSpec{
-			DeploymentClassName: deploymentClassName,
-			Connection:          konfidencev1alpha1.DeploymentTargetConnection{Type: "local"},
+			ArtifactType: konfidencev1alpha1.MustArtifactType(artifactType),
 		},
 	}
 	Expect(k8sClient.Create(ctx, target)).To(Succeed())

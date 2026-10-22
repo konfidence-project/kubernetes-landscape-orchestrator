@@ -57,14 +57,18 @@ func (p *LandscapeClientProvider) ClientFor(_ context.Context, _ string) (client
 	return p.Local, nil
 }
 
-// resolveTarget returns the single ready DeploymentTarget to apply through. With deploymentClassName set it must match;
+// resolveTarget returns the single ready DeploymentTarget to apply through. With artifactType set it must match;
 // otherwise all ready targets must share one connection (e.g. helm and kustomize on the same cluster).
 //
 // Currently unused: ClientFor short-circuits to the control-plane client. Retained for the follow-up in
 // konfidence-project/konfidence#391 / ADR-0036.
 //
 //nolint:unused // see TODO on ClientFor.
-func (p *LandscapeClientProvider) resolveTarget(ctx context.Context, landscapeNs, deploymentClassName string) (*konfidencev1alpha1.DeploymentTarget, error) {
+func (p *LandscapeClientProvider) resolveTarget(
+	ctx context.Context,
+	landscapeNs string,
+	artifactType konfidencev1alpha1.ArtifactType,
+) (*konfidencev1alpha1.DeploymentTarget, error) {
 	targets := &konfidencev1alpha1.DeploymentTargetList{}
 	if err := p.Reader.List(ctx, targets, client.InNamespace(landscapeNs)); err != nil {
 		return nil, fmt.Errorf("list DeploymentTargets in namespace %q: %w", landscapeNs, err)
@@ -73,7 +77,7 @@ func (p *LandscapeClientProvider) resolveTarget(ctx context.Context, landscapeNs
 	var ready []*konfidencev1alpha1.DeploymentTarget
 	for i := range targets.Items {
 		t := &targets.Items[i]
-		if deploymentClassName != "" && t.Spec.DeploymentClassName != deploymentClassName {
+		if artifactType != "" && t.Spec.ArtifactType != artifactType {
 			continue
 		}
 		if meta.IsStatusConditionTrue(t.Status.Conditions, konfidencev1alpha1.DeploymentTargetReadyCondition) {
@@ -82,14 +86,14 @@ func (p *LandscapeClientProvider) resolveTarget(ctx context.Context, landscapeNs
 	}
 
 	if len(ready) == 0 {
-		return nil, fmt.Errorf("no ready DeploymentTarget in namespace %q for routing (deploymentClassName %q)", landscapeNs, deploymentClassName)
+		return nil, fmt.Errorf("no ready DeploymentTarget in namespace %q for routing (artifactType %q)", landscapeNs, artifactType)
 	}
 
 	first := ready[0]
 	for _, t := range ready[1:] {
 		if !sameConnection(first, t) {
 			return nil, fmt.Errorf(
-				"multiple ready DeploymentTargets with different connections in namespace %q; set deploymentClassName in the activation registration spec",
+				"multiple ready DeploymentTargets with different connections in namespace %q; set artifactType in the activation registration spec",
 				landscapeNs,
 			)
 		}
@@ -100,14 +104,7 @@ func (p *LandscapeClientProvider) resolveTarget(ctx context.Context, landscapeNs
 
 //nolint:unused // see TODO on ClientFor.
 func sameConnection(a, b *konfidencev1alpha1.DeploymentTarget) bool {
-	if a.Spec.Connection.Type != b.Spec.Connection.Type {
-		return false
-	}
-	ar, br := a.Spec.Connection.Ref, b.Spec.Connection.Ref
-	if ar == nil || br == nil {
-		return ar == br
-	}
-	return ar.Name == br.Name
+	return a.Spec.ArtifactType == b.Spec.ArtifactType && a.Spec.Parameters == b.Spec.Parameters
 }
 
 // remoteClient builds (and caches by Secret resourceVersion) a client for the target cluster.

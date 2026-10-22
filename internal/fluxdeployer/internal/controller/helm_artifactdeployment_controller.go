@@ -6,7 +6,7 @@ import (
 	"reflect"
 
 	"github.com/konfidence-project/konfidence/pkg/deployer"
-	"github.com/konfidence-project/konfidence/pkg/deployer/deployment-target"
+	deploymenttarget "github.com/konfidence-project/konfidence/pkg/deployer/deployment-target"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -134,9 +134,14 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	artifactTypePredicate := deployer.ArtifactTypePredicate(internal.ArtifactTypeHelm)
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, deployer.ArtifactTypePredicate(internal.ArtifactTypeHelm))).
-		Watches(&konfidencev1alpha1.DeploymentTarget{}, deploymenttarget.EnqueueArtifactDeploymentsForTarget(internal.ArtifactTypeHelm, r.Client), builder.WithPredicates(deployer.ArtifactTypePredicate(internal.ArtifactTypeHelm))).
+		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, artifactTypePredicate)).
+		Watches(
+			&konfidencev1alpha1.DeploymentTarget{},
+			deploymenttarget.EnqueueArtifactDeploymentsForTarget(internal.ArtifactTypeHelm, r.Client),
+			builder.WithPredicates(artifactTypePredicate),
+		).
 		Owns(&sourcev1.HelmRepository{}).
 		Owns(&sourcev1.HelmChart{}).
 		Owns(&helmv2.HelmRelease{}).
