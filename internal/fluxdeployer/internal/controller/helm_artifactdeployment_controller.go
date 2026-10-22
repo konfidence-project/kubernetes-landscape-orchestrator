@@ -53,14 +53,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get artifact deployment object: %w", err)
 	}
-	if deployment.ArtifactType() != internal.DeploymentClassHelm {
-		return ctrl.Result{}, nil
-	}
-	active, err := deploymentClassActive(ctx, r.Client, deployment.Spec.Manifest.Type)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if !active {
+	if deployment.ArtifactType() != internal.ArtifactTypeHelm {
 		return ctrl.Result{}, nil
 	}
 
@@ -118,7 +111,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
-	err = r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
+	err := r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
 	if err != nil {
 		log.Error(err, "failed to handle Helm artifact deployment result", "ArtifactDeployment", deployment)
 	}
@@ -142,9 +135,8 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 // SetupWithManager sets up the controller with the Manager.
 func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, deployer.ArtifactTypePredicate(internal.DeploymentClassHelm))).
-		Watches(&konfidencev1alpha1.DeploymentTarget{}, deploymenttarget.EnqueueArtifactDeploymentsForTarget(internal.DeploymentClassHelm, r.Client), builder.WithPredicates(deployer.ArtifactTypePredicate(internal.DeploymentClassHelm))).
-		Watches(&konfidencev1alpha1.DeploymentClass{}, deploymentClassEventHandler(r.Client, string(internal.DeploymentClassHelm))).
+		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, deployer.ArtifactTypePredicate(internal.ArtifactTypeHelm))).
+		Watches(&konfidencev1alpha1.DeploymentTarget{}, deploymenttarget.EnqueueArtifactDeploymentsForTarget(internal.ArtifactTypeHelm, r.Client), builder.WithPredicates(deployer.ArtifactTypePredicate(internal.ArtifactTypeHelm))).
 		Owns(&sourcev1.HelmRepository{}).
 		Owns(&sourcev1.HelmChart{}).
 		Owns(&helmv2.HelmRelease{}).
