@@ -107,7 +107,9 @@ func sameConnection(a, b *konfidencev1alpha1.DeploymentTarget) bool {
 		return false
 	}
 
-	return a.Spec.Parameters.APIGroup == b.Spec.Parameters.APIGroup && a.Spec.Parameters.Kind == b.Spec.Parameters.Kind && a.Spec.Parameters.Name == b.Spec.Parameters.Name
+	return a.Spec.Parameters.APIGroup == b.Spec.Parameters.APIGroup &&
+		a.Spec.Parameters.Kind == b.Spec.Parameters.Kind &&
+		a.Spec.Parameters.Name == b.Spec.Parameters.Name
 }
 
 // remoteClient builds (and caches by Secret resourceVersion) a client for the target cluster.

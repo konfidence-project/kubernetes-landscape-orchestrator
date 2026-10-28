@@ -201,7 +201,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 
 		activate := func(ctx context.Context, spec string) {
 			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
-			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "helm.konfidence.cloud")
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
 				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1)},
