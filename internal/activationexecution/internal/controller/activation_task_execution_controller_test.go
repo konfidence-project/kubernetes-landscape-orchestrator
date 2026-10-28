@@ -51,13 +51,17 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 	BeforeEach(cleanup)
 	AfterEach(cleanup)
 
-	deploymentResult := func(name, k8sName string, port int32, ingressExposed bool) konfidencev1alpha1.DeploymentResult {
+	deploymentResult := func(name, k8sName string, port int32, northSouthPort string) konfidencev1alpha1.DeploymentResult {
 		return konfidencev1alpha1.DeploymentResult{
 			Name: name,
 			Type: "http-k8s-service",
 			Spec: runtime.RawExtension{
-				Raw: []byte(fmt.Sprintf(`{"Namespace":"%s","K8sName":"%s","ServicePorts":[{"name":"http","port":%d,"targetPort":"http"}],"IngressExposed":%t}`,
-					Namespace, k8sName, port, ingressExposed)),
+				Raw: []byte(fmt.Sprintf(
+					`{"Namespace":"%s","K8sName":"%s",`+
+						`"ServicePorts":[{"name":"http","port":%d,"targetPort":"http","protocol":"TCP"}],`+
+						`"NorthSouthPort":%q}`,
+					Namespace, k8sName, port, northSouthPort,
+				)),
 			},
 		}
 	}
@@ -74,28 +78,34 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 	}
 
 	Context("When reconciling a gateway-route activation", func() {
-		It("builds route rules only for explicitly ingress-exposed deployment results", func() {
-			exposed := deploymentResult(ServiceName1, ServiceName1, ServicePort1, true)
-			unexposed := deploymentResult(ServiceName2, ServiceName2, ServicePort2, false)
-			legacy := deploymentResult("legacy", "legacy", ServicePort1, false)
-			legacy.Spec.Raw = []byte(fmt.Sprintf(
+		It("builds route rules only for deployment results with a selected north-south port", func() {
+			exposed := deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http")
+			exposed.Spec.Raw = []byte(fmt.Sprintf(
+				`{"Namespace":"%s","K8sName":"%s",`+
+					`"ServicePorts":[{"name":"admin","port":8081,"protocol":"TCP"},`+
+					`{"name":"http","port":%d,"protocol":"TCP"}],"NorthSouthPort":"http"}`,
+				Namespace, ServiceName1, ServicePort1,
+			))
+			unexposed := deploymentResult(ServiceName2, ServiceName2, ServicePort2, "")
+			optedOut := deploymentResult("opted-out", "opted-out", ServicePort1, "")
+			optedOut.Spec.Raw = []byte(fmt.Sprintf(
 				`{"Namespace":"%s","K8sName":"legacy","ServicePorts":[{"name":"http","port":%d,"targetPort":"http"}]}`,
 				Namespace, ServicePort1,
 			))
-			noPorts := deploymentResult("no-ports", "no-ports", ServicePort1, true)
+			noPorts := deploymentResult("no-ports", "no-ports", ServicePort1, "http")
 			noPorts.Spec.Raw = []byte(fmt.Sprintf(
-				`{"Namespace":"%s","K8sName":"no-ports","ServicePorts":[],"IngressExposed":true}`,
+				`{"Namespace":"%s","K8sName":"no-ports","ServicePorts":[],"NorthSouthPort":"http"}`,
 				Namespace,
 			))
-			malformed := deploymentResult("malformed", "malformed", ServicePort1, true)
-			malformed.Spec.Raw = []byte(`{"IngressExposed":true`)
-			otherType := deploymentResult("other-type", "other-type", ServicePort1, true)
+			malformed := deploymentResult("malformed", "malformed", ServicePort1, "http")
+			malformed.Spec.Raw = []byte(`{"NorthSouthPort":"http"`)
+			otherType := deploymentResult("other-type", "other-type", ServicePort1, "http")
 			otherType.Type = "other"
 
 			vectorDeployment := &konfidencev1alpha1.VectorDeployment{}
 			vectorDeployment.Name = VectorDeployment
 			vectorDeployment.Status.DeploymentResults = map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {exposed, unexposed, legacy},
+				compA: {exposed, unexposed, optedOut},
 				compB: {noPorts, malformed, otherType},
 			}
 
@@ -105,16 +115,16 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			verifyRule(rules[0], Stage, ServiceName1, ServiceName1, ServicePort1, VectorDeployment)
 		})
 
-		It("creates a single per-stage HTTPRoute with a rule per ingress-exposed deployment result", func() {
+		It("creates a single per-stage HTTPRoute with a rule per north-south deployment result", func() {
 			ctx := context.Background()
 			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
 			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, true)},
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http")},
 				compB: {
-					deploymentResult(ServiceName2, ServiceName2, ServicePort2, true),
-					deploymentResult("internal", "internal", ServicePort1, false),
+					deploymentResult(ServiceName2, ServiceName2, ServicePort2, "http"),
+					deploymentResult("internal", "internal", ServicePort1, ""),
 				},
 			})
 
@@ -157,7 +167,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, true)},
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http")},
 			})
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
 				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-001")
@@ -174,7 +184,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			const vd2 = "vector-deployment-002"
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-002", Namespace, Stage, StageVersion+"-2", Vector001, vd2)
 			createVectorDeploymentWithResults(ctx, vd2, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort2, true)},
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort2, "http")},
 			})
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, "activation-execution-002", Namespace,
 				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-002")
@@ -192,7 +202,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			testutil.CleanupActivationTaskExecution(k8sClient, "activation-execution-002", Namespace)
 		})
 
-		It("removes the existing stage route when no result is ingress-exposed", func() {
+		It("removes the existing stage route when no result selects a north-south port", func() {
 			ctx := context.Background()
 			stage := testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
 			controllerutil.AddFinalizer(stage, stageRouteFinalizer)
@@ -208,7 +218,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, false)},
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, "")},
 			})
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
 				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-001")
@@ -228,13 +238,13 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			Expect(controllerutil.ContainsFinalizer(stage, stageRouteFinalizer)).To(BeTrue())
 		})
 
-		It("succeeds when no route exists and no result is ingress-exposed", func() {
+		It("succeeds when no route exists and no result selects a north-south port", func() {
 			ctx := context.Background()
 			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
 			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, false)},
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, "")},
 			})
 
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
@@ -261,7 +271,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, "sv-old", Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, true)},
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http")},
 			})
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
 				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-001")

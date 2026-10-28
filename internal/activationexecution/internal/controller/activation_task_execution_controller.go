@@ -311,13 +311,20 @@ func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDe
 			if err := json.Unmarshal(result.Spec.Raw, &spec); err != nil {
 				continue
 			}
-			if !spec.IngressExposed {
+			if spec.NorthSouthPort == "" {
 				continue
 			}
-			if len(spec.ServicePorts) == 0 {
+			var selectedPort *corev1.ServicePort
+			for portIndex := range spec.ServicePorts {
+				if spec.ServicePorts[portIndex].Name == spec.NorthSouthPort {
+					selectedPort = &spec.ServicePorts[portIndex]
+					break
+				}
+			}
+			if selectedPort == nil || selectedPort.Protocol != corev1.ProtocolTCP {
 				continue
 			}
-			targets = append(targets, routeTarget{name: result.Name, service: spec.K8sName, port: spec.ServicePorts[0].Port})
+			targets = append(targets, routeTarget{name: result.Name, service: spec.K8sName, port: selectedPort.Port})
 		}
 	}
 
