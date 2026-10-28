@@ -44,7 +44,7 @@ func (r *VectorAssignmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		if !ok {
 			return true
 		}
-		return assignment.Spec.Manifest.Type == internal.ArtifactTypeKustomize || assignment.Spec.Manifest.Type == internal.ArtifactTypeHelm
+		return assignment.Spec.ArtifactType == internal.ArtifactTypeKustomize || assignment.Spec.ArtifactType == internal.ArtifactTypeHelm
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).

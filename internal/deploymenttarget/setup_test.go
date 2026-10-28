@@ -88,7 +88,7 @@ func TestValidate(t *testing.T) {
 					Parameters:   tt.params,
 				},
 			}
-			err := validate(context.Background(), c, dt)
+			_, err := validate(context.Background(), c, dt)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("validate() error = %v, wantErr %v", err, tt.wantErr)
 			}

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
-	targethelpers "github.com/konfidence-project/konfidence/pkg/deployer/deployment-target"
+	targethelpers "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"

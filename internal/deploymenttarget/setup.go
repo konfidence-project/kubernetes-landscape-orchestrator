@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-logr/logr"
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
-	dpltarget "github.com/konfidence-project/konfidence/pkg/deployer/deployment-target"
+	dpltarget "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/build"
 	corev1 "k8s.io/api/core/v1"
@@ -25,32 +25,32 @@ var acceptedKubeconfigKeys = []string{"value", "value.yaml"}
 
 // validate accepts empty parameters for local deployment. Any configured
 // parameters must identify a Secret containing a valid kubeconfig.
-func validate(ctx context.Context, c client.Reader, dt *konfidencev1alpha1.DeploymentTarget) error {
+func validate(ctx context.Context, c client.Reader, dt *konfidencev1alpha1.DeploymentTarget) (dpltarget.ValidationResult, error) {
 	params := dt.Spec.Parameters
 	if params == nil {
 		// empty parameters is allowed and deploys to local cluster
-		return nil
+		return dpltarget.ValidationSuccess(), nil
 	}
 
 	if params.APIGroup != "" || params.Kind != "Secret" || params.Name == "" {
-		return fmt.Errorf("parameters must refer to a Kubernetes Secret containing a kubeconfig")
+		return dpltarget.ValidationFailure("parameters must refer to a Kubernetes Secret containing a kubeconfig"), nil
 	}
 
 	secret := &corev1.Secret{}
 	secretKey := types.NamespacedName{Namespace: dt.Namespace, Name: params.Name}
 	if err := c.Get(ctx, secretKey, secret); err != nil {
-		return fmt.Errorf("get secret %s: %w", secretKey, err)
+		return nil, fmt.Errorf("get secret %s: %w", secretKey, err)
 	}
 
 	kubeconfigBytes, err := kubeconfigFromSecret(secret)
 	if err != nil {
-		return err
+		return dpltarget.ValidationFailure(err.Error()), nil
 	}
 
 	if _, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigBytes); err != nil {
-		return fmt.Errorf("secret %q does not contain a valid kubeconfig: %w", params.Name, err)
+		return dpltarget.ValidationFailure(fmt.Sprintf("secret %q does not contain a valid kubeconfig", params.Name)), nil
 	}
-	return nil
+	return dpltarget.ValidationSuccess(), nil
 }
 
 func kubeconfigFromSecret(secret *corev1.Secret) ([]byte, error) {

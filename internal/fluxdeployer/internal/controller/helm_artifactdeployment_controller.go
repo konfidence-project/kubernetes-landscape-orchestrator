@@ -6,7 +6,7 @@ import (
 	"reflect"
 
 	"github.com/konfidence-project/konfidence/pkg/deployer"
-	deploymenttarget "github.com/konfidence-project/konfidence/pkg/deployer/deployment-target"
+	deploymenttarget "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"

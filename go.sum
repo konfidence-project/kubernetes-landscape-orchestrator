@@ -102,6 +102,12 @@ github.com/klauspost/compress v1.20.1 h1:T7kKElXUMXrUJ2E9QhQhxFtcK5rPyLdsGZvdbLM
 github.com/klauspost/compress v1.20.1/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
 github.com/konfidence-project/konfidence v0.0.0-20261022053535-6c236a096568 h1:MGJ70tt7FOyiY4NJVERfXSxaRj7ylkk1R+fK+Hw9W0k=
 github.com/konfidence-project/konfidence v0.0.0-20261022053535-6c236a096568/go.mod h1:fc3YyoxpTXXEuCWlMgJNi5hNlEJ7/BYGJUZzamoqjeo=
+github.com/konfidence-project/konfidence v0.0.0-20261028092215-0a40927c2711 h1:MJYzd7/FzjccJ0jhlBC/vXqmlK916rouWN/di85N6XY=
+github.com/konfidence-project/konfidence v0.0.0-20261028092215-0a40927c2711/go.mod h1:pVknCBrUUpgVUszPukxG2v7YoEzoRgeb/BK/Hvo6i9Q=
+github.com/konfidence-project/konfidence v0.0.0-20261028093549-f874abb32515 h1:fZTVYyyc++dzkEvrPwhGhmjwi5MQl14QfHHbubBfDHA=
+github.com/konfidence-project/konfidence v0.0.0-20261028093549-f874abb32515/go.mod h1:pVknCBrUUpgVUszPukxG2v7YoEzoRgeb/BK/Hvo6i9Q=
+github.com/konfidence-project/konfidence v0.0.0-20261028095328-a0c681146d9f h1:SfW7vFEMT7zDsnHn0DZ4r7MSLeBjZkX1gzshnZSzeaM=
+github.com/konfidence-project/konfidence v0.0.0-20261028095328-a0c681146d9f/go.mod h1:pVknCBrUUpgVUszPukxG2v7YoEzoRgeb/BK/Hvo6i9Q=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
