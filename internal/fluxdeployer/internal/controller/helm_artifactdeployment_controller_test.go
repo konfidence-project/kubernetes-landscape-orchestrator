@@ -68,21 +68,17 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 
 	newFixture := func(name string, resources []konfidencev1alpha1.OCMResource) (*HelmArtifactDeploymentReconciler, client.Client, *konfidencev1alpha1.ArtifactDeployment) { //nolint:lll
 		d := &konfidencev1alpha1.ArtifactDeployment{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Generation: 3},
+			Name:       name,
+			Namespace:  "default",
+			Generation: 3,
 			Spec: konfidencev1alpha1.ArtifactDeploymentSpec{
-				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: internal.ArtifactTypeHelm},
-				Component: konfidencev1alpha1.OCMComponent{Resources: resources},
-			},
-		}
-		class := &konfidencev1alpha1.DeploymentClass{
-			ObjectMeta: metav1.ObjectMeta{Name: string(internal.ArtifactTypeHelm)},
-			Spec: konfidencev1alpha1.DeploymentClassSpec{
-				Controller: internal.ControllerName,
+				ArtifactType: internal.ArtifactTypeHelm,
+				Component:    konfidencev1alpha1.OCMComponent{Resources: resources},
 			},
 		}
 		cl := fake.NewClientBuilder().
 			WithScheme(newTestScheme()).
-			WithObjects(d, class).
+			WithObjects(d).
 			WithStatusSubresource(&konfidencev1alpha1.ArtifactDeployment{}).
 			Build()
 		r := &HelmArtifactDeploymentReconciler{
