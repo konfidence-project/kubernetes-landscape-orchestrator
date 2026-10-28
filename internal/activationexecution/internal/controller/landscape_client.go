@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Retained for the follow-up in konfidence-project/konfidence#391 / ADR-0036.
+// Retained for the follow-up in konfidence-project/kubernetes-landscape-orchestrator#93 / ADR-0038.
 const (
 	//nolint:unused // see TODO on ClientFor.
 	connectionTypeLocal = "local"
@@ -49,8 +49,7 @@ type cachedClient struct {
 }
 
 // ClientFor returns the client to apply routing resources with.
-//
-// TODO(konfidence-project/konfidence#391, ADR-0036): resolve the DeploymentTarget and apply routes through it instead
+// TODO(konfidence-project/kubernetes-landscape-orchestrator#93, ADR-0038): resolve the DeploymentTarget and apply routes through it instead
 // of short-circuiting to the control-plane client. Deferred until the DeploymentTarget reshape (artifactType +
 // parameters, DeploymentClass CRD removal) lands and routing config has a home on the target.
 func (p *LandscapeClientProvider) ClientFor(_ context.Context, _ string) (client.Client, error) {
@@ -61,7 +60,7 @@ func (p *LandscapeClientProvider) ClientFor(_ context.Context, _ string) (client
 // otherwise all ready targets must share one connection (e.g. helm and kustomize on the same cluster).
 //
 // Currently unused: ClientFor short-circuits to the control-plane client. Retained for the follow-up in
-// konfidence-project/konfidence#391 / ADR-0036.
+// konfidence-project/kubernetes-landscape-orchestrator#93 / ADR-0038.
 //
 //nolint:unused // see TODO on ClientFor.
 func (p *LandscapeClientProvider) resolveTarget(
@@ -104,7 +103,11 @@ func (p *LandscapeClientProvider) resolveTarget(
 
 //nolint:unused // see TODO on ClientFor.
 func sameConnection(a, b *konfidencev1alpha1.DeploymentTarget) bool {
-	return a.Spec.ArtifactType == b.Spec.ArtifactType && a.Spec.Parameters == b.Spec.Parameters
+	if a.Spec.Parameters == nil || b.Spec.Parameters == nil {
+		return false
+	}
+
+	return a.Spec.Parameters.APIGroup == b.Spec.Parameters.APIGroup && a.Spec.Parameters.Kind == b.Spec.Parameters.Kind && a.Spec.Parameters.Name == b.Spec.Parameters.Name
 }
 
 // remoteClient builds (and caches by Secret resourceVersion) a client for the target cluster.
