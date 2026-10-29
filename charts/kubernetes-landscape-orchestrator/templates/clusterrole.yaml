@@ -162,7 +162,6 @@ rules:
 - apiGroups:
   - konfidence.cloud
   resources:
-  - deploymentclasses
   - deploymenttargets
   - stageversions
   verbs:

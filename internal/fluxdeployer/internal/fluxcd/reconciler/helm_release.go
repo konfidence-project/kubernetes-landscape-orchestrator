@@ -75,7 +75,7 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 		}
 	}
 
-	kubeConfig, err := r.ConfigProvider.GetKubeConfigRef(ctx, deployment.GetNamespace(), deployment.Spec.Manifest.Type)
+	kubeConfig, err := r.ConfigProvider.GetKubeConfigRef(ctx, deployment.GetNamespace(), string(deployment.Spec.ArtifactType))
 	if err != nil {
 		return err
 	}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/konfidence-project/konfidence/pkg/deployer"
+	deploymenttarget "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -12,7 +14,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -52,14 +53,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get artifact deployment object: %w", err)
 	}
-	if deployment.Spec.Manifest.Type != internal.DeploymentClassHelm {
-		return ctrl.Result{}, nil
-	}
-	active, err := deploymentClassActive(ctx, r.Client, deployment.Spec.Manifest.Type)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if !active {
+	if deployment.ArtifactType() != internal.ArtifactTypeHelm {
 		return ctrl.Result{}, nil
 	}
 
@@ -117,7 +111,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
-	err = r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
+	err := r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
 	if err != nil {
 		log.Error(err, "failed to handle Helm artifact deployment result", "ArtifactDeployment", deployment)
 	}
@@ -140,21 +134,14 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	helmDeployment := predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		deployment, ok := obj.(*konfidencev1alpha1.ArtifactDeployment)
-		return ok && deployment.Spec.Manifest.Type == internal.DeploymentClassHelm
-	})
-	helmTarget := predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		target, ok := obj.(*konfidencev1alpha1.DeploymentTarget)
-		return ok && target.Spec.DeploymentClassName == internal.DeploymentClassHelm
-	})
-
+	artifactTypePredicate := deployer.ArtifactTypePredicate(internal.ArtifactTypeHelm)
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, helmDeployment)).
-		Watches(&konfidencev1alpha1.DeploymentTarget{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
-			return artifactDeploymentsForTarget(ctx, r.Client, obj.(*konfidencev1alpha1.DeploymentTarget))
-		}), builder.WithPredicates(helmTarget)).
-		Watches(&konfidencev1alpha1.DeploymentClass{}, deploymentClassEventHandler(r.Client, internal.DeploymentClassHelm)).
+		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, artifactTypePredicate)).
+		Watches(
+			&konfidencev1alpha1.DeploymentTarget{},
+			deploymenttarget.EnqueueArtifactDeploymentsForTarget(internal.ArtifactTypeHelm, r.Client),
+			builder.WithPredicates(artifactTypePredicate),
+		).
 		Owns(&sourcev1.HelmRepository{}).
 		Owns(&sourcev1.HelmChart{}).
 		Owns(&helmv2.HelmRelease{}).

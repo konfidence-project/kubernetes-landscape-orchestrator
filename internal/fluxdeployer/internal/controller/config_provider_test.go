@@ -29,19 +29,16 @@ var _ = Describe("ConfigProvider", func() {
 		Expect(k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}})).To(Succeed())
 	})
 
-	createReadyTarget := func(name, connectionType, secretName string) {
-		var ref *konfidencev1alpha1.ConnectionRef
+	createReadyTarget := func(name, secretName string) {
+		var params *konfidencev1alpha1.Parameters
 		if secretName != "" {
-			ref = &konfidencev1alpha1.ConnectionRef{Kind: "Secret", Name: secretName}
+			params = &konfidencev1alpha1.Parameters{Kind: "Secret", Name: secretName}
 		}
 		target := &konfidencev1alpha1.DeploymentTarget{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
 			Spec: konfidencev1alpha1.DeploymentTargetSpec{
-				DeploymentClassName: deploymentType,
-				Connection: konfidencev1alpha1.DeploymentTargetConnection{
-					Type: connectionType,
-					Ref:  ref,
-				},
+				ArtifactType: deploymentType,
+				Parameters:   params,
 			},
 		}
 		Expect(k8sClient.Create(ctx, target)).To(Succeed())
@@ -56,7 +53,7 @@ var _ = Describe("ConfigProvider", func() {
 	}
 
 	It("returns the Secret referenced by the ready DeploymentTarget", func() {
-		createReadyTarget("remote", "kubeconfig", "remote-kubeconfig")
+		createReadyTarget("remote", "remote-kubeconfig")
 
 		ref, err := cp.GetKubeConfigRef(ctx, namespace, deploymentType)
 		Expect(err).NotTo(HaveOccurred())
@@ -64,7 +61,7 @@ var _ = Describe("ConfigProvider", func() {
 	})
 
 	It("returns nil for a local DeploymentTarget", func() {
-		createReadyTarget("local", "local", "")
+		createReadyTarget("local", "")
 
 		ref, err := cp.GetKubeConfigRef(ctx, namespace, deploymentType)
 		Expect(err).NotTo(HaveOccurred())
@@ -73,16 +70,16 @@ var _ = Describe("ConfigProvider", func() {
 
 	It("fails when no ready DeploymentTarget exists", func() {
 		ref, err := cp.GetKubeConfigRef(ctx, namespace, deploymentType)
-		Expect(err).To(MatchError(ContainSubstring("expected exactly one ready DeploymentTarget")))
+		Expect(err).To(MatchError(ContainSubstring("not found")))
 		Expect(ref).To(BeNil())
 	})
 
 	It("fails when multiple ready DeploymentTargets exist", func() {
-		createReadyTarget("first", "local", "")
-		createReadyTarget("second", "local", "")
+		createReadyTarget("first", "")
+		createReadyTarget("second", "")
 
 		ref, err := cp.GetKubeConfigRef(ctx, namespace, deploymentType)
-		Expect(err).To(MatchError(ContainSubstring("found 2")))
+		Expect(err).To(MatchError(ContainSubstring("multiple DeploymentTargets")))
 		Expect(ref).To(BeNil())
 	})
 
