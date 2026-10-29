@@ -148,7 +148,10 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 		return ctrl.Result{}, fmt.Errorf("failed to get VectorDeployment %s: %w", vectorActivation.Spec.VectorDeployment, err)
 	}
 
-	rules := buildRouteRules(vectorActivation.Spec.Stage, vectorDeployment)
+	rules, err := buildRouteRules(vectorActivation.Spec.Stage, vectorDeployment)
+	if err != nil {
+		return err
+	}
 	if len(rules) == 0 {
 		landscapeClient, err := r.Landscape.ClientFor(ctx, req.Namespace)
 		if err != nil {
@@ -294,7 +297,7 @@ func (r *ActivationTaskExecutionReconciler) applyStageRoute(
 // the result's Service. Selection is header-only and therefore authoritative: the admin edge sets x-konfidence-service
 // (e.g. derived from the request path). Gateway API ranks path above headers and cannot match a missing header, so a
 // path match here could never be overridden by the service header.
-func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDeployment) []gwapiv1.HTTPRouteRule {
+func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDeployment) ([]gwapiv1.HTTPRouteRule, error) {
 	type routeTarget struct {
 		name    string
 		service string
@@ -309,7 +312,7 @@ func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDe
 			}
 			var spec deploymentresult.ServiceSpec
 			if err := json.Unmarshal(result.Spec.Raw, &spec); err != nil {
-				continue
+				return nil, fmt.Errorf("decode ServiceSpec for deployment result %q: %w", result.Name, err)
 			}
 			if spec.NorthSouthPort == "" {
 				continue
@@ -322,7 +325,7 @@ func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDe
 				}
 			}
 			if selectedPort == nil || selectedPort.Protocol != corev1.ProtocolTCP {
-				continue
+				return nil, fmt.Errorf("resolve north-south port %q for deployment result %q: no matching TCP Service port", spec.NorthSouthPort, result.Name)
 			}
 			targets = append(targets, routeTarget{name: result.Name, service: spec.K8sName, port: selectedPort.Port})
 		}
@@ -360,7 +363,7 @@ func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDe
 			}},
 		})
 	}
-	return rules
+	return rules, nil
 }
 
 func parseGatewayRouteConfig(activationTaskExecution *konfidencev1alpha1.ActivationTaskExecution) (gatewayRouteConfig, error) {

@@ -14,6 +14,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -78,6 +80,51 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 	}
 
 	Context("When reconciling a gateway-route activation", func() {
+		It("preserves stage routing when a result breaches the selected-port contract", func() {
+			ctx := context.Background()
+			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
+			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
+				compA: {
+					deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http"),
+					deploymentResult("broken", "broken", ServicePort2, "missing"),
+				},
+			})
+
+			route := &gwapiv1.HTTPRoute{}
+			route.Name = StageRouteName(Stage)
+			route.Namespace = Namespace
+			route.Spec.ParentRefs = []gwapiv1.ParentReference{{Name: defaultGatewayName}}
+			route.Spec.Rules = []gwapiv1.HTTPRouteRule{{BackendRefs: []gwapiv1.HTTPBackendRef{{
+				BackendRef: gwapiv1.BackendRef{BackendObjectReference: gwapiv1.BackendObjectReference{
+					Name: "active-service", Port: new(gwapiv1.PortNumber(8080)),
+				}},
+			}}}}
+			Expect(k8sClient.Create(ctx, route)).To(Succeed())
+			routeKey := types.NamespacedName{Name: route.Name, Namespace: Namespace}
+			Expect(k8sClient.Get(ctx, routeKey, route)).To(Succeed())
+			originalSpec := route.Spec.DeepCopy()
+
+			// Keep the manager's type filter from racing this explicit reconciliation.
+			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
+				"direct-reconcile", ActivationTaskExecSpec, "vector-activation-001")
+			reconciler := &ActivationTaskExecutionReconciler{
+				Client: k8sClient, Scheme: reconcileScheme, Recorder: events.NewFakeRecorder(10),
+				Landscape: &LandscapeClientProvider{Local: k8sClient, Reader: k8sClient, Scheme: reconcileScheme},
+			}
+			key := types.NamespacedName{Name: ActivationTaskExecution, Namespace: Namespace}
+			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: key})
+			Expect(err).To(MatchError(ContainSubstring("broken")))
+			Expect(k8sClient.Get(ctx, routeKey, route)).To(Succeed())
+			Expect(route.Spec).To(Equal(*originalSpec))
+			stage := testutil.GetStage(ctx, k8sClient, Stage, Namespace)
+			Expect(controllerutil.ContainsFinalizer(stage, stageRouteFinalizer)).To(BeFalse())
+			ate := &konfidencev1alpha1.ActivationTaskExecution{}
+			Expect(k8sClient.Get(ctx, key, ate)).To(Succeed())
+			Expect(meta.IsStatusConditionTrue(ate.Status.Conditions, konfidencev1alpha1.ActivationTaskExecutionSucceeded)).To(BeFalse())
+		})
+
 		It("builds route rules only for deployment results with a selected north-south port", func() {
 			exposed := deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http")
 			exposed.Spec.Raw = []byte(fmt.Sprintf(
@@ -92,13 +139,6 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				`{"Namespace":"%s","K8sName":"legacy","ServicePorts":[{"name":"http","port":%d,"targetPort":"http"}]}`,
 				Namespace, ServicePort1,
 			))
-			noPorts := deploymentResult("no-ports", "no-ports", ServicePort1, "http")
-			noPorts.Spec.Raw = []byte(fmt.Sprintf(
-				`{"Namespace":"%s","K8sName":"no-ports","ServicePorts":[],"NorthSouthPort":"http"}`,
-				Namespace,
-			))
-			malformed := deploymentResult("malformed", "malformed", ServicePort1, "http")
-			malformed.Spec.Raw = []byte(`{"NorthSouthPort":"http"`)
 			otherType := deploymentResult("other-type", "other-type", ServicePort1, "http")
 			otherType.Type = "other"
 
@@ -106,14 +146,33 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			vectorDeployment.Name = VectorDeployment
 			vectorDeployment.Status.DeploymentResults = map[string]konfidencev1alpha1.ComponentDeploymentResults{
 				compA: {exposed, unexposed, optedOut},
-				compB: {noPorts, malformed, otherType},
+				compB: {otherType},
 			}
 
-			rules := buildRouteRules(Stage, vectorDeployment)
+			rules, err := buildRouteRules(Stage, vectorDeployment)
 
+			Expect(err).NotTo(HaveOccurred())
 			Expect(rules).To(HaveLen(1))
 			verifyRule(rules[0], Stage, ServiceName1, ServiceName1, ServicePort1, VectorDeployment)
 		})
+
+		DescribeTable("rejects contract breaches without returning partial rules", func(raw, message string) {
+			broken := deploymentResult("broken", "broken", ServicePort2, "http")
+			broken.Spec.Raw = []byte(raw)
+			vd := &konfidencev1alpha1.VectorDeployment{}
+			vd.Status.DeploymentResults = map[string]konfidencev1alpha1.ComponentDeploymentResults{
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http"), broken},
+			}
+
+			rules, err := buildRouteRules(Stage, vd)
+
+			Expect(err).To(MatchError(And(ContainSubstring("broken"), ContainSubstring(message))))
+			Expect(rules).To(BeNil())
+		},
+			Entry("malformed JSON", `{"NorthSouthPort":"http"`, "decode ServiceSpec"),
+			Entry("missing selected name", `{"NorthSouthPort":"http","ServicePorts":[{"name":"admin","port":8081,"protocol":"TCP"}]}`, `north-south port "http"`),
+			Entry("selected non-TCP port", `{"NorthSouthPort":"http","ServicePorts":[{"name":"http","port":80,"protocol":"UDP"}]}`, `north-south port "http"`),
+		)
 
 		It("creates a single per-stage HTTPRoute with a rule per north-south deployment result", func() {
 			ctx := context.Background()
@@ -183,8 +242,15 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			// flip: new VD + new activation + new execution
 			const vd2 = "vector-deployment-002"
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-002", Namespace, Stage, StageVersion+"-2", Vector001, vd2)
+			switched := deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http")
+			switched.Spec.Raw = []byte(fmt.Sprintf(
+				`{"Namespace":"%s","K8sName":"%s",`+
+					`"ServicePorts":[{"name":"http","port":80,"protocol":"TCP"},`+
+					`{"name":"web","port":8080,"protocol":"TCP"}],"NorthSouthPort":"web"}`,
+				Namespace, ServiceName1,
+			))
 			createVectorDeploymentWithResults(ctx, vd2, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort2, "http")},
+				compA: {switched},
 			})
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, "activation-execution-002", Namespace,
 				TypeGatewayRoute, ActivationTaskExecSpec, "vector-activation-002")
@@ -193,7 +259,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				g.Expect(k8sClient.Get(ctx, routeKey, route)).To(Succeed())
 				g.Expect(route.Spec.Rules).To(HaveLen(1))
 				g.Expect(route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Set[0].Value).To(Equal(vd2))
-				g.Expect(*route.Spec.Rules[0].BackendRefs[0].Port).To(Equal(gwapiv1.PortNumber(ServicePort2)))
+				g.Expect(*route.Spec.Rules[0].BackendRefs[0].Port).To(Equal(gwapiv1.PortNumber(8080)))
 			}, timeout, interval).Should(Succeed())
 
 			// still exactly one route for the stage
