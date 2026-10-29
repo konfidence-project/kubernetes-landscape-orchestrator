@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.1.0-alpha.1](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/compare/0.1.0-alpha.1...0.1.0-alpha.1) (2026-10-29)
+
+
+### Features
+
+* **activationexecution:** provision a cluster-internal konfidence-router via GEP-5093 ([3529bd2](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/3529bd2bc3d83c8f6214e106379263efcb74110d))
+* **activationexecution:** stage-routing activation via Gateway API HTTPRoutes ([#79](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/issues/79)) ([db2f25b](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/db2f25b5fbcbc0fc636a18a71e39f65949fa294a))
+* remove vectorassignment ([#92](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/issues/92)) ([54b7e03](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/54b7e03eae13c5563cc3d236b0e3bcebac432b27))
+* use new deployer library helper functions ([#86](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/issues/86)) ([329328e](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/329328e500aebe3765423172eda0216d6ffd2e4b))
+
+
+### Bug Fixes
+
+* **activationexecution:** report and bound the wait for a provisioned konfidence-router ([e944fca](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/e944fcaf6f18689008e2d0e628df43928e9e1d52))
+
+
+### Maintenance
+
+* **deps:** bump gateway-api to v1.7.0-rc.1 and go to 1.27.3 ([bc9816f](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/bc9816f9c6c54c7f6ce42326cd1e3dd673168c7b))
+* **deps:** bump sigs.k8s.io/gateway-api from 1.7.0-rc.1 to 1.7.0-rc.3 ([2ea8749](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/2ea87496022fee548922691ec20a698447b67166))
+* **deps:** bump the gomod-minor-patch group across 1 directory with 3 updates ([b6e315c](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/b6e315c4b9102d30380db8321d2356eece89e6bf))
+* **deps:** bump the gomod-minor-patch group with 3 updates ([e2247ec](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/e2247ec2c840e14518ea9e063746f2f556f7f822))
+* **deps:** bump the gomod-minor-patch group with 4 updates ([0dc3e9a](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/0dc3e9ad9f835d474c238124602df9f267a92ed3))
+* **lint:** bump golangci-lint to 2.15.0 for go 1.27 ([b4093e1](https://github.com/konfidence-project/kubernetes-landscape-orchestrator/commit/b4093e151625a2ab74aa6e47fd1bc12ec83decb3))
+
 ## 0.1.0-alpha.1 (2026-09-30)
 
 
