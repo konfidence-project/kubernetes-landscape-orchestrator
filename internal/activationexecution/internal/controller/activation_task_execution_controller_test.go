@@ -371,7 +371,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1)},
+				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http")},
 			})
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace, TypeGatewayRoute, spec, "vector-activation-001")
 		}

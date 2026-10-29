@@ -150,19 +150,19 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 
 	rules, err := buildRouteRules(vectorActivation.Spec.Stage, vectorDeployment)
 	if err != nil {
-		return err
+		return ctrl.Result{}, err
 	}
 	if len(rules) == 0 {
 		landscapeClient, err := r.Landscape.ClientFor(ctx, req.Namespace)
 		if err != nil {
-			return fmt.Errorf("resolve landscape client: %w", err)
+			return ctrl.Result{}, fmt.Errorf("resolve landscape client: %w", err)
 		}
 		route := &gwapiv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{
 			Name:      StageRouteName(vectorActivation.Spec.Stage),
 			Namespace: req.Namespace,
 		}}
 		if err := landscapeClient.Delete(ctx, route); err != nil && !errors.IsNotFound(err) {
-			return fmt.Errorf("delete HTTPRoute for stage %s: %w", vectorActivation.Spec.Stage, err)
+			return ctrl.Result{}, fmt.Errorf("delete HTTPRoute for stage %s: %w", vectorActivation.Spec.Stage, err)
 		}
 		log.Info("no routable deployment results, removed route", "stage", vectorActivation.Spec.Stage)
 		r.markSucceeded(activationTaskExecution)
