@@ -145,7 +145,6 @@ rules:
   - deploymenttargets/status
   - taskexecutions/status
   - vectoractivations/status
-  - vectorassignments/status
   - vectordata/status
   - vectordeployments/status
   verbs:
@@ -165,7 +164,6 @@ rules:
   resources:
   - deploymenttargets
   - stageversions
-  - vectorassignments
   verbs:
   - get
   - list
