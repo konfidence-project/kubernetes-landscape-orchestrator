@@ -148,9 +148,23 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 		return ctrl.Result{}, fmt.Errorf("failed to get VectorDeployment %s: %w", vectorActivation.Spec.VectorDeployment, err)
 	}
 
-	rules := buildRouteRules(vectorActivation.Spec.Stage, vectorDeployment)
+	rules, err := buildRouteRules(vectorActivation.Spec.Stage, vectorDeployment)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	if len(rules) == 0 {
-		log.Info("no routable deployment results, skipping route", "stage", vectorActivation.Spec.Stage)
+		landscapeClient, err := r.Landscape.ClientFor(ctx, req.Namespace)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("resolve landscape client: %w", err)
+		}
+		route := &gwapiv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{
+			Name:      StageRouteName(vectorActivation.Spec.Stage),
+			Namespace: req.Namespace,
+		}}
+		if err := landscapeClient.Delete(ctx, route); err != nil && !errors.IsNotFound(err) {
+			return ctrl.Result{}, fmt.Errorf("delete HTTPRoute for stage %s: %w", vectorActivation.Spec.Stage, err)
+		}
+		log.Info("no routable deployment results, removed route", "stage", vectorActivation.Spec.Stage)
 		r.markSucceeded(activationTaskExecution)
 		return ctrl.Result{}, nil
 	}
@@ -283,7 +297,7 @@ func (r *ActivationTaskExecutionReconciler) applyStageRoute(
 // the result's Service. Selection is header-only and therefore authoritative: the admin edge sets x-konfidence-service
 // (e.g. derived from the request path). Gateway API ranks path above headers and cannot match a missing header, so a
 // path match here could never be overridden by the service header.
-func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDeployment) []gwapiv1.HTTPRouteRule {
+func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDeployment) ([]gwapiv1.HTTPRouteRule, error) {
 	type routeTarget struct {
 		name    string
 		service string
@@ -293,21 +307,27 @@ func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDe
 
 	for _, deploymentResults := range vectorDeployment.Status.DeploymentResults {
 		for _, result := range deploymentResults {
-			// TODO: gate north-south exposure on an explicit ingress whitelist opt-in. Today every
-			// http-k8s-service deployment result is exposed; being an (east-west) deployment result must
-			// not auto-expose a service to the edge. Add the opt-in filter (continue unless whitelisted)
-			// here once the annotation/field is decided.
 			if result.Type != deploymentresult.TypeHTTPK8sService {
 				continue
 			}
 			var spec deploymentresult.ServiceSpec
 			if err := json.Unmarshal(result.Spec.Raw, &spec); err != nil {
+				return nil, fmt.Errorf("decode ServiceSpec for deployment result %q: %w", result.Name, err)
+			}
+			if spec.NorthSouthPort == "" {
 				continue
 			}
-			if len(spec.ServicePorts) == 0 {
-				continue
+			var selectedPort *corev1.ServicePort
+			for portIndex := range spec.ServicePorts {
+				if spec.ServicePorts[portIndex].Name == spec.NorthSouthPort {
+					selectedPort = &spec.ServicePorts[portIndex]
+					break
+				}
 			}
-			targets = append(targets, routeTarget{name: result.Name, service: spec.K8sName, port: spec.ServicePorts[0].Port})
+			if selectedPort == nil || selectedPort.Protocol != corev1.ProtocolTCP {
+				return nil, fmt.Errorf("resolve north-south port %q for deployment result %q: no matching TCP Service port", spec.NorthSouthPort, result.Name)
+			}
+			targets = append(targets, routeTarget{name: result.Name, service: spec.K8sName, port: selectedPort.Port})
 		}
 	}
 
@@ -343,7 +363,7 @@ func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDe
 			}},
 		})
 	}
-	return rules
+	return rules, nil
 }
 
 func parseGatewayRouteConfig(activationTaskExecution *konfidencev1alpha1.ActivationTaskExecution) (gatewayRouteConfig, error) {
