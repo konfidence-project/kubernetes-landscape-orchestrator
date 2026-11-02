@@ -83,7 +83,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		It("preserves stage routing when a result breaches the selected-port contract", func() {
 			ctx := context.Background()
 			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
-			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "helm.konfidence.cloud")
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
 				compA: {
@@ -170,14 +170,22 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			Expect(rules).To(BeNil())
 		},
 			Entry("malformed JSON", `{"IngressExposedPortName":"http"`, "decode ServiceSpec"),
-			Entry("missing selected name", `{"IngressExposedPortName":"http","ServicePorts":[{"name":"admin","port":8081,"protocol":"TCP"}]}`, `set Service annotation "konfidence.cloud/exposed-port-name"`),
-			Entry("selected non-TCP port", `{"IngressExposedPortName":"http","ServicePorts":[{"name":"http","port":80,"protocol":"UDP"}]}`, `set Service annotation "konfidence.cloud/exposed-port-name"`),
+			Entry(
+				"missing selected name",
+				`{"IngressExposedPortName":"http","ServicePorts":[{"name":"admin","port":8081,"protocol":"TCP"}]}`,
+				`set Service annotation "konfidence.cloud/exposed-port-name"`,
+			),
+			Entry(
+				"selected non-TCP port",
+				`{"IngressExposedPortName":"http","ServicePorts":[{"name":"http","port":80,"protocol":"UDP"}]}`,
+				`set Service annotation "konfidence.cloud/exposed-port-name"`,
+			),
 		)
 
 		It("creates a single per-stage HTTPRoute with a rule per north-south deployment result", func() {
 			ctx := context.Background()
 			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
-			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "helm.konfidence.cloud")
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
 				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http")},
@@ -222,7 +230,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		It("patches the existing per-stage route in place on a flip", func() {
 			ctx := context.Background()
 			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
-			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "helm.konfidence.cloud")
 
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
@@ -273,7 +281,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			stage := testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
 			controllerutil.AddFinalizer(stage, stageRouteFinalizer)
 			Expect(k8sClient.Update(ctx, stage)).To(Succeed())
-			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "helm.konfidence.cloud")
 
 			routeKey := types.NamespacedName{Name: StageRouteName(Stage), Namespace: Namespace}
 			route := &gwapiv1.HTTPRoute{}
@@ -307,7 +315,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		It("succeeds when no route exists and no result selects a north-south port", func() {
 			ctx := context.Background()
 			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
-			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "helm.konfidence.cloud")
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
 				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, "")},
@@ -327,7 +335,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 		It("skips a superseded execution without touching the route", func() {
 			ctx := context.Background()
 			stage := testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
-			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "helm.konfidence.cloud")
 
 			// older StageVersion first, then a strictly newer active one
 			testutil.CreateStageVersion(ctx, k8sClient, "sv-old", Namespace, Stage, Vector001)
@@ -368,7 +376,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 
 		activate := func(ctx context.Context, spec string) {
 			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
-			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "helm.konfidence.cloud")
 			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
 			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
 				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http")},
@@ -570,7 +578,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			stage := testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
 			controllerutil.AddFinalizer(stage, stageRouteFinalizer)
 			Expect(k8sClient.Update(ctx, stage)).To(Succeed())
-			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "helm.konfidence.cloud")
 
 			route := &gwapiv1.HTTPRoute{}
 			route.Name = StageRouteName(Stage)
@@ -596,7 +604,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			stage := testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
 			controllerutil.AddFinalizer(stage, stageRouteFinalizer)
 			Expect(k8sClient.Update(ctx, stage)).To(Succeed())
-			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "kubernetes-helm")
+			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "helm.konfidence.cloud")
 
 			Expect(k8sClient.Delete(ctx, stage)).To(Succeed())
 

@@ -210,7 +210,8 @@ func TestValidateExposePorts_UnsupportedProtocolDeterminesReason(t *testing.T) {
 			portName: "events",
 			port:     9000,
 			protocol: corev1.ProtocolSCTP,
-			message:  `Service "events": annotation "konfidence.cloud/exposed-port-name" names port "events", which uses unsupported protocol "SCTP" (only TCP is supported)`,
+			message: `Service "events": annotation "konfidence.cloud/exposed-port-name" names port "events", ` +
+				`which uses unsupported protocol "SCTP" (only TCP is supported)`,
 		},
 	}
 
@@ -252,7 +253,8 @@ func TestValidateExposePorts_DoesNotSelectUnnamedPortImplicitly(t *testing.T) {
 	if err.reason != artifactDeploymentStalledReasonExposePortNotFound {
 		t.Errorf("reason: got %q, want %q", err.reason, artifactDeploymentStalledReasonExposePortNotFound)
 	}
-	wantMessage := `Service "service": annotation "konfidence.cloud/exposed-port-name" names port "http", but no Service port has that name (available ports: ""/TCP)`
+	wantMessage := `Service "service": annotation "konfidence.cloud/exposed-port-name" names port "http", ` +
+		`but no Service port has that name (available ports: ""/TCP)`
 	if err.Error() != wantMessage {
 		t.Errorf("message: got %q, want %q", err.Error(), wantMessage)
 	}
