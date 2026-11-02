@@ -117,8 +117,8 @@ func (s *DeploymentResultStatusUpdater) fetchExposableServices(
 
 func hasDeploymentResultName(service *corev1.Service) bool {
 	if service.Annotations[annotationDeploymentResult] == "" {
-		// TODO: Services carrying expose-port without a usable deployment-result identity are intentionally ignored
-		// for now. Revisit this behavior when the producer contract gains a stable identity for such Services.
+		// TODO: Services with `konfidence.cloud/exposed-port-name` but no deployment-result identity are ignored. Revisit
+		// this when such Services have a stable deployment-result identity.
 		return false
 	}
 	return true
@@ -140,7 +140,7 @@ func validateExposePorts(serviceList *corev1.ServiceList) *exposureValidationErr
 			continue
 		}
 
-		selectedPort := service.Annotations[annotationExposePort]
+		selectedPort := service.Annotations[annotationExposedPortName]
 		if selectedPort == "" {
 			continue
 		}
@@ -157,15 +157,15 @@ func validateExposePorts(serviceList *corev1.ServiceList) *exposureValidationErr
 			return &exposureValidationError{
 				reason: artifactDeploymentStalledReasonExposePortNotFound,
 				message: fmt.Sprintf(
-					"Service %q selects expose-port %q, but no port has that exact name (available ports: %s)",
-					service.Name, selectedPort, formatAvailablePorts(service.Spec.Ports)),
+					"Service %q: annotation %q names port %q, but no Service port has that name (available ports: %s)",
+					service.Name, annotationExposedPortName, selectedPort, formatAvailablePorts(service.Spec.Ports)),
 			}
 		case matchedPort.Protocol != corev1.ProtocolTCP:
 			return &exposureValidationError{
 				reason: artifactDeploymentStalledReasonExposePortUnsupportedProtocol,
 				message: fmt.Sprintf(
-					"Service %q selects expose-port %q with unsupported protocol %q (only TCP is supported)",
-					service.Name, selectedPort, matchedPort.Protocol),
+					"Service %q: annotation %q names port %q, which uses unsupported protocol %q (only TCP is supported)",
+					service.Name, annotationExposedPortName, selectedPort, matchedPort.Protocol),
 			}
 		}
 	}
@@ -194,10 +194,10 @@ func mapServicesToDeploymentResults(serviceList *corev1.ServiceList) ([]konfiden
 		seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService] = service.Name
 
 		deploymentResultServiceSpecRaw, err := json.Marshal(deploymentresult.ServiceSpec{
-			Namespace:      service.Namespace,
-			K8sName:        service.Name,
-			ServicePorts:   service.Spec.Ports,
-			NorthSouthPort: service.Annotations[annotationExposePort],
+			Namespace:              service.Namespace,
+			K8sName:                service.Name,
+			ServicePorts:           service.Spec.Ports,
+			IngressExposedPortName: service.Annotations[annotationExposedPortName],
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal deploymentResultServiceSpec: %w", err)

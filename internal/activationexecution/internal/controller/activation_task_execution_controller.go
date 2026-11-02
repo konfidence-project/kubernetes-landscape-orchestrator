@@ -314,18 +314,21 @@ func buildRouteRules(stage string, vectorDeployment *konfidencev1alpha1.VectorDe
 			if err := json.Unmarshal(result.Spec.Raw, &spec); err != nil {
 				return nil, fmt.Errorf("decode ServiceSpec for deployment result %q: %w", result.Name, err)
 			}
-			if spec.NorthSouthPort == "" {
+			if spec.IngressExposedPortName == "" {
 				continue
 			}
 			var selectedPort *corev1.ServicePort
 			for portIndex := range spec.ServicePorts {
-				if spec.ServicePorts[portIndex].Name == spec.NorthSouthPort {
+				if spec.ServicePorts[portIndex].Name == spec.IngressExposedPortName {
 					selectedPort = &spec.ServicePorts[portIndex]
 					break
 				}
 			}
 			if selectedPort == nil || selectedPort.Protocol != corev1.ProtocolTCP {
-				return nil, fmt.Errorf("resolve north-south port %q for deployment result %q: no matching TCP Service port", spec.NorthSouthPort, result.Name)
+				return nil, fmt.Errorf(
+					"deployment result %q references Service port %q, but the port is missing or not TCP; set Service annotation %q to the name of a TCP port",
+					result.Name, spec.IngressExposedPortName, annotationExposedPortName,
+				)
 			}
 			targets = append(targets, routeTarget{name: result.Name, service: spec.K8sName, port: selectedPort.Port})
 		}

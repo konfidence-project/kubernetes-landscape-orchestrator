@@ -53,7 +53,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 	BeforeEach(cleanup)
 	AfterEach(cleanup)
 
-	deploymentResult := func(name, k8sName string, port int32, northSouthPort string) konfidencev1alpha1.DeploymentResult {
+	deploymentResult := func(name, k8sName string, port int32, ingressExposedPortName string) konfidencev1alpha1.DeploymentResult {
 		return konfidencev1alpha1.DeploymentResult{
 			Name: name,
 			Type: "http-k8s-service",
@@ -61,8 +61,8 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 				Raw: []byte(fmt.Sprintf(
 					`{"Namespace":"%s","K8sName":"%s",`+
 						`"ServicePorts":[{"name":"http","port":%d,"targetPort":"http","protocol":"TCP"}],`+
-						`"NorthSouthPort":%q}`,
-					Namespace, k8sName, port, northSouthPort,
+						`"IngressExposedPortName":%q}`,
+					Namespace, k8sName, port, ingressExposedPortName,
 				)),
 			},
 		}
@@ -130,7 +130,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			exposed.Spec.Raw = []byte(fmt.Sprintf(
 				`{"Namespace":"%s","K8sName":"%s",`+
 					`"ServicePorts":[{"name":"admin","port":8081,"protocol":"TCP"},`+
-					`{"name":"http","port":%d,"protocol":"TCP"}],"NorthSouthPort":"http"}`,
+					`{"name":"http","port":%d,"protocol":"TCP"}],"IngressExposedPortName":"http"}`,
 				Namespace, ServiceName1, ServicePort1,
 			))
 			unexposed := deploymentResult(ServiceName2, ServiceName2, ServicePort2, "")
@@ -169,9 +169,9 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			Expect(err).To(MatchError(And(ContainSubstring("broken"), ContainSubstring(message))))
 			Expect(rules).To(BeNil())
 		},
-			Entry("malformed JSON", `{"NorthSouthPort":"http"`, "decode ServiceSpec"),
-			Entry("missing selected name", `{"NorthSouthPort":"http","ServicePorts":[{"name":"admin","port":8081,"protocol":"TCP"}]}`, `north-south port "http"`),
-			Entry("selected non-TCP port", `{"NorthSouthPort":"http","ServicePorts":[{"name":"http","port":80,"protocol":"UDP"}]}`, `north-south port "http"`),
+			Entry("malformed JSON", `{"IngressExposedPortName":"http"`, "decode ServiceSpec"),
+			Entry("missing selected name", `{"IngressExposedPortName":"http","ServicePorts":[{"name":"admin","port":8081,"protocol":"TCP"}]}`, `set Service annotation "konfidence.cloud/exposed-port-name"`),
+			Entry("selected non-TCP port", `{"IngressExposedPortName":"http","ServicePorts":[{"name":"http","port":80,"protocol":"UDP"}]}`, `set Service annotation "konfidence.cloud/exposed-port-name"`),
 		)
 
 		It("creates a single per-stage HTTPRoute with a rule per north-south deployment result", func() {
@@ -246,7 +246,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			switched.Spec.Raw = []byte(fmt.Sprintf(
 				`{"Namespace":"%s","K8sName":"%s",`+
 					`"ServicePorts":[{"name":"http","port":80,"protocol":"TCP"},`+
-					`{"name":"web","port":8080,"protocol":"TCP"}],"NorthSouthPort":"web"}`,
+					`{"name":"web","port":8080,"protocol":"TCP"}],"IngressExposedPortName":"web"}`,
 				Namespace, ServiceName1,
 			))
 			createVectorDeploymentWithResults(ctx, vd2, map[string]konfidencev1alpha1.ComponentDeploymentResults{

@@ -46,8 +46,8 @@ func serviceSpec(t *testing.T, result konfidencev1alpha1.DeploymentResult) deplo
 func TestMapServicesToDeploymentResults_SelectsNamedTCPPortAndPreservesAllPorts(t *testing.T) {
 	list := &corev1.ServiceList{Items: []corev1.Service{
 		svc("candidates-7f3a", "landscape", map[string]string{
-			annotationDeploymentResult: candidatesResult,
-			annotationExposePort:       apiPortName,
+			annotationDeploymentResult:           candidatesResult,
+			"konfidence.cloud/exposed-port-name": apiPortName,
 		}, tcpPort("admin", 8081), tcpPort(apiPortName, 80)),
 	}}
 
@@ -69,8 +69,18 @@ func TestMapServicesToDeploymentResults_SelectsNamedTCPPortAndPreservesAllPorts(
 	if len(spec.ServicePorts) != 2 {
 		t.Fatalf("ServicePorts: got %d, want 2", len(spec.ServicePorts))
 	}
-	if spec.NorthSouthPort != apiPortName {
-		t.Errorf("NorthSouthPort: got %q, want api", spec.NorthSouthPort)
+	if spec.IngressExposedPortName != apiPortName {
+		t.Errorf("IngressExposedPortName: got %q, want api", spec.IngressExposedPortName)
+	}
+	var rawSpec map[string]any
+	if err := json.Unmarshal(results[0].Spec.Raw, &rawSpec); err != nil {
+		t.Fatalf("unmarshal raw spec: %v", err)
+	}
+	if got := rawSpec["IngressExposedPortName"]; got != apiPortName {
+		t.Errorf("serialized IngressExposedPortName: got %#v, want %q", got, apiPortName)
+	}
+	if _, ok := rawSpec["NorthSouthPort"]; ok {
+		t.Error("serialized spec retains obsolete NorthSouthPort key")
 	}
 }
 
@@ -79,7 +89,7 @@ func TestMapServicesToDeploymentResults_EmptySelectionOptsOut(t *testing.T) {
 		svc(missingName, "landscape", map[string]string{annotationDeploymentResult: missingName}, tcpPort("http", 80)),
 		svc("empty", "landscape", map[string]string{
 			annotationDeploymentResult: "empty",
-			annotationExposePort:       "",
+			annotationExposedPortName:  "",
 		}, tcpPort("http", 81)),
 	}}
 
@@ -98,25 +108,25 @@ func TestMapServicesToDeploymentResults_EmptySelectionOptsOut(t *testing.T) {
 		if len(spec.ServicePorts) != 1 {
 			t.Errorf("ServicePorts for %q: got %d, want 1", result.Name, len(spec.ServicePorts))
 		}
-		if spec.NorthSouthPort != "" {
-			t.Errorf("NorthSouthPort for %q: got %q, want empty", result.Name, spec.NorthSouthPort)
+		if spec.IngressExposedPortName != "" {
+			t.Errorf("IngressExposedPortName for %q: got %q, want empty", result.Name, spec.IngressExposedPortName)
 		}
 		var rawSpec map[string]any
 		if err := json.Unmarshal(result.Spec.Raw, &rawSpec); err != nil {
 			t.Fatalf("unmarshal raw spec for %q: %v", result.Name, err)
 		}
-		if _, ok := rawSpec["NorthSouthPort"]; ok {
-			t.Errorf("serialized NorthSouthPort for %q: got present, want omitted", result.Name)
+		if _, ok := rawSpec["IngressExposedPortName"]; ok {
+			t.Errorf("serialized IngressExposedPortName for %q: got present, want omitted", result.Name)
 		}
 	}
 }
 
 func TestMapServicesToDeploymentResults_IgnoresMissingOrEmptyIdentityBeforeExposure(t *testing.T) {
 	list := &corev1.ServiceList{Items: []corev1.Service{
-		svc(missingName, "landscape", map[string]string{annotationExposePort: missingName}, tcpPort("http", 80)),
+		svc(missingName, "landscape", map[string]string{annotationExposedPortName: missingName}, tcpPort("http", 80)),
 		svc("empty", "landscape", map[string]string{
 			annotationDeploymentResult: "",
-			annotationExposePort:       missingName,
+			annotationExposedPortName:  missingName,
 		}, tcpPort("http", 81)),
 	}}
 
@@ -136,15 +146,15 @@ func TestValidateExposePorts_ReturnsFirstInvalidSelection(t *testing.T) {
 	list := &corev1.ServiceList{Items: []corev1.Service{
 		svc(validResult, "landscape", map[string]string{
 			annotationDeploymentResult: validResult,
-			annotationExposePort:       apiPortName,
+			annotationExposedPortName:  apiPortName,
 		}, tcpPort("admin", 8081), tcpPort(apiPortName, 80)),
 		svc(missingName, "landscape", map[string]string{
 			annotationDeploymentResult: missingName,
-			annotationExposePort:       " api ",
+			annotationExposedPortName:  " api ",
 		}, tcpPort("admin", 8081), tcpPort(apiPortName, 80)),
 		svc("udp", "landscape", map[string]string{
 			annotationDeploymentResult: "udp",
-			annotationExposePort:       dnsPortName,
+			annotationExposedPortName:  dnsPortName,
 		}, corev1.ServicePort{Name: dnsPortName, Port: 53, Protocol: corev1.ProtocolUDP}),
 	}}
 
@@ -155,7 +165,7 @@ func TestValidateExposePorts_ReturnsFirstInvalidSelection(t *testing.T) {
 	if err.reason != artifactDeploymentStalledReasonExposePortNotFound {
 		t.Errorf("reason: got %q, want %q", err.reason, artifactDeploymentStalledReasonExposePortNotFound)
 	}
-	wantMessage := "Service \"missing\" selects expose-port \" api \", but no port has that exact name " +
+	wantMessage := "Service \"missing\": annotation \"konfidence.cloud/exposed-port-name\" names port \" api \", but no Service port has that name " +
 		"(available ports: \"admin\"/TCP, \"api\"/TCP)"
 	if err.Error() != wantMessage {
 		t.Errorf("message: got %q, want %q", err.Error(), wantMessage)
@@ -168,7 +178,7 @@ func TestValidateExposePorts_MatchesPortNamesExactly(t *testing.T) {
 			list := &corev1.ServiceList{Items: []corev1.Service{
 				svc("service", "landscape", map[string]string{
 					annotationDeploymentResult: "result",
-					annotationExposePort:       selectedPort,
+					annotationExposedPortName:  selectedPort,
 				}, tcpPort(apiPortName, 80)),
 			}}
 
@@ -193,14 +203,14 @@ func TestValidateExposePorts_UnsupportedProtocolDeterminesReason(t *testing.T) {
 			portName: dnsPortName,
 			port:     53,
 			protocol: corev1.ProtocolUDP,
-			message:  `Service "dns" selects expose-port "dns" with unsupported protocol "UDP" (only TCP is supported)`,
+			message:  `Service "dns": annotation "konfidence.cloud/exposed-port-name" names port "dns", which uses unsupported protocol "UDP" (only TCP is supported)`,
 		},
 		{
 			name:     "SCTP",
 			portName: "events",
 			port:     9000,
 			protocol: corev1.ProtocolSCTP,
-			message:  `Service "events" selects expose-port "events" with unsupported protocol "SCTP" (only TCP is supported)`,
+			message:  `Service "events": annotation "konfidence.cloud/exposed-port-name" names port "events", which uses unsupported protocol "SCTP" (only TCP is supported)`,
 		},
 	}
 
@@ -209,7 +219,7 @@ func TestValidateExposePorts_UnsupportedProtocolDeterminesReason(t *testing.T) {
 			list := &corev1.ServiceList{Items: []corev1.Service{
 				svc(test.portName, "landscape", map[string]string{
 					annotationDeploymentResult: test.portName,
-					annotationExposePort:       test.portName,
+					annotationExposedPortName:  test.portName,
 				}, corev1.ServicePort{Name: test.portName, Port: test.port, Protocol: test.protocol}),
 			}}
 
@@ -231,7 +241,7 @@ func TestValidateExposePorts_DoesNotSelectUnnamedPortImplicitly(t *testing.T) {
 	list := &corev1.ServiceList{Items: []corev1.Service{
 		svc("service", "landscape", map[string]string{
 			annotationDeploymentResult: "result",
-			annotationExposePort:       "http",
+			annotationExposedPortName:  "http",
 		}, tcpPort("", 8080)),
 	}}
 
@@ -242,7 +252,7 @@ func TestValidateExposePorts_DoesNotSelectUnnamedPortImplicitly(t *testing.T) {
 	if err.reason != artifactDeploymentStalledReasonExposePortNotFound {
 		t.Errorf("reason: got %q, want %q", err.reason, artifactDeploymentStalledReasonExposePortNotFound)
 	}
-	wantMessage := `Service "service" selects expose-port "http", but no port has that exact name (available ports: ""/TCP)`
+	wantMessage := `Service "service": annotation "konfidence.cloud/exposed-port-name" names port "http", but no Service port has that name (available ports: ""/TCP)`
 	if err.Error() != wantMessage {
 		t.Errorf("message: got %q, want %q", err.Error(), wantMessage)
 	}
@@ -277,12 +287,12 @@ func TestDeploymentResultStatusUpdater_RejectsAllResultsAndPublishesExposureFail
 	}
 	service := svc(apiPortName, "landscape", map[string]string{
 		annotationDeploymentResult: apiPortName,
-		annotationExposePort:       missingName,
+		annotationExposedPortName:  missingName,
 	}, tcpPort("http", 80))
 	service.Labels = map[string]string{labelArtifactDeployment: artifactName}
 	validService := svc("valid", "landscape", map[string]string{
 		annotationDeploymentResult: validResult,
-		annotationExposePort:       apiPortName,
+		annotationExposedPortName:  apiPortName,
 	}, tcpPort(apiPortName, 80))
 	validService.Labels = map[string]string{labelArtifactDeployment: artifactName}
 
