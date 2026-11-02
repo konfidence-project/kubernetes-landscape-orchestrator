@@ -15,6 +15,9 @@ const (
 	// headerRoutingKey carries the active vector id east-west. Name/value are interim pending konfidence #169.
 	headerRoutingKey = "x-konfidence-routing-key"
 
+	// annotationExposedPortName identifies the Service port routed through the edge.
+	annotationExposedPortName = "konfidence.cloud/exposed-port-name"
+
 	// defaultGatewayName is the Gateway the HTTPRoutes attach to when the registration does not override it. The
 	// namespace defaults to the landscape namespace.
 	defaultGatewayName = "konfidence-router"

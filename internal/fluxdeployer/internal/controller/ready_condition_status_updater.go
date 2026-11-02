@@ -13,6 +13,9 @@ type ReadyConditionStatusUpdater struct {
 }
 
 func (r *ReadyConditionStatusUpdater) MutateStatus(_ context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) error {
+	if meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.StalledCondition) {
+		return nil
+	}
 	if meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.AppHealthyCondition) &&
 		meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.DeploymentResultCreatedCondition) {
 		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
