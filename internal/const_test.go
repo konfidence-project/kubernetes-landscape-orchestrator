@@ -14,6 +14,6 @@ func TestInternal(t *testing.T) {
 
 var _ = Describe("KnownClasses", func() {
 	It("returns the known classes as a string", func() {
-		Expect(KnownClasses.String()).To(Equal("[helm.konfidence.cloud kustomize.konfidence.cloud]"))
+		Expect(SupportedArtifactTypes.String()).To(Equal("[helm.konfidence.cloud kustomize.konfidence.cloud]"))
 	})
 })

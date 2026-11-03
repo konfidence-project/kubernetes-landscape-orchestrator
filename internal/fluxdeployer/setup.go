@@ -53,13 +53,5 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 		return err
 	}
 
-	if err := (&internalcontroller.VectorAssignmentReconciler{
-		Client:   mgr.GetClient(),
-		Recorder: mgr.GetEventRecorder(internalcontroller.VectorAssignmentControllerName),
-	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create vector assignment controller", "controller", "VectorAssignment")
-		return err
-	}
-
 	return nil
 }

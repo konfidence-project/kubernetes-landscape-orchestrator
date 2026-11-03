@@ -49,21 +49,17 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 
 	newFixture := func(name string, resources []konfidencev1alpha1.OCMResource) (*KustomizeArtifactDeploymentReconciler, client.Client, *konfidencev1alpha1.ArtifactDeployment) { //nolint:lll
 		d := &konfidencev1alpha1.ArtifactDeployment{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Generation: 3},
+			Name:       name,
+			Namespace:  "default",
+			Generation: 3,
 			Spec: konfidencev1alpha1.ArtifactDeploymentSpec{
-				Manifest:  konfidencev1alpha1.ArtifactManifest{Type: internal.DeploymentClassKustomize},
-				Component: konfidencev1alpha1.OCMComponent{Resources: resources},
-			},
-		}
-		class := &konfidencev1alpha1.DeploymentClass{
-			ObjectMeta: metav1.ObjectMeta{Name: internal.DeploymentClassKustomize},
-			Spec: konfidencev1alpha1.DeploymentClassSpec{
-				Controller: internal.ControllerName,
+				ArtifactType: internal.ArtifactTypeKustomize,
+				Component:    konfidencev1alpha1.OCMComponent{Resources: resources},
 			},
 		}
 		cl := fake.NewClientBuilder().
 			WithScheme(newTestScheme()).
-			WithObjects(d, class).
+			WithObjects(d).
 			WithStatusSubresource(&konfidencev1alpha1.ArtifactDeployment{}).
 			Build()
 		r := &KustomizeArtifactDeploymentReconciler{

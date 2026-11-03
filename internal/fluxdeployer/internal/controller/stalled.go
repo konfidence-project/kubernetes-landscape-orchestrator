@@ -3,11 +3,11 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
-	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -63,7 +63,7 @@ func deploymentTargetSecretsStall(
 	var waitingReady *metav1.Condition
 	for i := range targets.Items {
 		target := &targets.Items[i]
-		if target.Spec.DeploymentClassName != deployment.Spec.Manifest.Type {
+		if target.ArtifactType() != deployment.ArtifactType() {
 			continue
 		}
 		ready := meta.FindStatusCondition(target.Status.Conditions, konfidencev1alpha1.DeploymentTargetReadyCondition)
@@ -73,7 +73,8 @@ func deploymentTargetSecretsStall(
 		if ready.Status == metav1.ConditionTrue {
 			return nil, nil
 		}
-		if ready.Reason != internal.DeploymentTargetReasonSecretNotFound && ready.Reason != internal.DeploymentTargetReasonInvalidSecret {
+		// every check in KLO's DeploymentTarget validation is about the kubeconfig Secret
+		if ready.Status != metav1.ConditionFalse {
 			continue
 		}
 		if now.Sub(ready.LastTransitionTime.Time) < deploymentTargetSecretsDeadline {
@@ -127,15 +128,19 @@ func fluxStall(ctx context.Context, c client.Reader, kind string, key client.Obj
 	}, nil
 }
 
+// deploymentResultStallReasons are the DeploymentResultCreated=False reasons that only a change to the deployed
+// manifests resolves.
+var deploymentResultStallReasons = []string{
+	konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique,
+	artifactDeploymentStalledReasonExposePortNotFound,
+	artifactDeploymentStalledReasonExposePortUnsupportedProtocol,
+}
+
 // deploymentResultStall reads the stored condition, as the results check is skipped unless ArtifactDeployed is True.
 func deploymentResultStall(deployment *konfidencev1alpha1.ArtifactDeployment) *stallCause {
 	created := meta.FindStatusCondition(deployment.Status.Conditions, konfidencev1alpha1.DeploymentResultCreatedCondition)
-	if created == nil || created.Status != metav1.ConditionFalse ||
-		created.Reason != konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique {
+	if created == nil || created.Status != metav1.ConditionFalse || !slices.Contains(deploymentResultStallReasons, created.Reason) {
 		return nil
 	}
-	return &stallCause{
-		reason:  konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique,
-		message: created.Message,
-	}
+	return &stallCause{reason: created.Reason, message: created.Message}
 }

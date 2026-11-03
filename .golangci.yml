@@ -24,8 +24,6 @@ linters:
   settings:
     lll:
       line-length: 160
-    goimports:
-      local-prefixes: konfidence.cloud
     revive:
       rules:
         - name: comment-spacings
@@ -49,6 +47,10 @@ formatters:
   enable:
     - gofmt
     - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - konfidence.cloud
   exclusions:
     generated: lax
     paths:

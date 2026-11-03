@@ -91,6 +91,20 @@ func TestReadyConditionStatusUpdater(t *testing.T) {
 			wantStatus: metav1.ConditionFalse,
 			wantReason: reasonDeploymentResultInvalid,
 		},
+		{
+			name: "an invalid exposed port takes Ready down",
+			conditions: []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionTrue, "Deployed"),
+				condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionTrue, "Healthy"),
+				condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionFalse,
+					artifactDeploymentStalledReasonExposePortNotFound),
+				condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionTrue, "Ready"),
+				condition(konfidencev1alpha1.StalledCondition, metav1.ConditionTrue, artifactDeploymentStalledReasonExposePortNotFound),
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: artifactDeploymentStalledReasonExposePortNotFound,
+		},
 	}
 
 	for _, tt := range tests {

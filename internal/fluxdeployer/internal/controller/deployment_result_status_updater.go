@@ -42,26 +42,22 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 		return err
 	}
 
-	// map Services to DeploymentResult
-	deploymentResultServices, err := d.mapServicesToDeploymentResult(serviceList)
+	if validationErr := validateExposePorts(serviceList); validationErr != nil {
+		setDeploymentResultFailure(deployment, validationErr.reason, validationErr.Error())
+		return nil
+	}
+
+	deploymentResultServices, err := mapServicesToDeploymentResults(serviceList)
 	if err != nil {
-		deployment.Status.DeploymentResults = nil
 		reason := reasonDeploymentResultInvalid
 		if errors.Is(err, errDeploymentResultNotUnique) {
 			reason = konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique
 		}
-		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-			Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
-			Status:             metav1.ConditionFalse,
-			Reason:             reason,
-			Message:            truncateMessage(err.Error()),
-			ObservedGeneration: deployment.Generation,
-		})
+		setDeploymentResultFailure(deployment, reason, err.Error())
 		return err
 	}
 
 	deployment.Status.DeploymentResults = deploymentResultServices
-
 	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
 		Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
 		Status:             metav1.ConditionTrue,
@@ -72,6 +68,18 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 	})
 
 	return nil
+}
+
+// setDeploymentResultFailure withdraws the published results. Ready and Stalled follow from the reason.
+func setDeploymentResultFailure(deployment *konfidencev1alpha1.ArtifactDeployment, reason, message string) {
+	deployment.Status.DeploymentResults = nil
+	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
+		Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
+		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            truncateMessage(message),
+		ObservedGeneration: deployment.Generation,
+	})
 }
 
 func (s *DeploymentResultStatusUpdater) fetchExposableServices(
@@ -93,25 +101,84 @@ func (s *DeploymentResultStatusUpdater) fetchExposableServices(
 	return serviceList, nil
 }
 
-// mapServicesToDeploymentResult turns the opted-in Services into DeploymentResults. A Service opts in via the
-// annotationDeploymentResult annotation, whose value becomes the stable result Name; Services without it are ignored.
-// Results are identified by (Name, Type); two Services yielding the same pair is a misconfiguration and is rejected.
-func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceList *corev1.ServiceList) ([]konfidencev1alpha1.DeploymentResult, error) {
-	deploymentResultServices := make([]konfidencev1alpha1.DeploymentResult, 0, len(serviceList.Items))
-	seen := make(map[string]string, len(serviceList.Items))
-
-	// sorted so a duplicate is always reported with the same pair of Services
+// servicesByName orders Services by name, so a failure always names the same Services.
+func servicesByName(serviceList *corev1.ServiceList) []*corev1.Service {
 	services := make([]*corev1.Service, 0, len(serviceList.Items))
 	for i := range serviceList.Items {
 		services = append(services, &serviceList.Items[i])
 	}
 	slices.SortFunc(services, func(a, b *corev1.Service) int { return strings.Compare(a.Name, b.Name) })
+	return services
+}
 
-	for _, service := range services {
-		resultName, ok := service.Annotations[annotationDeploymentResult]
-		if !ok {
+func hasDeploymentResultName(service *corev1.Service) bool {
+	if service.Annotations[annotationDeploymentResult] == "" {
+		// TODO: Services with `konfidence.cloud/exposed-port-name` but no deployment-result identity are ignored. Revisit
+		// this when such Services have a stable deployment-result identity.
+		return false
+	}
+	return true
+}
+
+type exposureValidationError struct {
+	reason  string
+	message string
+}
+
+func (e *exposureValidationError) Error() string {
+	return e.message
+}
+
+func validateExposePorts(serviceList *corev1.ServiceList) *exposureValidationError {
+	for _, service := range servicesByName(serviceList) {
+		if !hasDeploymentResultName(service) {
 			continue
 		}
+
+		selectedPort := service.Annotations[annotationExposedPortName]
+		if selectedPort == "" {
+			continue
+		}
+
+		var matchedPort *corev1.ServicePort
+		for portIndex := range service.Spec.Ports {
+			if service.Spec.Ports[portIndex].Name == selectedPort {
+				matchedPort = &service.Spec.Ports[portIndex]
+				break
+			}
+		}
+		switch {
+		case matchedPort == nil:
+			return &exposureValidationError{
+				reason: artifactDeploymentStalledReasonExposePortNotFound,
+				message: fmt.Sprintf(
+					"Service %q: annotation %q names port %q, but no Service port has that name (available ports: %s)",
+					service.Name, annotationExposedPortName, selectedPort, formatAvailablePorts(service.Spec.Ports)),
+			}
+		case matchedPort.Protocol != corev1.ProtocolTCP:
+			return &exposureValidationError{
+				reason: artifactDeploymentStalledReasonExposePortUnsupportedProtocol,
+				message: fmt.Sprintf(
+					"Service %q: annotation %q names port %q, which uses unsupported protocol %q (only TCP is supported)",
+					service.Name, annotationExposedPortName, selectedPort, matchedPort.Protocol),
+			}
+		}
+	}
+	return nil
+}
+
+// mapServicesToDeploymentResults turns validated, opted-in Services into DeploymentResults. A Service opts in via the
+// annotationDeploymentResult annotation, whose value becomes the stable result Name; Services without it are ignored.
+// Results are identified by (Name, Type); two Services yielding the same pair is a misconfiguration and is rejected.
+func mapServicesToDeploymentResults(serviceList *corev1.ServiceList) ([]konfidencev1alpha1.DeploymentResult, error) {
+	deploymentResultServices := make([]konfidencev1alpha1.DeploymentResult, 0, len(serviceList.Items))
+	seen := make(map[string]string, len(serviceList.Items))
+
+	for _, service := range servicesByName(serviceList) {
+		if !hasDeploymentResultName(service) {
+			continue
+		}
+		resultName := service.Annotations[annotationDeploymentResult]
 
 		if first, dup := seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService]; dup {
 			return nil, fmt.Errorf(
@@ -121,9 +188,10 @@ func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceLis
 		seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService] = service.Name
 
 		deploymentResultServiceSpecRaw, err := json.Marshal(deploymentresult.ServiceSpec{
-			Namespace:    service.Namespace,
-			K8sName:      service.Name,
-			ServicePorts: service.Spec.Ports,
+			Namespace:              service.Namespace,
+			K8sName:                service.Name,
+			ServicePorts:           service.Spec.Ports,
+			IngressExposedPortName: service.Annotations[annotationExposedPortName],
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal deploymentResultServiceSpec: %w", err)
@@ -136,4 +204,15 @@ func (s *DeploymentResultStatusUpdater) mapServicesToDeploymentResult(serviceLis
 		})
 	}
 	return deploymentResultServices, nil
+}
+
+func formatAvailablePorts(ports []corev1.ServicePort) string {
+	if len(ports) == 0 {
+		return "none"
+	}
+	available := make([]string, 0, len(ports))
+	for _, port := range ports {
+		available = append(available, fmt.Sprintf("%q/%s", port.Name, port.Protocol))
+	}
+	return strings.Join(available, ", ")
 }

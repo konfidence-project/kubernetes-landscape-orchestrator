@@ -74,6 +74,24 @@ rules:
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
+  - gatewayclasses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
   - httproutes
   verbs:
   - create
@@ -127,7 +145,6 @@ rules:
   - deploymenttargets/status
   - taskexecutions/status
   - vectoractivations/status
-  - vectorassignments/status
   - vectordata/status
   - vectordeployments/status
   verbs:
@@ -145,9 +162,8 @@ rules:
 - apiGroups:
   - konfidence.cloud
   resources:
-  - deploymentclasses
   - deploymenttargets
-  - vectorassignments
+  - stageversions
   verbs:
   - get
   - list
@@ -155,6 +171,7 @@ rules:
 - apiGroups:
   - konfidence.cloud
   resources:
+  - stages
   - vectordata
   verbs:
   - get

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/meta"
+	targethelpers "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
@@ -24,8 +24,6 @@ type ConfigProvider struct {
 
 var _ fluxcd.FluxConfigProvider = (*ConfigProvider)(nil)
 
-const connectionTypeLocal = "local"
-
 func (r *ConfigProvider) GetReconcileInterval(landscape string) metav1.Duration {
 	return metav1.Duration{Duration: 10 * time.Second}
 }
@@ -42,43 +40,24 @@ func (r *ConfigProvider) GetHelmDriftDetectionMode(landscape string) *helmv2.Dri
 	}
 }
 
-func (r *ConfigProvider) GetKubeConfigRef(ctx context.Context, landscape, deploymentType string) (*fluxmeta.KubeConfigReference, error) {
-	logger := crlog.Log.WithName("ConfigProvider").WithValues("landscape", landscape, "deploymentType", deploymentType)
-	targets := &konfidencev1alpha1.DeploymentTargetList{}
-	if err := r.Client.List(ctx, targets, client.InNamespace(landscape)); err != nil {
-		return nil, fmt.Errorf("list DeploymentTargets in namespace %q: %w", landscape, err)
+func (r *ConfigProvider) GetKubeConfigRef(ctx context.Context, landscape, artifactType string) (*fluxmeta.KubeConfigReference, error) {
+	logger := crlog.Log.WithName("ConfigProvider").WithValues("landscape", landscape, "artifactType", artifactType)
+	target, err := targethelpers.FindReady(ctx, r.Client, landscape, konfidencev1alpha1.ArtifactType(artifactType))
+	if err != nil {
+		return nil, err
 	}
-
-	var readyTargets []*konfidencev1alpha1.DeploymentTarget
-	for i := range targets.Items {
-		target := &targets.Items[i]
-		if target.Spec.DeploymentClassName != deploymentType {
-			continue
-		}
-
-		if meta.IsStatusConditionTrue(target.Status.Conditions, konfidencev1alpha1.DeploymentTargetReadyCondition) {
-			readyTargets = append(readyTargets, target)
-		}
-	}
-
-	if len(readyTargets) != 1 {
-		return nil, fmt.Errorf(
-			"expected exactly one ready DeploymentTarget in namespace %q for DeploymentClass %q, found %d",
-			landscape,
-			deploymentType,
-			len(readyTargets),
-		)
-	}
-
-	target := readyTargets[0]
-	if target.Spec.Connection.Type == connectionTypeLocal {
+	params := target.Spec.Parameters
+	if params == nil {
 		logger.Info("using local DeploymentTarget", "name", target.Name)
 		return nil, nil
 	}
+	if params.APIGroup != "" || params.Kind != "Secret" || params.Name == "" {
+		return nil, fmt.Errorf("DeploymentTarget %q has invalid KLO kubeconfig parameters", target.Name)
+	}
 
-	logger.Info("using remote DeploymentTarget", "name", target.Name, "secret", target.Spec.Connection.Ref.Name)
+	logger.Info("using remote DeploymentTarget", "name", target.Name, "secret", params.Name)
 	return &fluxmeta.KubeConfigReference{
-		SecretRef: &fluxmeta.SecretKeyReference{Name: target.Spec.Connection.Ref.Name},
+		SecretRef: &fluxmeta.SecretKeyReference{Name: params.Name},
 	}, nil
 }
 
