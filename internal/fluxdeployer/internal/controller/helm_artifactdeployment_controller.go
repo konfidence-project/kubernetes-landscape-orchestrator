@@ -2,8 +2,10 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/konfidence-project/konfidence/pkg/deployer"
 	deploymenttarget "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
@@ -74,6 +76,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 
 	if len(matches) > 1 {
 		msg := fmt.Sprintf("expected exactly one OCM resource of type %q, found %d; refusing to reconcile", ocmResourceTypeHelmChart, len(matches))
+		markStalled(deployment, resourceStall(errors.New(msg)))
 		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
 			Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
 			Status:             metav1.ConditionFalse,
@@ -92,12 +95,17 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, fmt.Errorf("%s", msg)
 	}
 
+	var resourceErr error
+	if len(matches) == 0 {
+		resourceErr = fmt.Errorf("no OCM resource of type %q in the artifact", ocmResourceTypeHelmChart)
+	}
+
 	if len(matches) == 1 {
 		ocmResource := matches[0]
 		helmChartResource, err := fluxcd.Map(ocmResource).ToHelm()
 		if err != nil {
-			log.Error(err, fmt.Sprintf("failed to map OCM resource %q to HelmChartResource", ocmResource.Name),
-				"ArtifactDeployment", deployment)
+			resourceErr = fmt.Errorf("failed to map OCM resource %q to HelmChartResource: %w", ocmResource.Name, err)
+			log.Error(resourceErr, "invalid artifact resource", "ArtifactDeployment", deployment)
 		} else {
 			if _, err := r.HelmRepositoryReconciler.Reconcile(ctx, deployment, helmChartResource); err != nil {
 				log.Error(err, fmt.Sprintf("failed to reconcile HelmRepository of OCM resource %q", ocmResource.Name),
@@ -111,14 +119,18 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
-	err := r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
-	if err != nil {
-		log.Error(err, "failed to handle Helm artifact deployment result", "ArtifactDeployment", deployment)
+	resultsErr := r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
+	if resultsErr != nil {
+		log.Error(resultsErr, "failed to handle Helm artifact deployment result", "ArtifactDeployment", deployment)
 	}
 
-	err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
+	err := r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
 	if err != nil {
 		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
+	}
+
+	if err := r.evaluateIfStalled(ctx, deployment, resourceErr); err != nil {
+		log.Error(err, "failed to evaluate Stalled condition", "ArtifactDeployment", deployment)
 	}
 
 	// patch the deployment status updates
@@ -130,6 +142,39 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 
 	log.Info("finish reconciling Helm artifact deployment")
 	return ctrl.Result{RequeueAfter: artifactDeploymentRequeueInterval}, nil
+}
+
+func (r *HelmArtifactDeploymentReconciler) evaluateIfStalled(
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resourceErr error,
+) error {
+	key := client.ObjectKeyFromObject(deployment)
+	release := helmv2.HelmRelease{ObjectMeta: metav1.ObjectMeta{Namespace: key.Namespace, Name: key.Name}}
+	chartKey := client.ObjectKey{Namespace: key.Namespace, Name: release.GetHelmChartName()}
+	cause, err := firstStall(
+		func() (*stallCause, error) { return resourceStall(resourceErr), nil },
+		func() (*stallCause, error) {
+			return deploymentTargetSecretsStall(ctx, r.Client, deployment, time.Now())
+		},
+		func() (*stallCause, error) {
+			return fluxStall(ctx, r.Client, sourcev1.HelmRepositoryKind, key, &sourcev1.HelmRepository{})
+		},
+		func() (*stallCause, error) {
+			return fluxStall(ctx, r.Client, sourcev1.HelmChartKind, chartKey, &sourcev1.HelmChart{})
+		},
+		func() (*stallCause, error) {
+			return fluxStall(ctx, r.Client, helmv2.HelmReleaseKind, key, &helmv2.HelmRelease{})
+		},
+		func() (*stallCause, error) { return deploymentResultStall(deployment), nil },
+	)
+	switch {
+	case err != nil:
+		return err
+	case cause != nil:
+		markStalled(deployment, cause)
+	default:
+		markNotStalled(deployment)
+	}
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
