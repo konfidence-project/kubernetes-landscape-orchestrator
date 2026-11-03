@@ -8,6 +8,7 @@ import (
 
 	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	"github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,20 +34,24 @@ func firstStall(checks ...stallCheck) (*stallCause, error) {
 	return nil, nil
 }
 
-func setStalledCondition(deployment *konfidencev1alpha1.ArtifactDeployment, cause *stallCause) {
-	condition := metav1.Condition{
+func markStalled(deployment *konfidencev1alpha1.ArtifactDeployment, cause *stallCause) {
+	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
+		Type:               konfidencev1alpha1.StalledCondition,
+		Status:             metav1.ConditionTrue,
+		Reason:             cause.reason,
+		Message:            cause.message,
+		ObservedGeneration: deployment.Generation,
+	})
+}
+
+func markNotStalled(deployment *konfidencev1alpha1.ArtifactDeployment) {
+	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
 		Type:               konfidencev1alpha1.StalledCondition,
 		Status:             metav1.ConditionFalse,
 		Reason:             konfidencev1alpha1.StalledReasonNotStalled,
 		Message:            "No blocking condition detected",
 		ObservedGeneration: deployment.Generation,
-	}
-	if cause != nil {
-		condition.Status = metav1.ConditionTrue
-		condition.Reason = cause.reason
-		condition.Message = truncateMessage(cause.message)
-	}
-	meta.SetStatusCondition(&deployment.Status.Conditions, condition)
+	})
 }
 
 // deploymentTargetSecretsStall times the wait from the target's Ready=False lastTransitionTime, which only moves
@@ -59,39 +64,30 @@ func deploymentTargetSecretsStall(
 		return nil, fmt.Errorf("list DeploymentTargets in namespace %q: %w", deployment.Namespace, err)
 	}
 
-	var waiting *konfidencev1alpha1.DeploymentTarget
-	var waitingReady *metav1.Condition
+	var target *konfidencev1alpha1.DeploymentTarget
 	for i := range targets.Items {
-		target := &targets.Items[i]
-		if target.ArtifactType() != deployment.ArtifactType() {
+		if targets.Items[i].ArtifactType() != deployment.ArtifactType() {
 			continue
 		}
-		ready := meta.FindStatusCondition(target.Status.Conditions, konfidencev1alpha1.DeploymentTargetReadyCondition)
-		if ready == nil || ready.ObservedGeneration != target.Generation {
-			continue
-		}
-		if ready.Status == metav1.ConditionTrue {
+		if deploymenttarget.IsReady(&targets.Items[i]) {
 			return nil, nil
 		}
-		// every check in KLO's DeploymentTarget validation is about the kubeconfig Secret
-		if ready.Status != metav1.ConditionFalse {
-			continue
-		}
-		if now.Sub(ready.LastTransitionTime.Time) < deploymentTargetSecretsDeadline {
-			continue
-		}
-		if waiting == nil || target.Name < waiting.Name {
-			waiting, waitingReady = target, ready
-		}
+		target = &targets.Items[i]
 	}
-	if waiting == nil {
+	if target == nil {
 		return nil, nil
 	}
 
+	// every check in KLO's DeploymentTarget validation is about the kubeconfig Secret, so any Ready=False counts
+	ready := meta.FindStatusCondition(target.Status.Conditions, konfidencev1alpha1.DeploymentTargetReadyCondition)
+	if ready == nil || ready.ObservedGeneration != target.Generation || ready.Status != metav1.ConditionFalse ||
+		now.Sub(ready.LastTransitionTime.Time) < deploymentTargetSecretsDeadline {
+		return nil, nil
+	}
 	return &stallCause{
 		reason: konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentTargetSecretsMissing,
 		message: fmt.Sprintf("DeploymentTarget %s has had no usable kubeconfig Secret for more than %s: %s",
-			waiting.Name, deploymentTargetSecretsDeadline, waitingReady.Message),
+			target.Name, deploymentTargetSecretsDeadline, ready.Message),
 	}, nil
 }
 

@@ -23,9 +23,6 @@ import (
 // manifests resolves it.
 var errDeploymentResultNotUnique = errors.New("deployment result (name, type) is not unique")
 
-// reasonDeploymentResultInvalid is the DeploymentResultCreated=False reason when the opted-in Services can't be mapped.
-const reasonDeploymentResultInvalid = "DeploymentResultInvalid"
-
 type DeploymentResultStatusUpdater struct {
 	client.Client
 }
@@ -48,12 +45,11 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 	}
 
 	deploymentResultServices, err := mapServicesToDeploymentResults(serviceList)
+	if errors.Is(err, errDeploymentResultNotUnique) {
+		setDeploymentResultFailure(deployment, konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique, err.Error())
+		return err
+	}
 	if err != nil {
-		reason := reasonDeploymentResultInvalid
-		if errors.Is(err, errDeploymentResultNotUnique) {
-			reason = konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique
-		}
-		setDeploymentResultFailure(deployment, reason, err.Error())
 		return err
 	}
 
@@ -77,7 +73,7 @@ func setDeploymentResultFailure(deployment *konfidencev1alpha1.ArtifactDeploymen
 		Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
 		Status:             metav1.ConditionFalse,
 		Reason:             reason,
-		Message:            truncateMessage(message),
+		Message:            message,
 		ObservedGeneration: deployment.Generation,
 	})
 }

@@ -76,7 +76,7 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 
 	if len(matches) > 1 {
 		msg := fmt.Sprintf("expected exactly one OCM resource of type %q, found %d; refusing to reconcile", ocmResourceTypeHelmChart, len(matches))
-		setStalledCondition(deployment, resourceStall(errors.New(msg)))
+		markStalled(deployment, resourceStall(errors.New(msg)))
 		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
 			Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
 			Status:             metav1.ConditionFalse,
@@ -129,10 +129,8 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
 	}
 
-	if cause, err := r.stallCause(ctx, deployment, resourceErr); err != nil {
+	if err := r.evaluateIfStalled(ctx, deployment, resourceErr); err != nil {
 		log.Error(err, "failed to evaluate Stalled condition", "ArtifactDeployment", deployment)
-	} else {
-		setStalledCondition(deployment, cause)
 	}
 
 	// patch the deployment status updates
@@ -146,13 +144,13 @@ func (r *HelmArtifactDeploymentReconciler) Reconcile(ctx context.Context, req ct
 	return ctrl.Result{RequeueAfter: artifactDeploymentRequeueInterval}, nil
 }
 
-func (r *HelmArtifactDeploymentReconciler) stallCause(
+func (r *HelmArtifactDeploymentReconciler) evaluateIfStalled(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resourceErr error,
-) (*stallCause, error) {
+) error {
 	key := client.ObjectKeyFromObject(deployment)
 	release := helmv2.HelmRelease{ObjectMeta: metav1.ObjectMeta{Namespace: key.Namespace, Name: key.Name}}
 	chartKey := client.ObjectKey{Namespace: key.Namespace, Name: release.GetHelmChartName()}
-	return firstStall(
+	cause, err := firstStall(
 		func() (*stallCause, error) { return resourceStall(resourceErr), nil },
 		func() (*stallCause, error) {
 			return deploymentTargetSecretsStall(ctx, r.Client, deployment, time.Now())
@@ -168,6 +166,15 @@ func (r *HelmArtifactDeploymentReconciler) stallCause(
 		},
 		func() (*stallCause, error) { return deploymentResultStall(deployment), nil },
 	)
+	switch {
+	case err != nil:
+		return err
+	case cause != nil:
+		markStalled(deployment, cause)
+	default:
+		markNotStalled(deployment)
+	}
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -490,7 +490,7 @@ var _ = Describe("deploymentTargetSecretsStall", func() {
 		Expect(cause).To(BeNil())
 	})
 
-	It("does not report when another target for the class is ready", func() {
+	It("does not report when another target for the artifact type is ready", func() {
 		createTarget(waitingTarget(namespace, class, deploymentTargetSecretsDeadline+time.Minute))
 		ready := waitingTarget(namespace, class, time.Hour)
 		ready.Name = "local"

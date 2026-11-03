@@ -326,7 +326,7 @@ func TestDeploymentResultStatusUpdater_RejectsAllResultsAndPublishesExposureFail
 	if err := (&ReadyConditionStatusUpdater{}).MutateStatus(context.Background(), deployment); err != nil {
 		t.Fatalf("Ready MutateStatus: %v", err)
 	}
-	setStalledCondition(deployment, deploymentResultStall(deployment))
+	markStalled(deployment, deploymentResultStall(deployment))
 
 	if len(deployment.Status.DeploymentResults) != 0 {
 		t.Fatalf("DeploymentResults: got %d, want none", len(deployment.Status.DeploymentResults))

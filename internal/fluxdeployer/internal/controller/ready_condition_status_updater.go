@@ -25,47 +25,43 @@ type ReadyConditionStatusUpdater struct {
 }
 
 // MutateStatus sets Ready=True once the app is healthy and its deployment results are created, and Ready=False
-// otherwise, carrying the reason of the first pipeline step that is not True. An Unknown step keeps Ready=True,
-// since Flux marks its conditions Unknown at the start of every reconcile.
+// otherwise, carrying the reason of the first pipeline step that is not True.
 func (r *ReadyConditionStatusUpdater) MutateStatus(_ context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) error {
-	if meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.AppHealthyCondition) &&
-		meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.DeploymentResultCreatedCondition) {
-		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-			Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
-			Status:             metav1.ConditionTrue,
-			Reason:             konfidencev1alpha1.ArtifactDeploymentReadyCondition,
-			Message:            "Successfully reconciled ArtifactDeployment",
-			ObservedGeneration: deployment.Generation,
-			LastTransitionTime: metav1.Now(),
-		})
+	conditions := deployment.Status.Conditions
+	if meta.IsStatusConditionTrue(conditions, konfidencev1alpha1.AppHealthyCondition) &&
+		meta.IsStatusConditionTrue(conditions, konfidencev1alpha1.DeploymentResultCreatedCondition) {
+		setReady(deployment, metav1.ConditionTrue, konfidencev1alpha1.ArtifactDeploymentReadyCondition,
+			"Successfully reconciled ArtifactDeployment")
 		return nil
 	}
 
-	reason, message, unknown := notReadyCause(deployment.Status.Conditions)
-	if unknown && meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition) {
-		return nil
+	for _, conditionType := range pipelineConditions {
+		step := meta.FindStatusCondition(conditions, conditionType)
+		switch {
+		case step == nil:
+			setReady(deployment, metav1.ConditionFalse, reasonPending, fmt.Sprintf("%s has not been reported yet", conditionType))
+			return nil
+		case step.Status == metav1.ConditionTrue:
+			continue
+		case step.Status == metav1.ConditionUnknown &&
+			meta.IsStatusConditionTrue(conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition):
+			// Flux marks its conditions Unknown at the start of every reconcile, so keep Ready until a step fails
+			return nil
+		default:
+			setReady(deployment, metav1.ConditionFalse, step.Reason,
+				fmt.Sprintf("%s is %s: %s", conditionType, step.Status, step.Message))
+			return nil
+		}
 	}
-	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-		Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
-		Status:             metav1.ConditionFalse,
-		Reason:             reason,
-		Message:            truncateMessage(message),
-		ObservedGeneration: deployment.Generation,
-	})
 	return nil
 }
 
-func notReadyCause(conditions []metav1.Condition) (reason, message string, unknown bool) {
-	for _, conditionType := range pipelineConditions {
-		condition := meta.FindStatusCondition(conditions, conditionType)
-		if condition == nil {
-			return reasonPending, fmt.Sprintf("%s has not been reported yet", conditionType), false
-		}
-		if condition.Status != metav1.ConditionTrue {
-			return condition.Reason, fmt.Sprintf("%s is %s: %s", conditionType, condition.Status, condition.Message),
-				condition.Status == metav1.ConditionUnknown
-		}
-	}
-	// unreachable: MutateStatus only asks when AppHealthy or DeploymentResultCreated is not True
-	return reasonPending, "waiting for the deployment pipeline", false
+func setReady(deployment *konfidencev1alpha1.ArtifactDeployment, status metav1.ConditionStatus, reason, message string) {
+	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
+		Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: deployment.Generation,
+	})
 }
