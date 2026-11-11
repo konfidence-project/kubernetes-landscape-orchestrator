@@ -148,8 +148,7 @@ func (r *HelmArtifactDeploymentReconciler) evaluateIfStalled(
 	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resourceErr error,
 ) error {
 	key := client.ObjectKeyFromObject(deployment)
-	release := helmv2.HelmRelease{ObjectMeta: metav1.ObjectMeta{Namespace: key.Namespace, Name: key.Name}}
-	chartKey := client.ObjectKey{Namespace: key.Namespace, Name: release.GetHelmChartName()}
+	chartKey := client.ObjectKey{Namespace: key.Namespace, Name: fmt.Sprintf("%s-%s", key.Namespace, key.Name)}
 	cause, err := firstStall(
 		func() (*stallCause, error) { return resourceStall(resourceErr), nil },
 		func() (*stallCause, error) {
