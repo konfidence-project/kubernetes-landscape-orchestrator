@@ -85,7 +85,7 @@ func (r *HelmReleaseReconciler) mutateHelmRelease(
 		Interval: r.ConfigProvider.GetReconcileInterval(deployment.GetNamespace()),
 		Chart: &helmv2.HelmChartTemplate{
 			Spec: helmv2.HelmChartTemplateSpec{
-				SourceRef: helmv2.CrossNamespaceObjectReference{
+				SourceRef: &helmv2.CrossNamespaceObjectReference{
 					Kind:      sourcev1.HelmRepositoryKind,
 					Namespace: deployment.GetNamespace(),
 					Name:      deployment.Name,
