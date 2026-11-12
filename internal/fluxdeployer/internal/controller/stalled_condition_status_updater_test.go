@@ -48,10 +48,7 @@ func fluxMeta(name string, generation int64) metav1.ObjectMeta {
 	return metav1.ObjectMeta{Name: name, Namespace: stalledNamespace, Generation: generation}
 }
 
-// waitingTarget is a DeploymentTarget that has lacked its kubeconfig Secret for waitingFor.
-func waitingTarget(
-	namespace string, artifactType konfidencev1alpha1.ArtifactType, waitingFor time.Duration,
-) *konfidencev1alpha1.DeploymentTarget {
+func notReadyTarget(namespace string, artifactType konfidencev1alpha1.ArtifactType) *konfidencev1alpha1.DeploymentTarget {
 	return &konfidencev1alpha1.DeploymentTarget{
 		ObjectMeta: metav1.ObjectMeta{Name: "remote", Namespace: namespace, Generation: 1},
 		Spec: konfidencev1alpha1.DeploymentTargetSpec{
@@ -64,9 +61,19 @@ func waitingTarget(
 			Reason:             deploymenttarget.ReasonValidationError,
 			Message:            fmt.Sprintf(`get secret %s/remote-kubeconfig: secrets "remote-kubeconfig" not found`, namespace),
 			ObservedGeneration: 1,
-			LastTransitionTime: metav1.NewTime(time.Now().Add(-waitingFor)),
+			LastTransitionTime: metav1.Now(),
 		}}},
 	}
+}
+
+func readyTarget(namespace, name string, artifactType konfidencev1alpha1.ArtifactType) *konfidencev1alpha1.DeploymentTarget {
+	target := notReadyTarget(namespace, artifactType)
+	target.Name = name
+	target.Spec.Parameters = nil
+	target.Status.Conditions[0].Status = metav1.ConditionTrue
+	target.Status.Conditions[0].Reason = deploymenttarget.ReasonAccepted
+	target.Status.Conditions[0].Message = ""
+	return target
 }
 
 var _ = Describe("Stalled condition on ArtifactDeployments", func() {
@@ -103,12 +110,19 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 		}
 	}
 
-	newClient := func(objs ...client.Object) client.Client {
+	newClientWithoutTargets := func(objs ...client.Object) client.Client {
 		return fake.NewClientBuilder().
 			WithScheme(newTestScheme()).
 			WithObjects(objs...).
 			WithStatusSubresource(&konfidencev1alpha1.ArtifactDeployment{}).
 			Build()
+	}
+
+	newClient := func(objs ...client.Object) client.Client {
+		return newClientWithoutTargets(append(objs,
+			readyTarget(stalledNamespace, "helm", internal.ArtifactTypeHelm),
+			readyTarget(stalledNamespace, "kustomize", internal.ArtifactTypeKustomize),
+		)...)
 	}
 
 	helmReconciler := func(cl client.Client) *HelmArtifactDeploymentReconciler {
@@ -218,11 +232,11 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			Expect(reconcileStalled(helmReconciler(cl), cl).Message).To(HavePrefix("HelmRepository "))
 		})
 
-		It("reports missing DeploymentTarget secrets before any Flux stall", func() {
+		It("reports a DeploymentTarget that is not Ready before any Flux stall", func() {
 			release := &helmv2.HelmRelease{ObjectMeta: fluxMeta(stalledDeploymentName, 1)}
 			release.Status.Conditions = fluxStalledConditions("RetriesExceeded", 1)
-			target := waitingTarget(stalledNamespace, internal.ArtifactTypeHelm, 2*deploymentTargetSecretsDeadline)
-			cl := newClient(helmDeployment(), release, target)
+			target := notReadyTarget(stalledNamespace, internal.ArtifactTypeHelm)
+			cl := newClientWithoutTargets(helmDeployment(), release, target)
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
 
 			stalled := reconcileStalled(helmReconciler(cl), cl)
@@ -431,8 +445,8 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 	})
 })
 
-// envtest, so lastTransitionTime goes through a real status round trip.
-var _ = Describe("deploymentTargetSecretsStall", func() {
+// envtest, so a spec update moves the target generation.
+var _ = Describe("deploymentTargetStall", func() {
 	class := konfidencev1alpha1.MustArtifactType("sample.konfidence.cloud")
 
 	var (
@@ -443,7 +457,7 @@ var _ = Describe("deploymentTargetSecretsStall", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		namespace = fmt.Sprintf("target-secrets-%d", time.Now().UnixNano())
+		namespace = fmt.Sprintf("target-stall-%d", time.Now().UnixNano())
 		Expect(k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}})).To(Succeed())
 		deployment = &konfidencev1alpha1.ArtifactDeployment{
 			ObjectMeta: metav1.ObjectMeta{Name: stalledDeploymentName, Namespace: namespace},
@@ -460,69 +474,46 @@ var _ = Describe("deploymentTargetSecretsStall", func() {
 		return target
 	}
 
-	It("reports a target that has waited for its Secret past the deadline", func() {
-		createTarget(waitingTarget(namespace, class, deploymentTargetSecretsDeadline+time.Minute))
-
-		cause, err := deploymentTargetSecretsStall(ctx, k8sClient, deployment, time.Now())
+	expectStall := func() {
+		cause, err := deploymentTargetStall(ctx, k8sClient, deployment)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cause).NotTo(BeNil())
 		Expect(cause.reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentTargetSecretsMissing))
-		Expect(cause.message).To(ContainSubstring(`DeploymentTarget remote has had no usable kubeconfig Secret`))
-		Expect(cause.message).To(ContainSubstring(`secrets "remote-kubeconfig" not found`))
+		Expect(cause.message).To(ContainSubstring(`no Ready DeploymentTarget for artifact type "sample.konfidence.cloud"`))
+	}
+
+	It("reports a target that is not Ready right away", func() {
+		createTarget(notReadyTarget(namespace, class))
+		expectStall()
 	})
 
-	It("reports a Ready deployment too, since it cannot roll out anything new", func() {
-		createTarget(waitingTarget(namespace, class, deploymentTargetSecretsDeadline+time.Minute))
-		deployment.Status.Conditions = []metav1.Condition{
-			condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionTrue, "Ready"),
-		}
-
-		cause, err := deploymentTargetSecretsStall(ctx, k8sClient, deployment, time.Now())
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cause).NotTo(BeNil())
+	It("reports a namespace without a target for the artifact type", func() {
+		createTarget(readyTarget(namespace, "other", konfidencev1alpha1.MustArtifactType("other.konfidence.cloud")))
+		expectStall()
 	})
 
-	It("waits until the deadline has passed", func() {
-		createTarget(waitingTarget(namespace, class, time.Minute))
+	It("does not report when a target for the artifact type is Ready", func() {
+		createTarget(notReadyTarget(namespace, class))
+		createTarget(readyTarget(namespace, "local", class))
 
-		cause, err := deploymentTargetSecretsStall(ctx, k8sClient, deployment, time.Now())
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cause).To(BeNil())
-	})
-
-	It("does not report when another target for the artifact type is ready", func() {
-		createTarget(waitingTarget(namespace, class, deploymentTargetSecretsDeadline+time.Minute))
-		ready := waitingTarget(namespace, class, time.Hour)
-		ready.Name = "local"
-		ready.Spec.Parameters = nil
-		ready.Status.Conditions[0].Status = metav1.ConditionTrue
-		ready.Status.Conditions[0].Reason = "Accepted"
-		createTarget(ready)
-
-		cause, err := deploymentTargetSecretsStall(ctx, k8sClient, deployment, time.Now())
+		cause, err := deploymentTargetStall(ctx, k8sClient, deployment)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cause).To(BeNil())
 	})
 
-	It("reports a target whose Secret is there but unusable", func() {
-		target := waitingTarget(namespace, class, deploymentTargetSecretsDeadline+time.Minute)
-		target.Status.Conditions[0].Reason = deploymenttarget.ReasonInvalidParameters
-		target.Status.Conditions[0].Message = `secret "remote-kubeconfig" does not contain a valid kubeconfig`
-		createTarget(target)
-
-		cause, err := deploymentTargetSecretsStall(ctx, k8sClient, deployment, time.Now())
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cause).NotTo(BeNil())
-		Expect(cause.message).To(ContainSubstring("does not contain a valid kubeconfig"))
-	})
-
-	It("ignores a Ready condition written for an older target generation", func() {
-		target := createTarget(waitingTarget(namespace, class, deploymentTargetSecretsDeadline+time.Minute))
-		target.Spec.Parameters.Name = "fixed-kubeconfig"
+	It("treats a Ready condition from an older target generation as not Ready", func() {
+		target := createTarget(readyTarget(namespace, "local", class))
+		target.Spec.Parameters = notReadyTarget(namespace, class).Spec.Parameters
 		Expect(k8sClient.Update(ctx, target)).To(Succeed())
+		expectStall()
+	})
 
-		cause, err := deploymentTargetSecretsStall(ctx, k8sClient, deployment, time.Now())
-		Expect(err).NotTo(HaveOccurred())
+	It("returns an error when two targets for the artifact type are Ready", func() {
+		createTarget(readyTarget(namespace, "local", class))
+		createTarget(readyTarget(namespace, "second", class))
+
+		cause, err := deploymentTargetStall(ctx, k8sClient, deployment)
+		Expect(err).To(HaveOccurred())
 		Expect(cause).To(BeNil())
 	})
 })

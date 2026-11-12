@@ -4,19 +4,15 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"time"
 
 	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	"github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// deploymentTargetSecretsDeadline is how long a DeploymentTarget may wait for its kubeconfig Secret before the
-// ArtifactDeployments it serves are reported stalled. Secrets are often synced in asynchronously.
-const deploymentTargetSecretsDeadline = 5 * time.Minute
 
 type stallCause struct {
 	reason  string
@@ -54,41 +50,19 @@ func markNotStalled(deployment *konfidencev1alpha1.ArtifactDeployment) {
 	})
 }
 
-// deploymentTargetSecretsStall times the wait from the target's Ready=False lastTransitionTime, which only moves
-// when Ready flips.
-func deploymentTargetSecretsStall(
-	ctx context.Context, c client.Reader, deployment *konfidencev1alpha1.ArtifactDeployment, now time.Time,
+// deploymentTargetStall reports a stall while no DeploymentTarget for the artifact type is Ready.
+func deploymentTargetStall(
+	ctx context.Context, c client.Reader, deployment *konfidencev1alpha1.ArtifactDeployment,
 ) (*stallCause, error) {
-	targets := &konfidencev1alpha1.DeploymentTargetList{}
-	if err := c.List(ctx, targets, client.InNamespace(deployment.Namespace)); err != nil {
-		return nil, fmt.Errorf("list DeploymentTargets in namespace %q: %w", deployment.Namespace, err)
+	_, err := deploymenttarget.FindReady(ctx, c, deployment.Namespace, deployment.ArtifactType())
+	if apierrors.IsNotFound(err) {
+		return &stallCause{
+			reason: konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentTargetSecretsMissing,
+			message: fmt.Sprintf("no Ready DeploymentTarget for artifact type %q in namespace %q",
+				deployment.ArtifactType(), deployment.Namespace),
+		}, nil
 	}
-
-	var target *konfidencev1alpha1.DeploymentTarget
-	for i := range targets.Items {
-		if targets.Items[i].ArtifactType() != deployment.ArtifactType() {
-			continue
-		}
-		if deploymenttarget.IsReady(&targets.Items[i]) {
-			return nil, nil
-		}
-		target = &targets.Items[i]
-	}
-	if target == nil {
-		return nil, nil
-	}
-
-	// every check in KLO's DeploymentTarget validation is about the kubeconfig Secret, so any Ready=False counts
-	ready := meta.FindStatusCondition(target.Status.Conditions, konfidencev1alpha1.DeploymentTargetReadyCondition)
-	if ready == nil || ready.ObservedGeneration != target.Generation || ready.Status != metav1.ConditionFalse ||
-		now.Sub(ready.LastTransitionTime.Time) < deploymentTargetSecretsDeadline {
-		return nil, nil
-	}
-	return &stallCause{
-		reason: konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentTargetSecretsMissing,
-		message: fmt.Sprintf("DeploymentTarget %s has had no usable kubeconfig Secret for more than %s: %s",
-			target.Name, deploymentTargetSecretsDeadline, ready.Message),
-	}, nil
+	return nil, err
 }
 
 // resourceStall reports a stall when the artifact's deployable OCM resource is missing or cannot be mapped. The

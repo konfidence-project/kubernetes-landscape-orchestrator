@@ -157,9 +157,7 @@ func (r *KustomizeArtifactDeploymentReconciler) evaluateIfStalled(
 	key := client.ObjectKeyFromObject(deployment)
 	cause, err := firstStall(
 		func() (*stallCause, error) { return resourceStall(resourceErr), nil },
-		func() (*stallCause, error) {
-			return deploymentTargetSecretsStall(ctx, r.Client, deployment, time.Now())
-		},
+		func() (*stallCause, error) { return deploymentTargetStall(ctx, r.Client, deployment) },
 		func() (*stallCause, error) {
 			return fluxStall(ctx, r.Client, sourcev1.OCIRepositoryKind, key, &sourcev1.OCIRepository{})
 		},
