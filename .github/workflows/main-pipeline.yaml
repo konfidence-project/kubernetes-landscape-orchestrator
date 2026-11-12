@@ -32,4 +32,4 @@ jobs:
     uses: konfidence-project/.github/.github/workflows/publish-helm-charts.yaml@v4
     with:
       mode: dev
-      charts: charts/kubernetes-landscape-orchestrator
+      charts: charts/kubernetes-landscape-orchestrator charts/vector-data-service
