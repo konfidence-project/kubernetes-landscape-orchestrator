@@ -9,52 +9,119 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestReadyConditionStatusUpdater_DoesNotOverrideStalledDeployment(t *testing.T) {
-	deployment := &konfidencev1alpha1.ArtifactDeployment{
-		ObjectMeta: metav1.ObjectMeta{Generation: 3},
-		Status: konfidencev1alpha1.ArtifactDeploymentStatus{Conditions: []metav1.Condition{
-			{Type: konfidencev1alpha1.AppHealthyCondition, Status: metav1.ConditionTrue},
-			{
-				Type:   konfidencev1alpha1.DeploymentResultCreatedCondition,
-				Status: metav1.ConditionFalse,
-				Reason: artifactDeploymentStalledReasonExposePortNotFound,
-			},
-			{
-				Type:   konfidencev1alpha1.ArtifactDeploymentReadyCondition,
-				Status: metav1.ConditionFalse,
-				Reason: artifactDeploymentStalledReasonExposePortNotFound,
-			},
-			{
-				Type:   konfidencev1alpha1.StalledCondition,
-				Status: metav1.ConditionTrue,
-				Reason: artifactDeploymentStalledReasonExposePortNotFound,
-			},
-		}},
-	}
-
-	updater := &ReadyConditionStatusUpdater{}
-	if err := updater.MutateStatus(context.Background(), deployment); err != nil {
-		t.Fatalf("MutateStatus: %v", err)
-	}
-	if meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition) {
-		t.Error("Ready: got true, want false while Stalled is true")
-	}
+func condition(conditionType string, status metav1.ConditionStatus, reason string) metav1.Condition {
+	return metav1.Condition{Type: conditionType, Status: status, Reason: reason, Message: "from " + reason, LastTransitionTime: metav1.Now()}
 }
 
-func TestReadyConditionStatusUpdater_SetsReadyWhenHealthyAndResultsCreated(t *testing.T) {
-	deployment := &konfidencev1alpha1.ArtifactDeployment{
-		ObjectMeta: metav1.ObjectMeta{Generation: 3},
-		Status: konfidencev1alpha1.ArtifactDeploymentStatus{Conditions: []metav1.Condition{
-			{Type: konfidencev1alpha1.AppHealthyCondition, Status: metav1.ConditionTrue},
-			{Type: konfidencev1alpha1.DeploymentResultCreatedCondition, Status: metav1.ConditionTrue},
-		}},
+func TestReadyConditionStatusUpdater(t *testing.T) {
+	tests := []struct {
+		name       string
+		conditions []metav1.Condition
+		wantStatus metav1.ConditionStatus
+		wantReason string
+	}{
+		{
+			name: "healthy with results is ready",
+			conditions: []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionTrue, "Deployed"),
+				condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionTrue, "Healthy"),
+				condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionTrue, "Created"),
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: konfidencev1alpha1.ArtifactDeploymentReadyCondition,
+		},
+		{
+			name: "a stall does not change Ready",
+			conditions: []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionTrue, "Deployed"),
+				condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionTrue, "Healthy"),
+				condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionTrue, "Created"),
+				condition(konfidencev1alpha1.StalledCondition, metav1.ConditionTrue, "URLInvalid"),
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: konfidencev1alpha1.ArtifactDeploymentReadyCondition,
+		},
+		{
+			name:       "nothing reported yet",
+			wantStatus: metav1.ConditionFalse,
+			wantReason: reasonPending,
+		},
+		{
+			name: "carries the reason of the first failing step",
+			conditions: []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionFalse, "InstallFailed"),
+				condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionFalse, "Unhealthy"),
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: "InstallFailed",
+		},
+		{
+			name: "stays ready while Flux reconciles",
+			conditions: []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionUnknown, "Progressing"),
+				condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionUnknown, "Progressing"),
+				condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionTrue, "Created"),
+				condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionTrue, "Ready"),
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: "Ready",
+		},
+		{
+			name: "an unknown step is not ready on the first deploy",
+			conditions: []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionUnknown, "Progressing"),
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: "Progressing",
+		},
+		{
+			name: "goes false again when the deployment results break",
+			conditions: []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionTrue, "Deployed"),
+				condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionTrue, "Healthy"),
+				condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionFalse,
+					konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique),
+				condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionTrue, "Ready"),
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique,
+		},
+		{
+			name: "an invalid exposed port takes Ready down",
+			conditions: []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionTrue, "Deployed"),
+				condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionTrue, "Healthy"),
+				condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionFalse,
+					artifactDeploymentStalledReasonExposePortNotFound),
+				condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionTrue, "Ready"),
+				condition(konfidencev1alpha1.StalledCondition, metav1.ConditionTrue, artifactDeploymentStalledReasonExposePortNotFound),
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: artifactDeploymentStalledReasonExposePortNotFound,
+		},
 	}
 
-	updater := &ReadyConditionStatusUpdater{}
-	if err := updater.MutateStatus(context.Background(), deployment); err != nil {
-		t.Fatalf("MutateStatus: %v", err)
-	}
-	if !meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition) {
-		t.Error("Ready: got non-true, want true")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deployment := &konfidencev1alpha1.ArtifactDeployment{}
+			deployment.Status.Conditions = tt.conditions
+			if err := (&ReadyConditionStatusUpdater{}).MutateStatus(context.Background(), deployment); err != nil {
+				t.Fatalf("MutateStatus: %v", err)
+			}
+			ready := meta.FindStatusCondition(deployment.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
+			if ready == nil {
+				t.Fatal("Ready not written")
+			}
+			if ready.Status != tt.wantStatus || ready.Reason != tt.wantReason {
+				t.Errorf("Ready: got %s/%s, want %s/%s", ready.Status, ready.Reason, tt.wantStatus, tt.wantReason)
+			}
+		})
 	}
 }

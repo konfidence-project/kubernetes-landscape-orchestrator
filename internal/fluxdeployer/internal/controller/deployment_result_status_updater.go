@@ -3,7 +3,9 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
@@ -17,6 +19,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// errDeploymentResultNotUnique marks two Services declaring the same (name, type); only a change to the deployed
+// manifests resolves it.
+var errDeploymentResultNotUnique = errors.New("deployment result (name, type) is not unique")
+
 type DeploymentResultStatusUpdater struct {
 	client.Client
 }
@@ -24,9 +30,6 @@ type DeploymentResultStatusUpdater struct {
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 
 func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment) error {
-	if hasExposureValidationFailure(deployment) {
-		return nil
-	}
 	if !meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.ArtifactDeployedCondition) {
 		return nil
 	}
@@ -37,11 +40,15 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 	}
 
 	if validationErr := validateExposePorts(serviceList); validationErr != nil {
-		setExposureValidationFailure(deployment, validationErr)
+		setDeploymentResultFailure(deployment, validationErr.reason, validationErr.Error())
 		return nil
 	}
 
 	deploymentResultServices, err := mapServicesToDeploymentResults(serviceList)
+	if errors.Is(err, errDeploymentResultNotUnique) {
+		setDeploymentResultFailure(deployment, konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique, err.Error())
+		return err
+	}
 	if err != nil {
 		return err
 	}
@@ -59,41 +66,16 @@ func (d *DeploymentResultStatusUpdater) MutateStatus(ctx context.Context, deploy
 	return nil
 }
 
-func setExposureValidationFailure(
-	deployment *konfidencev1alpha1.ArtifactDeployment,
-	validationErr *exposureValidationError,
-) {
+// setDeploymentResultFailure withdraws the published results. Ready and Stalled follow from the reason.
+func setDeploymentResultFailure(deployment *konfidencev1alpha1.ArtifactDeployment, reason, message string) {
 	deployment.Status.DeploymentResults = nil
-	now := metav1.Now()
-	for _, condition := range []metav1.Condition{
-		{
-			Type:   konfidencev1alpha1.DeploymentResultCreatedCondition,
-			Status: metav1.ConditionFalse,
-		},
-		{
-			Type:   konfidencev1alpha1.ArtifactDeploymentReadyCondition,
-			Status: metav1.ConditionFalse,
-		},
-		{
-			Type:   konfidencev1alpha1.StalledCondition,
-			Status: metav1.ConditionTrue,
-		},
-	} {
-		condition.Reason = validationErr.reason
-		condition.Message = validationErr.Error()
-		condition.ObservedGeneration = deployment.Generation
-		condition.LastTransitionTime = now
-		meta.SetStatusCondition(&deployment.Status.Conditions, condition)
-	}
-}
-
-func hasExposureValidationFailure(deployment *konfidencev1alpha1.ArtifactDeployment) bool {
-	stalled := meta.FindStatusCondition(deployment.Status.Conditions, konfidencev1alpha1.StalledCondition)
-	if stalled == nil || stalled.Status != metav1.ConditionTrue {
-		return false
-	}
-	return stalled.Reason == artifactDeploymentStalledReasonExposePortNotFound ||
-		stalled.Reason == artifactDeploymentStalledReasonExposePortUnsupportedProtocol
+	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
+		Type:               konfidencev1alpha1.DeploymentResultCreatedCondition,
+		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: deployment.Generation,
+	})
 }
 
 func (s *DeploymentResultStatusUpdater) fetchExposableServices(
@@ -115,6 +97,16 @@ func (s *DeploymentResultStatusUpdater) fetchExposableServices(
 	return serviceList, nil
 }
 
+// servicesByName orders Services by name, so a failure always names the same Services.
+func servicesByName(serviceList *corev1.ServiceList) []*corev1.Service {
+	services := make([]*corev1.Service, 0, len(serviceList.Items))
+	for i := range serviceList.Items {
+		services = append(services, &serviceList.Items[i])
+	}
+	slices.SortFunc(services, func(a, b *corev1.Service) int { return strings.Compare(a.Name, b.Name) })
+	return services
+}
+
 func hasDeploymentResultName(service *corev1.Service) bool {
 	if service.Annotations[annotationDeploymentResult] == "" {
 		// TODO: Services with `konfidence.cloud/exposed-port-name` but no deployment-result identity are ignored. Revisit
@@ -134,8 +126,7 @@ func (e *exposureValidationError) Error() string {
 }
 
 func validateExposePorts(serviceList *corev1.ServiceList) *exposureValidationError {
-	for i := range serviceList.Items {
-		service := &serviceList.Items[i]
+	for _, service := range servicesByName(serviceList) {
 		if !hasDeploymentResultName(service) {
 			continue
 		}
@@ -179,8 +170,7 @@ func mapServicesToDeploymentResults(serviceList *corev1.ServiceList) ([]konfiden
 	deploymentResultServices := make([]konfidencev1alpha1.DeploymentResult, 0, len(serviceList.Items))
 	seen := make(map[string]string, len(serviceList.Items))
 
-	for i := range serviceList.Items {
-		service := &serviceList.Items[i]
+	for _, service := range servicesByName(serviceList) {
 		if !hasDeploymentResultName(service) {
 			continue
 		}
@@ -188,8 +178,8 @@ func mapServicesToDeploymentResults(serviceList *corev1.ServiceList) ([]konfiden
 
 		if first, dup := seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService]; dup {
 			return nil, fmt.Errorf(
-				"services %q and %q both declare deployment result (name=%q, type=%q); the pair must be unique",
-				first, service.Name, resultName, deploymentresult.TypeHTTPK8sService)
+				"%w: services %q and %q both declare (name=%q, type=%q)",
+				errDeploymentResultNotUnique, first, service.Name, resultName, deploymentresult.TypeHTTPK8sService)
 		}
 		seen[resultName+"\x00"+deploymentresult.TypeHTTPK8sService] = service.Name
 
