@@ -11,8 +11,6 @@ import (
 	deploymenttarget "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -79,15 +77,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 
 	if len(matches) > 1 {
 		msg := fmt.Sprintf("expected exactly one OCM resource of type %q, found %d; refusing to reconcile", ocmResourceTypeKustomize, len(matches))
-		markStalled(deployment, resourceStall(errors.New(msg)))
-		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-			Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
-			Status:             metav1.ConditionFalse,
-			Reason:             "MultipleKustomizeResources",
-			Message:            msg,
-			ObservedGeneration: deployment.Generation,
-			LastTransitionTime: metav1.Now(),
-		})
+		setLifecycleConditions(deployment, resourceStall(errors.New(msg)))
 
 		if !reflect.DeepEqual(deployment.Status, originalDeployment.Status) {
 			if err := r.Client.Status().Patch(ctx, deployment, patch); err != nil {
@@ -166,15 +156,11 @@ func (r *KustomizeArtifactDeploymentReconciler) evaluateIfStalled(
 		},
 		func() (*stallCause, error) { return deploymentResultStall(deployment), nil },
 	)
-	switch {
-	case err != nil:
-		return err
-	case cause != nil:
-		markStalled(deployment, cause)
-	default:
-		markNotStalled(deployment)
+	if err != nil {
+		cause = lastStall(deployment)
 	}
-	return nil
+	setLifecycleConditions(deployment, cause)
+	return err
 }
 
 // SetupWithManager sets up the controller with the Manager.

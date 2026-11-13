@@ -59,7 +59,7 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 		}
 		cl := fake.NewClientBuilder().
 			WithScheme(newTestScheme()).
-			WithObjects(d).
+			WithObjects(d, readyTarget("default", "local", internal.ArtifactTypeKustomize)).
 			WithStatusSubresource(&konfidencev1alpha1.ArtifactDeployment{}).
 			Build()
 		r := &KustomizeArtifactDeploymentReconciler{
@@ -73,7 +73,7 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 	}
 
 	Context("When the deployment contains multiple kustomize resources", func() {
-		It("patches Ready=False with reason MultipleKustomizeResources, returns an error, and never calls the sub-reconcilers", func() {
+		It("patches Stalled and Ready=False with reason ResourceInvalid, returns an error, and never calls the sub-reconcilers", func() {
 			r, cl, d := newFixture("multi-kustomize", []konfidencev1alpha1.OCMResource{
 				{Name: "a", Type: ocmResourceTypeKustomize, Content: rawKustomizeOCIContent()},
 				{Name: "b", Type: ocmResourceTypeKustomize, Content: rawKustomizeOCIContent()},
@@ -93,7 +93,7 @@ var _ = Describe("KustomizeArtifactDeployment Controller", func() { //nolint:dup
 			ready := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
 			Expect(ready).NotTo(BeNil(), "Ready condition should be set")
 			Expect(ready.Status).To(Equal(metav1.ConditionFalse))
-			Expect(ready.Reason).To(Equal("MultipleKustomizeResources"))
+			Expect(ready.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonResourceInvalid))
 			Expect(ready.Message).To(ContainSubstring("found 2"))
 			Expect(ready.ObservedGeneration).To(Equal(d.Generation))
 		})
