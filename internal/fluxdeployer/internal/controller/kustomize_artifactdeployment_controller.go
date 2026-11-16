@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -78,6 +79,7 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 
 	if len(matches) > 1 {
 		msg := fmt.Sprintf("expected exactly one OCM resource of type %q, found %d; refusing to reconcile", ocmResourceTypeKustomize, len(matches))
+		markStalled(deployment, resourceStall(errors.New(msg)))
 		meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
 			Type:               konfidencev1alpha1.ArtifactDeploymentReadyCondition,
 			Status:             metav1.ConditionFalse,
@@ -96,12 +98,17 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 		return ctrl.Result{}, fmt.Errorf("%s", msg)
 	}
 
+	var resourceErr error
+	if len(matches) == 0 {
+		resourceErr = fmt.Errorf("no OCM resource of type %q in the artifact", ocmResourceTypeKustomize)
+	}
+
 	if len(matches) == 1 {
 		ocmResource := matches[0]
 		kustomizeResource, err := fluxcd.Map(ocmResource).ToKustomize()
 		if err != nil {
-			log.Error(err, fmt.Sprintf("failed to map OCM resource %q to KustomizeResource", ocmResource.Name),
-				"ArtifactDeployment", deployment)
+			resourceErr = fmt.Errorf("failed to map OCM resource %q to KustomizeResource: %w", ocmResource.Name, err)
+			log.Error(resourceErr, "invalid artifact resource", "ArtifactDeployment", deployment)
 		} else {
 			if isReady, err := r.OCIRepositoryReconciler.Reconcile(ctx, deployment, kustomizeResource); err != nil {
 				log.Error(err, fmt.Sprintf("failed to reconcile OCIRepository of OCM resource '%s'", ocmResource.Name),
@@ -119,14 +126,18 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 		}
 	}
 
-	err := r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
-	if err != nil {
-		log.Error(err, "failed to handle Kustomize deployment result", "ArtifactDeployment", deployment)
+	resultsErr := r.DeploymentResultStatusUpdater.MutateStatus(ctx, deployment)
+	if resultsErr != nil {
+		log.Error(resultsErr, "failed to handle Kustomize deployment result", "ArtifactDeployment", deployment)
 	}
 
-	err = r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
+	err := r.ReadyConditionStatusUpdater.MutateStatus(ctx, deployment)
 	if err != nil {
 		log.Error(err, "failed to mutate status condition to READY ", "ArtifactDeployment", deployment)
+	}
+
+	if err := r.evaluateIfStalled(ctx, deployment, resourceErr); err != nil {
+		log.Error(err, "failed to evaluate Stalled condition", "ArtifactDeployment", deployment)
 	}
 
 	// patch the deployment status updates
@@ -138,6 +149,32 @@ func (r *KustomizeArtifactDeploymentReconciler) Reconcile(ctx context.Context, r
 
 	log.Info("finish reconciling Kustomize artifact deployment")
 	return ctrl.Result{RequeueAfter: artifactDeploymentRequeueInterval}, nil
+}
+
+func (r *KustomizeArtifactDeploymentReconciler) evaluateIfStalled(
+	ctx context.Context, deployment *konfidencev1alpha1.ArtifactDeployment, resourceErr error,
+) error {
+	key := client.ObjectKeyFromObject(deployment)
+	cause, err := firstStall(
+		func() (*stallCause, error) { return resourceStall(resourceErr), nil },
+		func() (*stallCause, error) { return deploymentTargetStall(ctx, r.Client, deployment) },
+		func() (*stallCause, error) {
+			return fluxStall(ctx, r.Client, sourcev1.OCIRepositoryKind, key, &sourcev1.OCIRepository{})
+		},
+		func() (*stallCause, error) {
+			return fluxStall(ctx, r.Client, kustomizev1.KustomizationKind, key, &kustomizev1.Kustomization{})
+		},
+		func() (*stallCause, error) { return deploymentResultStall(deployment), nil },
+	)
+	switch {
+	case err != nil:
+		return err
+	case cause != nil:
+		markStalled(deployment, cause)
+	default:
+		markNotStalled(deployment)
+	}
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

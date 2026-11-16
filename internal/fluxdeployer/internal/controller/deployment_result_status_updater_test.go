@@ -3,6 +3,8 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
@@ -172,6 +174,18 @@ func TestValidateExposePorts_ReturnsFirstInvalidSelection(t *testing.T) {
 	}
 }
 
+func TestValidateExposePorts_ReportsServicesInNameOrder(t *testing.T) {
+	list := &corev1.ServiceList{Items: []corev1.Service{
+		svc("b", "landscape", map[string]string{annotationDeploymentResult: "b", annotationExposedPortName: missingName}, tcpPort("http", 80)),
+		svc("a", "landscape", map[string]string{annotationDeploymentResult: "a", annotationExposedPortName: missingName}, tcpPort("http", 80)),
+	}}
+
+	err := validateExposePorts(list)
+	if err == nil || !strings.HasPrefix(err.Error(), `Service "a"`) {
+		t.Fatalf("expected the error to name Service \"a\", got %v", err)
+	}
+}
+
 func TestValidateExposePorts_MatchesPortNamesExactly(t *testing.T) {
 	for _, selectedPort := range []string{"API", " api ", "80"} {
 		t.Run(selectedPort, func(t *testing.T) {
@@ -262,12 +276,16 @@ func TestValidateExposePorts_DoesNotSelectUnnamedPortImplicitly(t *testing.T) {
 
 func TestMapServicesToDeploymentResults_RejectsDuplicateNameType(t *testing.T) {
 	list := &corev1.ServiceList{Items: []corev1.Service{
-		svc("candidates-a1", "shop", map[string]string{annotationDeploymentResult: candidatesResult}, tcpPort("http", 80)),
 		svc("candidates-b2", "shop", map[string]string{annotationDeploymentResult: candidatesResult}, tcpPort("http", 80)),
+		svc("candidates-a1", "shop", map[string]string{annotationDeploymentResult: candidatesResult}, tcpPort("http", 80)),
 	}}
 
-	if _, err := mapServicesToDeploymentResults(list); err == nil {
-		t.Fatal("expected error for duplicate (name, type), got nil")
+	_, err := mapServicesToDeploymentResults(list)
+	if !errors.Is(err, errDeploymentResultNotUnique) {
+		t.Fatalf("expected errDeploymentResultNotUnique for duplicate (name, type), got %v", err)
+	}
+	if !strings.Contains(err.Error(), `services "candidates-a1" and "candidates-b2"`) {
+		t.Errorf("expected the Services named in sorted order, got %v", err)
 	}
 }
 
@@ -282,10 +300,11 @@ func TestDeploymentResultStatusUpdater_RejectsAllResultsAndPublishesExposureFail
 
 	deployment := &konfidencev1alpha1.ArtifactDeployment{
 		ObjectMeta: metav1.ObjectMeta{Name: artifactName, Namespace: "landscape", Generation: 4},
-		Status: konfidencev1alpha1.ArtifactDeploymentStatus{Conditions: []metav1.Condition{{
-			Type:   konfidencev1alpha1.ArtifactDeployedCondition,
-			Status: metav1.ConditionTrue,
-		}}},
+		Status: konfidencev1alpha1.ArtifactDeploymentStatus{Conditions: []metav1.Condition{
+			{Type: konfidencev1alpha1.ArtifactFetchedCondition, Status: metav1.ConditionTrue},
+			{Type: konfidencev1alpha1.ArtifactDeployedCondition, Status: metav1.ConditionTrue},
+			{Type: konfidencev1alpha1.AppHealthyCondition, Status: metav1.ConditionTrue},
+		}},
 	}
 	service := svc(apiPortName, "landscape", map[string]string{
 		annotationDeploymentResult: apiPortName,
@@ -304,6 +323,10 @@ func TestDeploymentResultStatusUpdater_RejectsAllResultsAndPublishesExposureFail
 	if err := updater.MutateStatus(context.Background(), deployment); err != nil {
 		t.Fatalf("MutateStatus: %v", err)
 	}
+	if err := (&ReadyConditionStatusUpdater{}).MutateStatus(context.Background(), deployment); err != nil {
+		t.Fatalf("Ready MutateStatus: %v", err)
+	}
+	markStalled(deployment, deploymentResultStall(deployment))
 
 	if len(deployment.Status.DeploymentResults) != 0 {
 		t.Fatalf("DeploymentResults: got %d, want none", len(deployment.Status.DeploymentResults))
@@ -322,29 +345,44 @@ func TestDeploymentResultStatusUpdater_RejectsAllResultsAndPublishesExposureFail
 	}
 }
 
-func TestDeploymentResultStatusUpdater_DoesNotRevalidateExposureFailure(t *testing.T) {
+func TestDeploymentResultStatusUpdater_ClearsExposureFailureOnceFixed(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add core scheme: %v", err)
+	}
+
+	service := svc(apiPortName, "landscape", map[string]string{
+		annotationDeploymentResult: apiPortName,
+		annotationExposedPortName:  apiPortName,
+	}, tcpPort(apiPortName, 80))
+	service.Labels = map[string]string{labelArtifactDeployment: artifactName}
 	deployment := &konfidencev1alpha1.ArtifactDeployment{
+		ObjectMeta: metav1.ObjectMeta{Name: artifactName, Namespace: service.Namespace},
 		Status: konfidencev1alpha1.ArtifactDeploymentStatus{
 			Conditions: []metav1.Condition{
+				{Type: konfidencev1alpha1.ArtifactDeployedCondition, Status: metav1.ConditionTrue},
 				{
 					Type:   konfidencev1alpha1.DeploymentResultCreatedCondition,
 					Status: metav1.ConditionFalse,
-					Reason: artifactDeploymentStalledReasonExposePortUnsupportedProtocol,
-				},
-				{
-					Type:   konfidencev1alpha1.StalledCondition,
-					Status: metav1.ConditionTrue,
 					Reason: artifactDeploymentStalledReasonExposePortUnsupportedProtocol,
 				},
 			},
 		},
 	}
 
-	updater := &DeploymentResultStatusUpdater{}
+	updater := &DeploymentResultStatusUpdater{
+		Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(&service).Build(),
+	}
 	if err := updater.MutateStatus(context.Background(), deployment); err != nil {
 		t.Fatalf("MutateStatus: %v", err)
 	}
-	if len(deployment.Status.DeploymentResults) != 0 {
-		t.Fatalf("DeploymentResults: got %#v, want none", deployment.Status.DeploymentResults)
+	if len(deployment.Status.DeploymentResults) != 1 {
+		t.Fatalf("DeploymentResults: got %d, want 1", len(deployment.Status.DeploymentResults))
+	}
+	if !meta.IsStatusConditionTrue(deployment.Status.Conditions, konfidencev1alpha1.DeploymentResultCreatedCondition) {
+		t.Error("DeploymentResultCreated: got non-true, want true")
+	}
+	if cause := deploymentResultStall(deployment); cause != nil {
+		t.Errorf("stall cause: got %+v, want none", cause)
 	}
 }
