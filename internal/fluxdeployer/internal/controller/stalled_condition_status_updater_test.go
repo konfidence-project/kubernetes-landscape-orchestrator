@@ -602,12 +602,15 @@ var _ = Describe("deploymentTargetStall", func() {
 		expectStall()
 	})
 
-	It("returns an error when two targets for the artifact type are Ready", func() {
+	It("reports two Ready targets for the artifact type", func() {
 		createTarget(readyTarget(namespace, "local", class))
 		createTarget(readyTarget(namespace, "second", class))
 
 		cause, err := deploymentTargetStall(ctx, k8sClient, deployment)
-		Expect(err).To(HaveOccurred())
-		Expect(cause).To(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cause).NotTo(BeNil())
+		Expect(cause.reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonMultipleReadyDeploymentTargets))
+		Expect(cause.message).To(ContainSubstring(
+			`multiple Ready DeploymentTargets for artifact type "sample.konfidence.cloud"`))
 	})
 })

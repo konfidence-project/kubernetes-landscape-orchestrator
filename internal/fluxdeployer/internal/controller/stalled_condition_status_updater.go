@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -78,7 +79,7 @@ func lastStall(deployment *konfidencev1alpha1.ArtifactDeployment) *stallCause {
 	return &stallCause{reason: stalled.Reason, message: stalled.Message}
 }
 
-// deploymentTargetStall reports a stall while no DeploymentTarget for the artifact type is Ready.
+// deploymentTargetStall reports a stall while no DeploymentTarget for the artifact type is Ready, or more than one is.
 func deploymentTargetStall(
 	ctx context.Context, c client.Reader, deployment *konfidencev1alpha1.ArtifactDeployment,
 ) (*stallCause, error) {
@@ -88,6 +89,13 @@ func deploymentTargetStall(
 			reason: konfidencev1alpha1.ArtifactDeploymentStalledReasonNoReadyDeploymentTarget,
 			message: fmt.Sprintf("no Ready DeploymentTarget for artifact type %q in namespace %q",
 				deployment.ArtifactType(), deployment.Namespace),
+		}, nil
+	}
+	if errors.Is(err, deploymenttarget.ErrMultipleReadyTargets) {
+		return &stallCause{
+			reason: konfidencev1alpha1.ArtifactDeploymentStalledReasonMultipleReadyDeploymentTargets,
+			message: fmt.Sprintf("multiple Ready DeploymentTargets for artifact type %q in namespace %q; "+
+				"remove the extra targets so exactly one remains", deployment.ArtifactType(), deployment.Namespace),
 		}, nil
 	}
 	return nil, err
