@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	targethelpers "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -79,7 +80,7 @@ var _ = Describe("ConfigProvider", func() {
 		createReadyTarget("second", "")
 
 		ref, err := cp.GetKubeConfigRef(ctx, namespace, deploymentType)
-		Expect(err).To(MatchError(ContainSubstring("multiple DeploymentTargets")))
+		Expect(err).To(MatchError(targethelpers.ErrMultipleReadyTargets))
 		Expect(ref).To(BeNil())
 	})
 

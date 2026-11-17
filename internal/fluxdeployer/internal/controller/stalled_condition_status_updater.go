@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -40,26 +41,61 @@ func markStalled(deployment *konfidencev1alpha1.ArtifactDeployment, cause *stall
 	})
 }
 
-func markNotStalled(deployment *konfidencev1alpha1.ArtifactDeployment) {
-	meta.SetStatusCondition(&deployment.Status.Conditions, metav1.Condition{
-		Type:               konfidencev1alpha1.StalledCondition,
-		Status:             metav1.ConditionFalse,
-		Reason:             konfidencev1alpha1.StalledReasonNotStalled,
-		Message:            "No blocking condition detected",
+// setLifecycleConditions keeps at most one of Reconciling, Stalled and Ready True, as deployer spec 3.4 requires. A
+// stall wins over Ready, and a deployment that is neither stalled nor Ready is still reconciling.
+func setLifecycleConditions(deployment *konfidencev1alpha1.ArtifactDeployment, cause *stallCause) {
+	conditions := &deployment.Status.Conditions
+	if cause != nil {
+		meta.RemoveStatusCondition(conditions, konfidencev1alpha1.ArtifactDeploymentReconcilingCondition)
+		markStalled(deployment, cause)
+		setReady(deployment, metav1.ConditionFalse, cause.reason, cause.message)
+		return
+	}
+
+	meta.RemoveStatusCondition(conditions, konfidencev1alpha1.StalledCondition)
+	if meta.FindStatusCondition(*conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition) == nil {
+		setReady(deployment, metav1.ConditionFalse, reasonPending, "Ready has not been evaluated yet")
+	}
+	ready := meta.FindStatusCondition(*conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
+	if ready.Status == metav1.ConditionTrue {
+		meta.RemoveStatusCondition(conditions, konfidencev1alpha1.ArtifactDeploymentReconcilingCondition)
+		return
+	}
+	meta.SetStatusCondition(conditions, metav1.Condition{
+		Type:               konfidencev1alpha1.ArtifactDeploymentReconcilingCondition,
+		Status:             metav1.ConditionTrue,
+		Reason:             ready.Reason,
+		Message:            ready.Message,
 		ObservedGeneration: deployment.Generation,
 	})
 }
 
-// deploymentTargetStall reports a stall while no DeploymentTarget for the artifact type is Ready.
+// lastStall keeps the previous stall when the checks could not run.
+func lastStall(deployment *konfidencev1alpha1.ArtifactDeployment) *stallCause {
+	stalled := meta.FindStatusCondition(deployment.Status.Conditions, konfidencev1alpha1.StalledCondition)
+	if stalled == nil || stalled.Status != metav1.ConditionTrue {
+		return nil
+	}
+	return &stallCause{reason: stalled.Reason, message: stalled.Message}
+}
+
+// deploymentTargetStall reports a stall while no DeploymentTarget for the artifact type is Ready, or more than one is.
 func deploymentTargetStall(
 	ctx context.Context, c client.Reader, deployment *konfidencev1alpha1.ArtifactDeployment,
 ) (*stallCause, error) {
 	_, err := deploymenttarget.FindReady(ctx, c, deployment.Namespace, deployment.ArtifactType())
 	if apierrors.IsNotFound(err) {
 		return &stallCause{
-			reason: konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentTargetSecretsMissing,
+			reason: konfidencev1alpha1.ArtifactDeploymentStalledReasonNoReadyDeploymentTarget,
 			message: fmt.Sprintf("no Ready DeploymentTarget for artifact type %q in namespace %q",
 				deployment.ArtifactType(), deployment.Namespace),
+		}, nil
+	}
+	if errors.Is(err, deploymenttarget.ErrMultipleReadyTargets) {
+		return &stallCause{
+			reason: konfidencev1alpha1.ArtifactDeploymentStalledReasonMultipleReadyDeploymentTargets,
+			message: fmt.Sprintf("multiple Ready DeploymentTargets for artifact type %q in namespace %q; "+
+				"remove the extra targets so exactly one remains", deployment.ArtifactType(), deployment.Namespace),
 		}, nil
 	}
 	return nil, err

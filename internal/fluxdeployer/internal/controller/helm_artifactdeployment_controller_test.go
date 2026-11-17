@@ -87,7 +87,7 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 		}
 		cl := fake.NewClientBuilder().
 			WithScheme(newTestScheme()).
-			WithObjects(d).
+			WithObjects(d, readyTarget("default", "local", internal.ArtifactTypeHelm)).
 			WithStatusSubresource(&konfidencev1alpha1.ArtifactDeployment{}).
 			Build()
 		r := &HelmArtifactDeploymentReconciler{
@@ -101,7 +101,7 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 	}
 
 	Context("When the deployment contains multiple helmChart resources", func() {
-		It("patches Ready=False with reason MultipleHelmChartResources, returns an error, and never calls the sub-reconcilers", func() {
+		It("patches Stalled and Ready=False with reason ResourceInvalid, returns an error, and never calls the sub-reconcilers", func() {
 			r, cl, d := newFixture("multi-helm", []konfidencev1alpha1.OCMResource{
 				{Name: "a", Type: ocmResourceTypeHelmChart, Content: rawHelmOCIContent()},
 				{Name: "b", Type: ocmResourceTypeHelmChart, Content: rawHelmOCIContent()},
@@ -121,7 +121,7 @@ var _ = Describe("HelmArtifactDeployment Controller", func() { //nolint:dupl
 			ready := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
 			Expect(ready).NotTo(BeNil(), "Ready condition should be set")
 			Expect(ready.Status).To(Equal(metav1.ConditionFalse))
-			Expect(ready.Reason).To(Equal("MultipleHelmChartResources"))
+			Expect(ready.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonResourceInvalid))
 			Expect(ready.Message).To(ContainSubstring("found 2"))
 			Expect(ready.ObservedGeneration).To(Equal(d.Generation))
 		})

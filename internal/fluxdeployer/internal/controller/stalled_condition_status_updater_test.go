@@ -76,6 +76,27 @@ func readyTarget(namespace, name string, artifactType konfidencev1alpha1.Artifac
 	return target
 }
 
+// expectExclusiveLifecycle checks deployer spec 3.4: Ready is present, exactly one of Reconciling, Stalled and Ready
+// is True, and Reconciling and Stalled are never written False.
+func expectExclusiveLifecycle(conditions []metav1.Condition) {
+	GinkgoHelper()
+	Expect(meta.FindStatusCondition(conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)).NotTo(BeNil())
+	lifecycle := []string{
+		konfidencev1alpha1.ArtifactDeploymentReconcilingCondition,
+		konfidencev1alpha1.StalledCondition,
+		konfidencev1alpha1.ArtifactDeploymentReadyCondition,
+	}
+	var trueTypes []string
+	for _, conditionType := range lifecycle {
+		if meta.IsStatusConditionTrue(conditions, conditionType) {
+			trueTypes = append(trueTypes, conditionType)
+		}
+	}
+	Expect(trueTypes).To(HaveLen(1))
+	Expect(meta.IsStatusConditionFalse(conditions, konfidencev1alpha1.StalledCondition)).To(BeFalse())
+	Expect(meta.IsStatusConditionFalse(conditions, konfidencev1alpha1.ArtifactDeploymentReconcilingCondition)).To(BeFalse())
+}
+
 var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 	var (
 		ctx       context.Context
@@ -153,19 +174,24 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 		}
 	}
 
-	// reconcileStalled runs one reconcile, asserts Ready was not written and returns the Stalled condition.
-	reconcileStalled := func(r reconcile.Reconciler, cl client.Client) *metav1.Condition {
+	// reconcileConditions runs one reconcile and returns the conditions after checking the lifecycle conditions.
+	reconcileConditions := func(r reconcile.Reconciler, cl client.Client) []metav1.Condition {
 		key := client.ObjectKey{Namespace: stalledNamespace, Name: stalledDeploymentName}
 		_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
 		Expect(err).NotTo(HaveOccurred())
 
 		got := &konfidencev1alpha1.ArtifactDeployment{}
 		Expect(cl.Get(ctx, key, got)).To(Succeed())
-		Expect(meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)).To(BeNil(),
-			"Stalled must not write Ready")
-		stalled := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.StalledCondition)
-		Expect(stalled).NotTo(BeNil(), "Stalled must be written on every completed evaluation")
-		Expect(stalled.ObservedGeneration).To(Equal(int64(3)))
+		expectExclusiveLifecycle(got.Status.Conditions)
+		return got.Status.Conditions
+	}
+
+	// reconcileStalled runs one reconcile and returns the Stalled condition, nil when nothing blocks.
+	reconcileStalled := func(r reconcile.Reconciler, cl client.Client) *metav1.Condition {
+		stalled := meta.FindStatusCondition(reconcileConditions(r, cl), konfidencev1alpha1.StalledCondition)
+		if stalled != nil {
+			Expect(stalled.ObservedGeneration).To(Equal(int64(3)))
+		}
 		return stalled
 	}
 
@@ -174,7 +200,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			return newDeployment(internal.ArtifactTypeHelm, ocmResourceTypeHelmChart, rawHelmOCIContent())
 		}
 
-		It("writes Stalled=False when nothing blocks, clearing an earlier stall", func() {
+		It("removes an earlier stall and reports Reconciling when nothing blocks", func() {
 			d := helmDeployment()
 			d.Status.Conditions = []metav1.Condition{{
 				Type: konfidencev1alpha1.StalledCondition, Status: metav1.ConditionTrue, Reason: "RetriesExceeded",
@@ -183,9 +209,9 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			cl := newClient(d)
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
 
-			stalled := reconcileStalled(helmReconciler(cl), cl)
-			Expect(stalled.Status).To(Equal(metav1.ConditionFalse))
-			Expect(stalled.Reason).To(Equal(konfidencev1alpha1.StalledReasonNotStalled))
+			conditions := reconcileConditions(helmReconciler(cl), cl)
+			Expect(meta.FindStatusCondition(conditions, konfidencev1alpha1.StalledCondition)).To(BeNil())
+			Expect(meta.IsStatusConditionTrue(conditions, konfidencev1alpha1.ArtifactDeploymentReconcilingCondition)).To(BeTrue())
 		})
 
 		It("mirrors a Stalled HelmRelease with Flux's message", func() {
@@ -206,7 +232,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			cl := newClient(helmDeployment(), release)
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
 
-			Expect(reconcileStalled(helmReconciler(cl), cl).Status).To(Equal(metav1.ConditionFalse))
+			Expect(reconcileStalled(helmReconciler(cl), cl)).To(BeNil())
 		})
 
 		It("mirrors a Stalled HelmChart created for the release", func() {
@@ -241,7 +267,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 
 			stalled := reconcileStalled(helmReconciler(cl), cl)
 			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
-			Expect(stalled.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentTargetSecretsMissing))
+			Expect(stalled.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonNoReadyDeploymentTarget))
 		})
 
 		It("reports an artifact without a Helm chart resource", func() {
@@ -278,6 +304,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 
 			got := &konfidencev1alpha1.ArtifactDeployment{}
 			Expect(cl.Get(ctx, key, got)).To(Succeed())
+			expectExclusiveLifecycle(got.Status.Conditions)
 			stalled := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.StalledCondition)
 			Expect(stalled).NotTo(BeNil())
 			Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
@@ -343,7 +370,7 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 		Expect(ready.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentResultNotUnique))
 	})
 
-	It("reports a Flux stall on a Ready deployment and keeps it Ready", func() {
+	It("reports a Flux stall on a Ready deployment and sets Ready=False", func() {
 		d := newDeployment(internal.ArtifactTypeHelm, ocmResourceTypeHelmChart, rawHelmOCIContent())
 		d.Status.Conditions = []metav1.Condition{
 			condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
@@ -364,7 +391,10 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 
 		got := &konfidencev1alpha1.ArtifactDeployment{}
 		Expect(cl.Get(ctx, key, got)).To(Succeed())
-		Expect(meta.IsStatusConditionTrue(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)).To(BeTrue())
+		expectExclusiveLifecycle(got.Status.Conditions)
+		ready := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
+		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+		Expect(ready.Reason).To(Equal("Stalled"))
 		stalled := meta.FindStatusCondition(got.Status.Conditions, konfidencev1alpha1.StalledCondition)
 		Expect(stalled).NotTo(BeNil())
 		Expect(stalled.Status).To(Equal(metav1.ConditionTrue))
@@ -436,12 +466,76 @@ var _ = Describe("Stalled condition on ArtifactDeployments", func() {
 			Expect(stalled.Reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonResourceInvalid))
 		})
 
-		It("writes Stalled=False when nothing blocks", func() {
+		It("reports Reconciling when nothing blocks", func() {
 			cl := newClient(kustomizeDeployment())
 			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
 
-			Expect(reconcileStalled(kustomizeReconciler(cl), cl).Status).To(Equal(metav1.ConditionFalse))
+			conditions := reconcileConditions(kustomizeReconciler(cl), cl)
+			Expect(meta.FindStatusCondition(conditions, konfidencev1alpha1.StalledCondition)).To(BeNil())
+			Expect(meta.IsStatusConditionTrue(conditions, konfidencev1alpha1.ArtifactDeploymentReconcilingCondition)).To(BeTrue())
 		})
+
+		It("removes Reconciling once the deployment is Ready", func() {
+			d := kustomizeDeployment()
+			d.Status.Conditions = []metav1.Condition{
+				condition(konfidencev1alpha1.ArtifactFetchedCondition, metav1.ConditionTrue, "Fetched"),
+				condition(konfidencev1alpha1.ArtifactDeployedCondition, metav1.ConditionTrue, "Deployed"),
+				condition(konfidencev1alpha1.AppHealthyCondition, metav1.ConditionTrue, "Healthy"),
+				condition(konfidencev1alpha1.DeploymentResultCreatedCondition, metav1.ConditionTrue, "Created"),
+				condition(konfidencev1alpha1.ArtifactDeploymentReconcilingCondition, metav1.ConditionTrue, "Progressing"),
+			}
+			cl := newClient(d)
+			r := kustomizeReconciler(cl)
+			r.ReadyConditionStatusUpdater = &ReadyConditionStatusUpdater{}
+			drMock.EXPECT().MutateStatus(gomock.Any(), gomock.Any()).Return(nil)
+
+			conditions := reconcileConditions(r, cl)
+			Expect(meta.IsStatusConditionTrue(conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)).To(BeTrue())
+			Expect(meta.FindStatusCondition(conditions, konfidencev1alpha1.ArtifactDeploymentReconcilingCondition)).To(BeNil())
+		})
+	})
+})
+
+var _ = Describe("setLifecycleConditions", func() {
+	deploymentWith := func(conditions ...metav1.Condition) *konfidencev1alpha1.ArtifactDeployment {
+		return &konfidencev1alpha1.ArtifactDeployment{
+			ObjectMeta: metav1.ObjectMeta{Generation: 2},
+			Status:     konfidencev1alpha1.ArtifactDeploymentStatus{Conditions: conditions},
+		}
+	}
+
+	It("lets a stall win over Ready", func() {
+		d := deploymentWith(condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionTrue, "Ready"))
+		setLifecycleConditions(d, &stallCause{reason: "ResourceInvalid", message: "broken"})
+
+		expectExclusiveLifecycle(d.Status.Conditions)
+		ready := meta.FindStatusCondition(d.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)
+		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+		Expect(ready.Reason).To(Equal("ResourceInvalid"))
+	})
+
+	It("reports Reconciling with the reason Ready=False carries", func() {
+		d := deploymentWith(condition(konfidencev1alpha1.ArtifactDeploymentReadyCondition, metav1.ConditionFalse, "Progressing"))
+		setLifecycleConditions(d, nil)
+
+		expectExclusiveLifecycle(d.Status.Conditions)
+		reconciling := meta.FindStatusCondition(d.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReconcilingCondition)
+		Expect(reconciling.Reason).To(Equal("Progressing"))
+		Expect(reconciling.ObservedGeneration).To(Equal(int64(2)))
+	})
+
+	It("writes Ready=False when Ready was never evaluated", func() {
+		d := deploymentWith()
+		setLifecycleConditions(d, nil)
+
+		expectExclusiveLifecycle(d.Status.Conditions)
+		Expect(meta.IsStatusConditionFalse(d.Status.Conditions, konfidencev1alpha1.ArtifactDeploymentReadyCondition)).To(BeTrue())
+	})
+
+	It("keeps the last stall when the checks could not run", func() {
+		stalled := condition(konfidencev1alpha1.StalledCondition, metav1.ConditionTrue, "ResourceInvalid")
+		Expect(lastStall(deploymentWith(stalled))).To(Equal(&stallCause{reason: "ResourceInvalid", message: "from ResourceInvalid"}))
+		Expect(lastStall(deploymentWith())).To(BeNil())
 	})
 })
 
@@ -478,7 +572,7 @@ var _ = Describe("deploymentTargetStall", func() {
 		cause, err := deploymentTargetStall(ctx, k8sClient, deployment)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cause).NotTo(BeNil())
-		Expect(cause.reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonDeploymentTargetSecretsMissing))
+		Expect(cause.reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonNoReadyDeploymentTarget))
 		Expect(cause.message).To(ContainSubstring(`no Ready DeploymentTarget for artifact type "sample.konfidence.cloud"`))
 	}
 
@@ -508,12 +602,15 @@ var _ = Describe("deploymentTargetStall", func() {
 		expectStall()
 	})
 
-	It("returns an error when two targets for the artifact type are Ready", func() {
+	It("reports two Ready targets for the artifact type", func() {
 		createTarget(readyTarget(namespace, "local", class))
 		createTarget(readyTarget(namespace, "second", class))
 
 		cause, err := deploymentTargetStall(ctx, k8sClient, deployment)
-		Expect(err).To(HaveOccurred())
-		Expect(cause).To(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cause).NotTo(BeNil())
+		Expect(cause.reason).To(Equal(konfidencev1alpha1.ArtifactDeploymentStalledReasonMultipleReadyDeploymentTargets))
+		Expect(cause.message).To(ContainSubstring(
+			`multiple Ready DeploymentTargets for artifact type "sample.konfidence.cloud"`))
 	})
 })
