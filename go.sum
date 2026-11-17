@@ -100,8 +100,8 @@ github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnr
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
 github.com/klauspost/compress v1.20.1 h1:T7kKElXUMXrUJ2E9QhQhxFtcK5rPyLdsGZvdbLMPdiQ=
 github.com/klauspost/compress v1.20.1/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
-github.com/konfidence-project/konfidence v0.0.0-20261117145732-073a193edebd h1:5ZVzU+y+KMIsB/ZGltzgdNDq7jCKcbw4H5SpSM7w4R4=
-github.com/konfidence-project/konfidence v0.0.0-20261117145732-073a193edebd/go.mod h1:eUuyNMnb7CJ8pM00whyXXMLF4zpSc+6XVApsT/U0w1k=
+github.com/konfidence-project/konfidence v0.0.0-20261117152938-fb73985f410c h1:tvum/bVUY/5ZErtVbWMvrbGqMu5BYhxeJWMMTP1E3cQ=
+github.com/konfidence-project/konfidence v0.0.0-20261117152938-fb73985f410c/go.mod h1:eUuyNMnb7CJ8pM00whyXXMLF4zpSc+6XVApsT/U0w1k=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=

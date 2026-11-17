@@ -72,7 +72,10 @@ func init() {
 	rootCmd.Flags().StringVar(&metricsAddr, "metrics-bind-address", ":8080",
 		"The address the metrics endpoint binds to. Set to '0' to disable.")
 
-	rootCmd.Flags().StringVar(&excludedNamespacesSpec, "exclude-namespaces", "", "Comma-separated namespaces whose resources are not reconciled. Changes require a restart.")
+	rootCmd.Flags().StringVar(
+		&excludedNamespacesSpec, "exclude-namespaces", "",
+		"Comma-separated namespaces whose resources are not reconciled. Changes require a restart.",
+	)
 	rootCmd.Flags().StringVar(&controllersSpec, "controllers", "*",
 		"Comma-separated glob expression selecting which controllers to enable. "+
 			"Examples: '*' (all), 'FluxDeployer', '!FluxDeployer,*' (all except), 'Task*'. "+
