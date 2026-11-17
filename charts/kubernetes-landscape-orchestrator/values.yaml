@@ -1,5 +1,7 @@
 # -- Forwarded as flags to the operator binary.
 controller:
+  # -- Namespaces whose resources are skipped before reconciliation. Changes roll out the operator.
+  excludeNamespaces: []
   # -- Comma-separated list of sub-controllers, or `*` for all.
   # Examples: `"FluxDeployer"`, `"!FluxDeployer,*"` (all except), `"Task*"`.
   controllers: "*"

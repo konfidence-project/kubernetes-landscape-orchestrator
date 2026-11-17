@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"time"
 
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
 	"github.com/konfidence-project/konfidence/pkg/deployer"
 	deploymenttarget "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
@@ -178,7 +179,7 @@ func (r *KustomizeArtifactDeploymentReconciler) evaluateIfStalled(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces ...pkgctrl.NamespaceExclusions) error {
 	artifactTypePredicate := deployer.ArtifactTypePredicate(internal.ArtifactTypeKustomize)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, artifactTypePredicate)).
@@ -190,5 +191,5 @@ func (r *KustomizeArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manage
 		Owns(&sourcev1.OCIRepository{}).
 		Owns(&kustomizev1.Kustomization{}).
 		Named("kustomize_artifactdeployment").
-		Complete(r)
+		Complete(pkgctrl.WrapExcludedNamespaces(r, excludedNamespaces...))
 }

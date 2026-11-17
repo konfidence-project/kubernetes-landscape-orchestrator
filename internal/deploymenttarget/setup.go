@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-logr/logr"
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
 	dpltarget "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/build"
@@ -66,10 +67,11 @@ func kubeconfigFromSecret(secret *corev1.Secret) ([]byte, error) {
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=deploymenttargets/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
-func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
+func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespaces ...pkgctrl.NamespaceExclusions) error {
 	if err := dpltarget.NewControllerManagedBy(mgr).
 		For(internal.SupportedArtifactTypes).
 		WithValidation(validate).
+		WithNamespaceExclusions(excludedNamespaces...).
 		Watches(&corev1.Secret{}, dpltarget.EnqueueReferencedTargets()).
 		Named(internal.ControllerName + ":" + build.Version).
 		Complete(); err != nil {

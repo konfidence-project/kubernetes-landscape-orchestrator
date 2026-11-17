@@ -26,8 +26,9 @@ Kubernetes: `>=1.27.0-0`
 |-----|------|---------|-------------|
 | affinity | object | `{}` | Affinity rules for the controller Pod. |
 | containerSecurityContext | object | `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}` | Container-level security context. |
-| controller | object | `{"controllers":"*","healthProbeBindAddress":":8081","leaderElection":true,"leaseId":"orchestrator.konfidence.cloud","metricsBindAddress":":8080"}` | Forwarded as flags to the operator binary. |
+| controller | object | `{"controllers":"*","excludeNamespaces":[],"healthProbeBindAddress":":8081","leaderElection":true,"leaseId":"orchestrator.konfidence.cloud","metricsBindAddress":":8080"}` | Forwarded as flags to the operator binary. |
 | controller.controllers | string | `"*"` | Comma-separated list of sub-controllers, or `*` for all. Examples: `"FluxDeployer"`, `"!FluxDeployer,*"` (all except), `"Task*"`. |
+| controller.excludeNamespaces | list | `[]` | Namespaces whose resources are skipped before reconciliation. Changes roll out the operator. |
 | controller.healthProbeBindAddress | string | `":8081"` | Bind address for the health probe endpoint. |
 | controller.leaderElection | bool | `true` | Enable leader election for the controller. |
 | controller.leaseId | string | `"orchestrator.konfidence.cloud"` | Lease ID used for leader election. |

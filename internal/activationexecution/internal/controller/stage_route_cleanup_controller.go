@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -67,9 +68,9 @@ func (r *StageRouteCleanupReconciler) deleteStageRoute(ctx context.Context, name
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *StageRouteCleanupReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *StageRouteCleanupReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces ...pkgctrl.NamespaceExclusions) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&konfidencev1alpha1.Stage{}).
 		Named("stageRouteCleanup").
-		Complete(r)
+		Complete(pkgctrl.WrapExcludedNamespaces(r, excludedNamespaces...))
 }
