@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
 	"github.com/konfidence-project/konfidence/pkg/deployer"
 	deploymenttarget "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
@@ -174,7 +175,7 @@ func (r *HelmArtifactDeploymentReconciler) evaluateIfStalled(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	artifactTypePredicate := deployer.ArtifactTypePredicate(internal.ArtifactTypeHelm)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&konfidencev1alpha1.ArtifactDeployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}, artifactTypePredicate)).
@@ -187,5 +188,5 @@ func (r *HelmArtifactDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Owns(&sourcev1.HelmChart{}).
 		Owns(&helmv2.HelmRelease{}).
 		Named("helm_artifactdeployment").
-		Complete(r)
+		Complete(excludedNamespaces.Wrap(r))
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentresult"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -431,7 +432,7 @@ func StageRouteName(stage string) string {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ActivationTaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ActivationTaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	activationTaskExecutionFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		switch o := obj.(type) {
 		case *konfidencev1alpha1.ActivationTaskExecution:
@@ -445,5 +446,5 @@ func (r *ActivationTaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) e
 		For(&konfidencev1alpha1.ActivationTaskExecution{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		WithEventFilter(activationTaskExecutionFilter).
 		Named("activationTaskExecution").
-		Complete(r)
+		Complete(excludedNamespaces.Wrap(r))
 }

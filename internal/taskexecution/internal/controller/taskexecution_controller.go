@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -188,7 +189,7 @@ var (
 )
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *TaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *TaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &batchv1.Job{}, taskExecutionOwnerKey, func(rawObj client.Object) []string {
 		// grab the job object and extract the owner
 		job := rawObj.(*batchv1.Job)
@@ -222,7 +223,7 @@ func (r *TaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&konfidencev1alpha1.TaskExecution{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(taskExecutionFilter).
 		Owns(&batchv1.Job{}).
 		Named("taskExecution").
-		Complete(r)
+		Complete(excludedNamespaces.Wrap(r))
 }
 
 func (r *TaskExecutionReconciler) jobOwnerRefsContainKind(references []metav1.OwnerReference, kind string) bool {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-logr/logr"
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -232,7 +233,7 @@ func (r *VectorDataReconciler) setReady(ctx context.Context, vd *konfidencev1alp
 	return nil
 }
 
-func (r *VectorDataReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *VectorDataReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	// Reconcile on spec changes and on deletion-timestamp transitions so the finalizer path
 	// runs independent of whether the API server bumps generation on the deletion write.
 	return ctrl.NewControllerManagedBy(mgr).
@@ -243,5 +244,5 @@ func (r *VectorDataReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}},
 		))).
 		Named(VectorDataControllerName).
-		Complete(r)
+		Complete(excludedNamespaces.Wrap(r))
 }

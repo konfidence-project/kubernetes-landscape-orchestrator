@@ -15,6 +15,7 @@ package vectordata
 
 import (
 	"github.com/go-logr/logr"
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/vectordata/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -23,12 +24,12 @@ import (
 const OperatorFlagName = "VectorData"
 
 // SetupControllers registers the VectorData reconciler with the manager.
-func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
+func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	if err := (&controller.VectorDataReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorder(controller.VectorDataControllerName),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, excludedNamespaces); err != nil {
 		logger.Error(err, "unable to create controller", "controller", "VectorData")
 		return err
 	}

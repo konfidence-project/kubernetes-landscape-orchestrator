@@ -2,6 +2,7 @@ package fluxdeployer
 
 import (
 	"github.com/go-logr/logr"
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
 	internalcontroller "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/controller"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer/internal/fluxcd/reconciler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -9,7 +10,7 @@ import (
 
 const OperatorFlagName = "FluxDeployer"
 
-func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
+func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	configProvider := &internalcontroller.ConfigProvider{Client: mgr.GetClient()}
 
 	if err := (&internalcontroller.HelmArtifactDeploymentReconciler{
@@ -27,7 +28,7 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 			Scheme:         mgr.GetScheme(),
 			ConfigProvider: configProvider,
 		},
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, excludedNamespaces); err != nil {
 		logger.Error(err, "unable to create helm controller", "controller", "ArtifactDeployment")
 		return err
 	}
@@ -48,7 +49,7 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 			ConfigProvider: configProvider,
 			Recorder:       mgr.GetEventRecorder(reconciler.KustomizationControllerName),
 		},
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, excludedNamespaces); err != nil {
 		logger.Error(err, "unable to create kustomize controller", "controller", "ArtifactDeployment")
 		return err
 	}

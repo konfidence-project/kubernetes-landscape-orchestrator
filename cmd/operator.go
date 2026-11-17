@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	utilscmd "github.com/konfidence-project/konfidence/pkg/cmd"
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/activationexecution"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/deploymenttarget"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/fluxdeployer"
@@ -18,6 +19,10 @@ import (
 )
 
 func startOperator(cmd *cobra.Command, args []string) error {
+	excludedNamespaces, err := pkgctrl.ParseNamespaceExclusions(excludedNamespacesSpec)
+	if err != nil {
+		return err
+	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		HealthProbeBindAddress: probeAddr,
@@ -35,19 +40,19 @@ func startOperator(cmd *cobra.Command, args []string) error {
 
 	controllerSetups := map[string]func() error{
 		fluxdeployer.OperatorFlagName: func() error {
-			return fluxdeployer.SetupControllers(mgr, setupLog)
+			return fluxdeployer.SetupControllers(mgr, setupLog, excludedNamespaces)
 		},
 		taskexecution.OperatorFlagName: func() error {
-			return taskexecution.SetupControllers(mgr, setupLog)
+			return taskexecution.SetupControllers(mgr, setupLog, excludedNamespaces)
 		},
 		activationexecution.OperatorFlagName: func() error {
-			return activationexecution.SetupControllers(mgr, setupLog)
+			return activationexecution.SetupControllers(mgr, setupLog, excludedNamespaces)
 		},
 		vectordata.OperatorFlagName: func() error {
-			return vectordata.SetupControllers(mgr, setupLog)
+			return vectordata.SetupControllers(mgr, setupLog, excludedNamespaces)
 		},
 		deploymenttarget.OperatorFlagName: func() error {
-			return deploymenttarget.SetupControllers(mgr, setupLog)
+			return deploymenttarget.SetupControllers(mgr, setupLog, excludedNamespaces)
 		},
 	}
 
