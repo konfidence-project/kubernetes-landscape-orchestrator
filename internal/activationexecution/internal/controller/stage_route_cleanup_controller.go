@@ -68,9 +68,9 @@ func (r *StageRouteCleanupReconciler) deleteStageRoute(ctx context.Context, name
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *StageRouteCleanupReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces ...pkgctrl.NamespaceExclusions) error {
+func (r *StageRouteCleanupReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&konfidencev1alpha1.Stage{}).
 		Named("stageRouteCleanup").
-		Complete(pkgctrl.WrapExcludedNamespaces(r, excludedNamespaces...))
+		Complete(excludedNamespaces.Wrap(r))
 }

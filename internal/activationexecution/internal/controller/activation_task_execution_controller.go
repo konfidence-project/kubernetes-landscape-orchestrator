@@ -432,7 +432,7 @@ func StageRouteName(stage string) string {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ActivationTaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces ...pkgctrl.NamespaceExclusions) error {
+func (r *ActivationTaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	activationTaskExecutionFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		switch o := obj.(type) {
 		case *konfidencev1alpha1.ActivationTaskExecution:
@@ -446,5 +446,5 @@ func (r *ActivationTaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager, e
 		For(&konfidencev1alpha1.ActivationTaskExecution{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		WithEventFilter(activationTaskExecutionFilter).
 		Named("activationTaskExecution").
-		Complete(pkgctrl.WrapExcludedNamespaces(r, excludedNamespaces...))
+		Complete(excludedNamespaces.Wrap(r))
 }

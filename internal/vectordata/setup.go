@@ -24,12 +24,12 @@ import (
 const OperatorFlagName = "VectorData"
 
 // SetupControllers registers the VectorData reconciler with the manager.
-func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespaces ...pkgctrl.NamespaceExclusions) error {
+func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	if err := (&controller.VectorDataReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorder(controller.VectorDataControllerName),
-	}).SetupWithManager(mgr, excludedNamespaces...); err != nil {
+	}).SetupWithManager(mgr, excludedNamespaces); err != nil {
 		logger.Error(err, "unable to create controller", "controller", "VectorData")
 		return err
 	}

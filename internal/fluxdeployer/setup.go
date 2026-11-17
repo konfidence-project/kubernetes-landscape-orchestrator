@@ -10,7 +10,7 @@ import (
 
 const OperatorFlagName = "FluxDeployer"
 
-func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespaces ...pkgctrl.NamespaceExclusions) error {
+func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	configProvider := &internalcontroller.ConfigProvider{Client: mgr.GetClient()}
 
 	if err := (&internalcontroller.HelmArtifactDeploymentReconciler{
@@ -28,7 +28,7 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespace
 			Scheme:         mgr.GetScheme(),
 			ConfigProvider: configProvider,
 		},
-	}).SetupWithManager(mgr, excludedNamespaces...); err != nil {
+	}).SetupWithManager(mgr, excludedNamespaces); err != nil {
 		logger.Error(err, "unable to create helm controller", "controller", "ArtifactDeployment")
 		return err
 	}
@@ -49,7 +49,7 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespace
 			ConfigProvider: configProvider,
 			Recorder:       mgr.GetEventRecorder(reconciler.KustomizationControllerName),
 		},
-	}).SetupWithManager(mgr, excludedNamespaces...); err != nil {
+	}).SetupWithManager(mgr, excludedNamespaces); err != nil {
 		logger.Error(err, "unable to create kustomize controller", "controller", "ArtifactDeployment")
 		return err
 	}

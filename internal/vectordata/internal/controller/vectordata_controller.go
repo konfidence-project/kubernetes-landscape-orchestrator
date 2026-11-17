@@ -233,7 +233,7 @@ func (r *VectorDataReconciler) setReady(ctx context.Context, vd *konfidencev1alp
 	return nil
 }
 
-func (r *VectorDataReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces ...pkgctrl.NamespaceExclusions) error {
+func (r *VectorDataReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	// Reconcile on spec changes and on deletion-timestamp transitions so the finalizer path
 	// runs independent of whether the API server bumps generation on the deletion write.
 	return ctrl.NewControllerManagedBy(mgr).
@@ -244,5 +244,5 @@ func (r *VectorDataReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamesp
 			}},
 		))).
 		Named(VectorDataControllerName).
-		Complete(pkgctrl.WrapExcludedNamespaces(r, excludedNamespaces...))
+		Complete(excludedNamespaces.Wrap(r))
 }

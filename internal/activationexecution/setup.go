@@ -9,7 +9,7 @@ import (
 
 const OperatorFlagName = "ActivationExecution"
 
-func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespaces ...pkgctrl.NamespaceExclusions) error {
+func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	landscape := &internalcontroller.LandscapeClientProvider{
 		Local:  mgr.GetClient(),
 		Reader: mgr.GetAPIReader(),
@@ -21,7 +21,7 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespace
 		Scheme:    mgr.GetScheme(),
 		Recorder:  mgr.GetEventRecorder(internalcontroller.ActivationTaskExecutionControllerName),
 		Landscape: landscape,
-	}).SetupWithManager(mgr, excludedNamespaces...); err != nil {
+	}).SetupWithManager(mgr, excludedNamespaces); err != nil {
 		logger.Error(err, "unable to create controller", "controller", "ActivationTaskExecution")
 		return err
 	}
@@ -30,7 +30,7 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespace
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		Landscape: landscape,
-	}).SetupWithManager(mgr, excludedNamespaces...); err != nil {
+	}).SetupWithManager(mgr, excludedNamespaces); err != nil {
 		logger.Error(err, "unable to create controller", "controller", "StageRouteCleanup")
 		return err
 	}

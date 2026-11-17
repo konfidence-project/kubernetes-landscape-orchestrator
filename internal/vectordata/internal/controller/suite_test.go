@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -70,7 +72,7 @@ var _ = BeforeSuite(func() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorder(VectorDataControllerName),
-	}).SetupWithManager(mgr)).To(Succeed())
+	}).SetupWithManager(mgr, pkgctrl.NamespaceExclusions{})).To(Succeed())
 
 	go func() {
 		defer GinkgoRecover()

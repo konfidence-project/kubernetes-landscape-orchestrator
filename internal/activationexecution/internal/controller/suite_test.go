@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	pkgctrl "github.com/konfidence-project/konfidence/pkg/controller"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -97,14 +99,14 @@ var _ = BeforeSuite(func() {
 		Scheme:    k8sManager.GetScheme(),
 		Recorder:  k8sManager.GetEventRecorder(ActivationTaskExecutionControllerName),
 		Landscape: landscape,
-	}).SetupWithManager(k8sManager)
+	}).SetupWithManager(k8sManager, pkgctrl.NamespaceExclusions{})
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&StageRouteCleanupReconciler{
 		Client:    k8sManager.GetClient(),
 		Scheme:    k8sManager.GetScheme(),
 		Landscape: landscape,
-	}).SetupWithManager(k8sManager)
+	}).SetupWithManager(k8sManager, pkgctrl.NamespaceExclusions{})
 	Expect(err).ToNot(HaveOccurred())
 
 	go func() {

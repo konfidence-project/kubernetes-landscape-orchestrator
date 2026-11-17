@@ -67,11 +67,11 @@ func kubeconfigFromSecret(secret *corev1.Secret) ([]byte, error) {
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=deploymenttargets/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
-func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespaces ...pkgctrl.NamespaceExclusions) error {
+func SetupControllers(mgr manager.Manager, logger logr.Logger, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	if err := dpltarget.NewControllerManagedBy(mgr).
 		For(internal.SupportedArtifactTypes).
 		WithValidation(validate).
-		WithNamespaceExclusions(excludedNamespaces...).
+		WithNamespaceExclusions(excludedNamespaces).
 		Watches(&corev1.Secret{}, dpltarget.EnqueueReferencedTargets()).
 		Named(internal.ControllerName + ":" + build.Version).
 		Complete(); err != nil {

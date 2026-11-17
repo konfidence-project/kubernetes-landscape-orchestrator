@@ -189,7 +189,7 @@ var (
 )
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *TaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces ...pkgctrl.NamespaceExclusions) error {
+func (r *TaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager, excludedNamespaces pkgctrl.NamespaceExclusions) error {
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &batchv1.Job{}, taskExecutionOwnerKey, func(rawObj client.Object) []string {
 		// grab the job object and extract the owner
 		job := rawObj.(*batchv1.Job)
@@ -223,7 +223,7 @@ func (r *TaskExecutionReconciler) SetupWithManager(mgr ctrl.Manager, excludedNam
 		For(&konfidencev1alpha1.TaskExecution{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).WithEventFilter(taskExecutionFilter).
 		Owns(&batchv1.Job{}).
 		Named("taskExecution").
-		Complete(pkgctrl.WrapExcludedNamespaces(r, excludedNamespaces...))
+		Complete(excludedNamespaces.Wrap(r))
 }
 
 func (r *TaskExecutionReconciler) jobOwnerRefsContainKind(references []metav1.OwnerReference, kind string) bool {
