@@ -9,6 +9,7 @@ import (
 )
 
 func TestResolve(t *testing.T) {
+	const configName = "config"
 	for _, tt := range []struct {
 		name    string
 		missing bool
@@ -18,11 +19,11 @@ func TestResolve(t *testing.T) {
 	}{
 		{name: "missing target", missing: true, err: true},
 		{name: "local", want: kubernetesclient.Destination{Local: true}},
-		{name: "remote", params: &konfidencev1alpha1.Parameters{Kind: "Secret", Name: "config"},
-			want: kubernetesclient.Destination{SecretRef: types.NamespacedName{Namespace: "target-ns", Name: "config"}}},
-		{name: "non-core group", params: &konfidencev1alpha1.Parameters{APIGroup: "example.com", Kind: "Secret", Name: "config"}, err: true},
-		{name: "wrong kind", params: &konfidencev1alpha1.Parameters{Kind: "ConfigMap", Name: "config"}, err: true},
-		{name: "empty name", params: &konfidencev1alpha1.Parameters{Kind: "Secret"}, err: true},
+		{name: "remote", params: &konfidencev1alpha1.Parameters{Kind: secretKind, Name: configName},
+			want: kubernetesclient.Destination{SecretRef: types.NamespacedName{Namespace: "target-ns", Name: configName}}},
+		{name: "non-core group", params: &konfidencev1alpha1.Parameters{APIGroup: "example.com", Kind: secretKind, Name: configName}, err: true},
+		{name: "wrong kind", params: &konfidencev1alpha1.Parameters{Kind: "ConfigMap", Name: configName}, err: true},
+		{name: "empty name", params: &konfidencev1alpha1.Parameters{Kind: secretKind}, err: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var target *konfidencev1alpha1.DeploymentTarget

@@ -30,9 +30,9 @@ func (p *testProvider) ClientFor(ctx context.Context, ref types.NamespacedName) 
 	return p.value, p.err
 }
 
-func remoteTarget(namespace, name string) *konfidencev1alpha1.DeploymentTarget {
+func remoteTarget(name string) *konfidencev1alpha1.DeploymentTarget {
 	return &konfidencev1alpha1.DeploymentTarget{
-		Namespace: namespace,
+		Namespace: "ns",
 		Spec: konfidencev1alpha1.DeploymentTargetSpec{
 			Parameters: &konfidencev1alpha1.Parameters{Kind: "Secret", Name: name},
 		},
@@ -49,9 +49,9 @@ func TestClientProviderWithoutRemoteCall(t *testing.T) {
 	}{
 		{name: "missing target", err: true},
 		{name: "local target", target: &konfidencev1alpha1.DeploymentTarget{}, want: local},
-		{name: "non-core API group", target: remoteTarget("ns", "config"), err: true},
-		{name: "wrong kind", target: remoteTarget("ns", "config"), err: true},
-		{name: "empty name", target: remoteTarget("ns", ""), err: true},
+		{name: "non-core API group", target: remoteTarget("config"), err: true},
+		{name: "wrong kind", target: remoteTarget("config"), err: true},
+		{name: "empty name", target: remoteTarget(""), err: true},
 	}
 	tests[2].target.Spec.Parameters.APIGroup = "example.com"
 	tests[3].target.Spec.Parameters.Kind = "ConfigMap"
@@ -143,7 +143,7 @@ func TestClientProviderSharedTargetReference(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := kubernetesclient.NewClientProvider(&testClient{}, remote)
-	firstTarget, secondTarget := remoteTarget("ns", "config"), remoteTarget("ns", "config")
+	firstTarget, secondTarget := remoteTarget("config"), remoteTarget("config")
 	firstTarget.Name, secondTarget.Name = "first", "second"
 	firstResolution, err := deploymenttarget.Resolve(firstTarget)
 	if err != nil {

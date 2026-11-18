@@ -16,6 +16,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	secretUID    = "uid-1"
+	secretName   = "config"
+	valueKey     = "value"
+	valueYAMLKey = "value.yaml"
+	remoteHost   = "https://example.com:6443"
+)
+
 const validKubeconfig = `apiVersion: v1
 kind: Config
 clusters:
@@ -60,12 +68,16 @@ func providerForTest(t *testing.T, reader client.Reader) *runtimeClientProvider 
 
 func configSecret() *corev1.Secret {
 	return &corev1.Secret{
-		UID: "uid-1", ResourceVersion: "1",
-		Data: map[string][]byte{"value": []byte(validKubeconfig)},
+		UID: secretUID, ResourceVersion: "1",
+		Data: map[string][]byte{valueKey: []byte(validKubeconfig)},
 	}
 }
 
 func TestRuntimeClientProviderCache(t *testing.T) {
+	const (
+		otherName      = "other"
+		otherNamespace = "other-ns"
+	)
 	ctx := context.Background()
 	ref := types.NamespacedName{Namespace: "target-ns", Name: "credentials"}
 	secret := configSecret()
@@ -82,7 +94,7 @@ func TestRuntimeClientProviderCache(t *testing.T) {
 	builds := 0
 	p.newClient = func(config *rest.Config, options client.Options) (client.Client, error) {
 		builds++
-		if config.Host != "https://example.com:6443" || options.Scheme != p.scheme {
+		if config.Host != remoteHost || options.Scheme != p.scheme {
 			t.Errorf("unexpected factory dependencies: host %q, scheme %p", config.Host, options.Scheme)
 		}
 		return &testClient{}, nil
@@ -100,8 +112,8 @@ func TestRuntimeClientProviderCache(t *testing.T) {
 		t.Fatal("unchanged Secret did not reuse client")
 	}
 	for _, other := range []types.NamespacedName{
-		{Namespace: ref.Namespace, Name: "other"},
-		{Namespace: "other-ns", Name: ref.Name},
+		{Namespace: ref.Namespace, Name: otherName},
+		{Namespace: otherNamespace, Name: ref.Name},
 	} {
 		if got := resolve(other); got == first {
 			t.Fatalf("reference %s shared another reference's client", other)
@@ -127,8 +139,8 @@ func TestRuntimeClientProviderCache(t *testing.T) {
 		t.Fatalf("got %d builds and %d reads, want 5 and 10", builds, len(reads))
 	}
 	wantRefs := []types.NamespacedName{ref, ref,
-		{Namespace: ref.Namespace, Name: "other"}, {Namespace: ref.Namespace, Name: "other"},
-		{Namespace: "other-ns", Name: ref.Name}, {Namespace: "other-ns", Name: ref.Name},
+		{Namespace: ref.Namespace, Name: otherName}, {Namespace: ref.Namespace, Name: otherName},
+		{Namespace: otherNamespace, Name: ref.Name}, {Namespace: otherNamespace, Name: ref.Name},
 		ref, ref, ref, ref,
 	}
 	for i := range wantRefs {
@@ -139,8 +151,12 @@ func TestRuntimeClientProviderCache(t *testing.T) {
 }
 
 func TestRuntimeClientProviderFailuresPreserveCache(t *testing.T) {
+	const (
+		readFailure  = "read"
+		buildFailure = "build"
+	)
 	sentinel := errors.New("injected failure")
-	for _, failure := range []string{"read", "missing keys", "invalid kubeconfig", "build"} {
+	for _, failure := range []string{readFailure, "missing keys", "invalid kubeconfig", buildFailure} {
 		for _, cached := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/cached=%v", failure, cached), func(t *testing.T) {
 				secret := configSecret()
@@ -161,7 +177,7 @@ func TestRuntimeClientProviderFailuresPreserveCache(t *testing.T) {
 					}
 					return &testClient{}, nil
 				}
-				ref := types.NamespacedName{Namespace: "ns", Name: "config"}
+				ref := types.NamespacedName{Namespace: "ns", Name: secretName}
 				if cached {
 					if _, err := p.ClientFor(context.Background(), ref); err != nil {
 						t.Fatal(err)
@@ -171,13 +187,13 @@ func TestRuntimeClientProviderFailuresPreserveCache(t *testing.T) {
 				buildsBefore := builds
 				secret.ResourceVersion = "2"
 				switch failure {
-				case "read":
+				case readFailure:
 					readErr = sentinel
 				case "missing keys":
 					secret.Data = nil
 				case "invalid kubeconfig":
-					secret.Data["value"] = []byte("private-credential: [")
-				case "build":
+					secret.Data[valueKey] = []byte("private-credential: [")
+				case buildFailure:
 					buildErr = sentinel
 				}
 				got, err := p.ClientFor(context.Background(), ref)
@@ -188,7 +204,7 @@ func TestRuntimeClientProviderFailuresPreserveCache(t *testing.T) {
 					t.Fatal("lock not released on error")
 				}
 				p.mu.Unlock()
-				if (failure == "read" || failure == "build") && !errors.Is(err, sentinel) {
+				if (failure == readFailure || failure == buildFailure) && !errors.Is(err, sentinel) {
 					t.Fatalf("underlying error lost: %v", err)
 				}
 				if strings.Contains(err.Error(), "private-credential") {
@@ -199,7 +215,7 @@ func TestRuntimeClientProviderFailuresPreserveCache(t *testing.T) {
 					t.Fatal("failure changed cache")
 				}
 				wantBuilds := buildsBefore
-				if failure == "build" {
+				if failure == buildFailure {
 					wantBuilds++
 				}
 				if builds != wantBuilds {
@@ -232,12 +248,12 @@ func TestRuntimeClientProviderKubeconfigKeyPriority(t *testing.T) {
 		err  bool
 	}{
 		{name: "value first", data: map[string][]byte{
-			"value":      []byte(validKubeconfig),
-			"value.yaml": []byte(strings.ReplaceAll(validKubeconfig, "example.com", "secondary.example.com")),
-		}, host: "https://example.com:6443"},
-		{name: "value.yaml only", data: map[string][]byte{"value.yaml": []byte(validKubeconfig)}, host: "https://example.com:6443"},
-		{name: "empty value blocks fallback", data: map[string][]byte{"value": {}, "value.yaml": []byte(validKubeconfig)}, err: true},
-		{name: "invalid value blocks fallback", data: map[string][]byte{"value": []byte("private-credential: ["), "value.yaml": []byte(validKubeconfig)}, err: true},
+			valueKey:     []byte(validKubeconfig),
+			valueYAMLKey: []byte(strings.ReplaceAll(validKubeconfig, "example.com", "secondary.example.com")),
+		}, host: remoteHost},
+		{name: "value.yaml only", data: map[string][]byte{valueYAMLKey: []byte(validKubeconfig)}, host: remoteHost},
+		{name: "empty value blocks fallback", data: map[string][]byte{valueKey: {}, valueYAMLKey: []byte(validKubeconfig)}, err: true},
+		{name: "invalid value blocks fallback", data: map[string][]byte{valueKey: []byte("private-credential: ["), valueYAMLKey: []byte(validKubeconfig)}, err: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			p := providerForTest(t, &testReader{get: func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
@@ -254,7 +270,7 @@ func TestRuntimeClientProviderKubeconfigKeyPriority(t *testing.T) {
 				}
 				return &testClient{}, nil
 			}
-			got, err := p.ClientFor(context.Background(), types.NamespacedName{Name: "config"})
+			got, err := p.ClientFor(context.Background(), types.NamespacedName{Name: secretName})
 			if tt.err {
 				if err == nil || got != nil || builds != 0 {
 					t.Fatalf("invalid value fell back: client=%v, err=%v, builds=%d", got, err, builds)
@@ -268,7 +284,7 @@ func TestRuntimeClientProviderKubeconfigKeyPriority(t *testing.T) {
 
 func TestRuntimeClientProviderConcurrentRefresh(t *testing.T) {
 	const callers = 12
-	ref := types.NamespacedName{Namespace: "ns", Name: "config"}
+	ref := types.NamespacedName{Namespace: "ns", Name: secretName}
 	readEntered, releaseRead := make(chan struct{}), make(chan struct{})
 	buildEntered, releaseBuild := make(chan struct{}), make(chan struct{})
 	var reads, builds, activeReads atomic.Int32
@@ -303,7 +319,7 @@ func TestRuntimeClientProviderConcurrentRefresh(t *testing.T) {
 	}
 	// Seed an older entry so this wave exercises cache replacement, not just insertion.
 	old := &testClient{}
-	p.cache[ref] = runtimeClientCacheEntry{uid: "uid-1", resourceVersion: "old", client: old}
+	p.cache[ref] = runtimeClientCacheEntry{uid: secretUID, resourceVersion: "old", client: old}
 	start := make(chan struct{})
 	var ready, done sync.WaitGroup
 	ready.Add(callers)
@@ -350,7 +366,7 @@ func TestRuntimeClientProviderConcurrentRefresh(t *testing.T) {
 		t.Fatal("lock not released after calls")
 	}
 	defer p.mu.Unlock()
-	if entry := p.cache[ref]; entry.client != first || entry.uid != "uid-1" || entry.resourceVersion != "1" {
+	if entry := p.cache[ref]; entry.client != first || entry.uid != secretUID || entry.resourceVersion != "1" {
 		t.Fatalf("unexpected replacement entry: %+v", entry)
 	}
 }
