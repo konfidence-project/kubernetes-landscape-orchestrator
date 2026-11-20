@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/deploymenttarget"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -86,24 +87,20 @@ var _ = BeforeSuite(func() {
 
 	reconcileScheme = k8sManager.GetScheme()
 
-	landscape := &LandscapeClientProvider{
-		Local:  k8sManager.GetClient(),
-		Reader: k8sManager.GetAPIReader(),
-		Scheme: k8sManager.GetScheme(),
-	}
+	clientProvider, err := deploymenttarget.NewKubernetesClientProvider(k8sManager.GetClient(), k8sManager.GetAPIReader())
+	Expect(err).NotTo(HaveOccurred())
 
 	err = (&ActivationTaskExecutionReconciler{
-		Client:    k8sManager.GetClient(),
-		Scheme:    k8sManager.GetScheme(),
-		Recorder:  k8sManager.GetEventRecorder(ActivationTaskExecutionControllerName),
-		Landscape: landscape,
+		Client:         k8sManager.GetClient(),
+		Scheme:         reconcileScheme,
+		Recorder:       k8sManager.GetEventRecorder(ActivationTaskExecutionControllerName),
+		ClientProvider: clientProvider,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&StageRouteCleanupReconciler{
-		Client:    k8sManager.GetClient(),
-		Scheme:    k8sManager.GetScheme(),
-		Landscape: landscape,
+		Client: k8sManager.GetClient(),
+		Scheme: reconcileScheme,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
