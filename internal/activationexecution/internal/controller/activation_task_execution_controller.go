@@ -9,6 +9,7 @@ import (
 	"time"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/deploymenttarget"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentresult"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -28,15 +29,14 @@ import (
 
 const ActivationTaskExecutionControllerName = "kubernetes-activation-task-execution-controller"
 
-// ActivationTaskExecutionReconciler reconciles an ActivationTaskExecution object. On activation it maintains a single
-// per-stage HTTPRoute on the configured Gateway: match the x-konfidence-stage header plus the request path (or the
-// x-konfidence-service header), inject the routing-key header for the active vector, and back it with the vector's
-// deployment-result Services.
+// ActivationTaskExecutionReconciler maintains one HTTPRoute per stage on the configured Gateway.
+// The route matches the x-konfidence-stage and x-konfidence-service headers, sets the routing-key header
+// for the active vector, and forwards to the Services named in its deployment results.
 type ActivationTaskExecutionReconciler struct {
 	client.Client
-	Scheme    *runtime.Scheme
-	Recorder  events.EventRecorder
-	Landscape *LandscapeClientProvider
+	Scheme         *runtime.Scheme
+	Recorder       events.EventRecorder
+	ClientProvider *deploymenttarget.KubernetesClientProvider
 }
 
 // gatewayRouteConfig is the optional per-landscape configuration carried verbatim in the ActivationTaskRegistration
@@ -45,6 +45,9 @@ type ActivationTaskExecutionReconciler struct {
 // TODO(konfidence-project/konfidence#391, ADR-0036): move this configuration onto the DeploymentTarget once it carries
 // per-landscape routing parameters. The current registration-blob location is interim.
 type gatewayRouteConfig struct {
+	// ArtifactType selects the DeploymentTarget for routing.
+	// If it is empty, no DeploymentTarget matches.
+	ArtifactType konfidencev1alpha1.ArtifactType `json:"artifactType,omitempty"`
 	// GatewayName is the Gateway the HTTPRoutes attach to; defaults to konfidence-router.
 	GatewayName string `json:"gatewayName,omitempty"`
 	// GatewayNamespace is the Gateway namespace; defaults to the landscape namespace.
@@ -75,8 +78,6 @@ type gatewayRouteConfig struct {
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
 func (r *ActivationTaskExecutionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	log.Info("Reconcile started...")
@@ -152,16 +153,18 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	targetClient, err := r.ClientProvider.ClientForReadyTarget(ctx, req.Namespace, config.ArtifactType)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if len(rules) == 0 {
-		landscapeClient, err := r.Landscape.ClientFor(ctx, req.Namespace)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("resolve landscape client: %w", err)
-		}
 		route := &gwapiv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{
 			Name:      StageRouteName(vectorActivation.Spec.Stage),
 			Namespace: req.Namespace,
 		}}
-		if err := landscapeClient.Delete(ctx, route); err != nil && !errors.IsNotFound(err) {
+		if err := client.IgnoreNotFound(targetClient.Delete(ctx, route)); err != nil {
 			return ctrl.Result{}, fmt.Errorf("delete HTTPRoute for stage %s: %w", vectorActivation.Spec.Stage, err)
 		}
 		log.Info("no routable deployment results, removed route", "stage", vectorActivation.Spec.Stage)
@@ -175,13 +178,8 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 		return ctrl.Result{}, err
 	}
 
-	landscapeClient, err := r.Landscape.ClientFor(ctx, req.Namespace)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("resolve landscape client: %w", err)
-	}
-
 	if config.provisionsGateway {
-		state, err := ensureRouterGateway(ctx, landscapeClient, req.Namespace, config.GatewayClassName,
+		state, err := ensureRouterGateway(ctx, targetClient, req.Namespace, config.GatewayClassName,
 			activationTaskExecution.CreationTimestamp.Time, time.Now())
 		if err != nil {
 			return ctrl.Result{}, err
@@ -191,7 +189,7 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 		}
 	}
 
-	if err := r.applyStageRoute(ctx, landscapeClient, req.Namespace, vectorActivation.Spec.Stage, config, rules); err != nil {
+	if err := r.applyStageRoute(ctx, targetClient, req.Namespace, vectorActivation.Spec.Stage, config, rules); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -258,7 +256,7 @@ func (r *ActivationTaskExecutionReconciler) ensureStageFinalizer(ctx context.Con
 
 func (r *ActivationTaskExecutionReconciler) applyStageRoute(
 	ctx context.Context,
-	landscapeClient client.Client,
+	targetClient client.Client,
 	namespace, stage string,
 	config gatewayRouteConfig,
 	rules []gwapiv1.HTTPRouteRule,
@@ -277,7 +275,7 @@ func (r *ActivationTaskExecutionReconciler) applyStageRoute(
 		},
 	}
 
-	_, err := controllerutil.CreateOrUpdate(ctx, landscapeClient, route, func() error {
+	_, err := controllerutil.CreateOrUpdate(ctx, targetClient, route, func() error {
 		route.Spec = gwapiv1.HTTPRouteSpec{
 			CommonRouteSpec: gwapiv1.CommonRouteSpec{
 				ParentRefs: []gwapiv1.ParentReference{parentRef},

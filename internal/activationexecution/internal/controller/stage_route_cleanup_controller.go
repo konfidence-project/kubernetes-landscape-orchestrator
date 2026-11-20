@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	targethelpers "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/deploymenttarget"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -17,12 +18,11 @@ import (
 
 const StageRouteCleanupControllerName = "kubernetes-stage-route-cleanup-controller"
 
-// StageRouteCleanupReconciler deletes a stage's HTTPRoute when the Stage is deleted. The route may live on a different
-// cluster than the Stage, so its lifecycle is bound to the Stage via a finalizer instead of owner references.
+// StageRouteCleanupReconciler deletes a stage's HTTPRoute when the Stage is deleted.
 type StageRouteCleanupReconciler struct {
 	client.Client
-	Scheme    *runtime.Scheme
-	Landscape *LandscapeClientProvider
+	Scheme         *runtime.Scheme
+	ClientProvider *deploymenttarget.KubernetesClientProvider
 }
 
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=stages,verbs=get;list;watch;update;patch
@@ -39,8 +39,34 @@ func (r *StageRouteCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.deleteStageRoute(ctx, req.Namespace, stage.Name); err != nil {
-		return ctrl.Result{}, err
+	// TODO(konfidence-project/kubernetes-landscape-orchestrator#78): Use the target
+	// that owns the route instead of inferring its type from the ready targets.
+	targets := &konfidencev1alpha1.DeploymentTargetList{}
+	if err := r.List(ctx, targets, client.InNamespace(req.Namespace)); err != nil {
+		return ctrl.Result{}, fmt.Errorf("list DeploymentTargets for stage %s: %w", stage.Name, err)
+	}
+	var artifactType konfidencev1alpha1.ArtifactType
+	for i := range targets.Items {
+		target := &targets.Items[i]
+		if !targethelpers.IsReady(target) {
+			continue
+		}
+		if artifactType != "" {
+			return ctrl.Result{}, fmt.Errorf("cannot select a DeploymentTarget for stage %s: multiple ready targets", stage.Name)
+		}
+		artifactType = target.ArtifactType()
+	}
+	if artifactType == "" {
+		return ctrl.Result{}, fmt.Errorf("cannot select a DeploymentTarget for stage %s: no ready target", stage.Name)
+	}
+	routeClient, err := r.ClientProvider.ClientForReadyTarget(ctx, req.Namespace, artifactType)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("get route client for stage %s: %w", stage.Name, err)
+	}
+
+	route := &gwapiv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: StageRouteName(stage.Name), Namespace: req.Namespace}}
+	if err := client.IgnoreNotFound(routeClient.Delete(ctx, route)); err != nil {
+		return ctrl.Result{}, fmt.Errorf("delete HTTPRoute for stage %s: %w", stage.Name, err)
 	}
 
 	patch := client.MergeFrom(stage.DeepCopy())
@@ -51,19 +77,6 @@ func (r *StageRouteCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	log.Info("cleaned up stage route", "stage", stage.Name)
 	return ctrl.Result{}, nil
-}
-
-func (r *StageRouteCleanupReconciler) deleteStageRoute(ctx context.Context, namespace, stage string) error {
-	landscapeClient, err := r.Landscape.ClientFor(ctx, namespace)
-	if err != nil {
-		return fmt.Errorf("resolve landscape client for stage %s cleanup: %w", stage, err)
-	}
-
-	route := &gwapiv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: StageRouteName(stage), Namespace: namespace}}
-	if err := landscapeClient.Delete(ctx, route); err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("delete HTTPRoute for stage %s: %w", stage, err)
-	}
-	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
