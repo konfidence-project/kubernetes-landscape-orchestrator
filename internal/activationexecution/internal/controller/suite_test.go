@@ -99,8 +99,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&StageRouteCleanupReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: reconcileScheme,
+		Client:         k8sManager.GetClient(),
+		Scheme:         reconcileScheme,
+		ClientProvider: clientProvider,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 

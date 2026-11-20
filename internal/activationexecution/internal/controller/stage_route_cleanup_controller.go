@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
+	targethelpers "github.com/konfidence-project/konfidence/pkg/deployer/deploymenttarget"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/deploymenttarget"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -16,12 +18,11 @@ import (
 
 const StageRouteCleanupControllerName = "kubernetes-stage-route-cleanup-controller"
 
-// StageRouteCleanupReconciler deletes a stage's HTTPRoute from the local cluster when the Stage is deleted.
-// TODO(konfidence-project/kubernetes-landscape-orchestrator#78): Delete the HTTPRoute
-// from the cluster where it was created before removing the Stage finalizer.
+// StageRouteCleanupReconciler deletes a stage's HTTPRoute when the Stage is deleted.
 type StageRouteCleanupReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme         *runtime.Scheme
+	ClientProvider *deploymenttarget.KubernetesClientProvider
 }
 
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=stages,verbs=get;list;watch;update;patch
@@ -38,8 +39,33 @@ func (r *StageRouteCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, nil
 	}
 
+	// TODO(konfidence-project/kubernetes-landscape-orchestrator#78): Use the target
+	// that owns the route instead of inferring its type from the ready targets.
+	targets := &konfidencev1alpha1.DeploymentTargetList{}
+	if err := r.List(ctx, targets, client.InNamespace(req.Namespace)); err != nil {
+		return ctrl.Result{}, fmt.Errorf("list DeploymentTargets for stage %s: %w", stage.Name, err)
+	}
+	var artifactType konfidencev1alpha1.ArtifactType
+	for i := range targets.Items {
+		target := &targets.Items[i]
+		if !targethelpers.IsReady(target) {
+			continue
+		}
+		if artifactType != "" {
+			return ctrl.Result{}, fmt.Errorf("cannot select a DeploymentTarget for stage %s: multiple ready targets", stage.Name)
+		}
+		artifactType = target.ArtifactType()
+	}
+	if artifactType == "" {
+		return ctrl.Result{}, fmt.Errorf("cannot select a DeploymentTarget for stage %s: no ready target", stage.Name)
+	}
+	routeClient, err := r.ClientProvider.ClientForReadyTarget(ctx, req.Namespace, artifactType)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("get route client for stage %s: %w", stage.Name, err)
+	}
+
 	route := &gwapiv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: StageRouteName(stage.Name), Namespace: req.Namespace}}
-	if err := client.IgnoreNotFound(r.Delete(ctx, route)); err != nil {
+	if err := client.IgnoreNotFound(routeClient.Delete(ctx, route)); err != nil {
 		return ctrl.Result{}, fmt.Errorf("delete HTTPRoute for stage %s: %w", stage.Name, err)
 	}
 

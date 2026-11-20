@@ -26,8 +26,9 @@ func SetupControllers(mgr manager.Manager, logger logr.Logger) error {
 	}
 
 	if err := (&internalcontroller.StageRouteCleanupReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		ClientProvider: clientProvider,
 	}).SetupWithManager(mgr); err != nil {
 		logger.Error(err, "unable to create controller", "controller", "StageRouteCleanup")
 		return err
