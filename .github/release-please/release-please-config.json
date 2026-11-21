@@ -1,14 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "3e73afdb9e882de0d1020c45d111881dd9d988e4",
   "release-type": "simple",
   "include-v-in-tag": false,
   "include-v-in-release-name": false,
   "draft": true,
   "force-tag-creation": true,
-  "versioning": "prerelease",
-  "prerelease": true,
-  "prerelease-type": "alpha",
-  "initial-version": "0.0.1-alpha.1",
   "bump-minor-pre-major": true,
   "commit-search-depth": 1000,
   "pull-request-title-pattern": "chore(release): ${version}",
@@ -57,7 +54,6 @@
   ],
   "packages": {
     ".": {
-      "release-as": "0.1.0-alpha.1",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         {
