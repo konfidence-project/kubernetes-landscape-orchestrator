@@ -7,6 +7,7 @@ import (
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	testutil "github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/activationexecution/internal/utils"
+	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/deploymenttarget"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -109,12 +110,14 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			// Keep the manager's type filter from racing this explicit reconciliation.
 			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
 				"direct-reconcile", ActivationTaskExecSpec, "vector-activation-001")
+			clientProvider, err := deploymenttarget.NewKubernetesClientProvider(k8sClient, k8sClient)
+			Expect(err).NotTo(HaveOccurred())
 			reconciler := &ActivationTaskExecutionReconciler{
 				Client: k8sClient, Scheme: reconcileScheme, Recorder: events.NewFakeRecorder(10),
-				Landscape: &LandscapeClientProvider{Local: k8sClient, Reader: k8sClient, Scheme: reconcileScheme},
+				ClientProvider: clientProvider,
 			}
 			key := types.NamespacedName{Name: ActivationTaskExecution, Namespace: Namespace}
-			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: key})
+			_, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: key})
 			Expect(err).To(MatchError(ContainSubstring("broken")))
 			Expect(k8sClient.Get(ctx, routeKey, route)).To(Succeed())
 			Expect(route.Spec).To(Equal(*originalSpec))

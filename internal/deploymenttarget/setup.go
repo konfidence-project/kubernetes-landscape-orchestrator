@@ -10,7 +10,6 @@ import (
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/build"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -18,28 +17,20 @@ import (
 
 const OperatorFlagName = "DeploymentTarget"
 
-// Currently the user cannot specify which key should be used in a Secret/ConfigMap, so we
-// have to fall back to the default keys used by FluxCD:
-// https://fluxcd.io/flux/components/kustomize/kustomizations/#secret-based-authentication
-var acceptedKubeconfigKeys = []string{"value", "value.yaml"}
-
 // validate accepts empty parameters for local deployment. Any configured
 // parameters must identify a Secret containing a valid kubeconfig.
 func validate(ctx context.Context, c client.Reader, dt *konfidencev1alpha1.DeploymentTarget) (dpltarget.ValidationResult, error) {
-	params := dt.Spec.Parameters
-	if params == nil {
-		// empty parameters is allowed and deploys to local cluster
+	secretKey, err := kubeconfigSecretRef(dt)
+	if err != nil {
+		return dpltarget.ValidationFailure(err.Error()), nil
+	}
+	if secretKey == nil {
 		return dpltarget.ValidationSuccess(), nil
 	}
 
-	if params.APIGroup != "" || params.Kind != "Secret" || params.Name == "" {
-		return dpltarget.ValidationFailure("parameters must refer to a Kubernetes Secret containing a kubeconfig"), nil
-	}
-
 	secret := &corev1.Secret{}
-	secretKey := types.NamespacedName{Namespace: dt.Namespace, Name: params.Name}
-	if err := c.Get(ctx, secretKey, secret); err != nil {
-		return nil, fmt.Errorf("get secret %s: %w", secretKey, err)
+	if err := c.Get(ctx, *secretKey, secret); err != nil {
+		return nil, fmt.Errorf("get secret %s: %w", *secretKey, err)
 	}
 
 	kubeconfigBytes, err := kubeconfigFromSecret(secret)
@@ -48,18 +39,9 @@ func validate(ctx context.Context, c client.Reader, dt *konfidencev1alpha1.Deplo
 	}
 
 	if _, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigBytes); err != nil {
-		return dpltarget.ValidationFailure(fmt.Sprintf("secret %q does not contain a valid kubeconfig", params.Name)), nil
+		return dpltarget.ValidationFailure(fmt.Sprintf("secret %q does not contain a valid kubeconfig", secretKey.Name)), nil
 	}
 	return dpltarget.ValidationSuccess(), nil
-}
-
-func kubeconfigFromSecret(secret *corev1.Secret) ([]byte, error) {
-	for _, key := range acceptedKubeconfigKeys {
-		if data, ok := secret.Data[key]; ok {
-			return data, nil
-		}
-	}
-	return nil, fmt.Errorf("secret %q contains no kubeconfig: expected key as one of [value value.yaml]", secret.Name)
 }
 
 // +kubebuilder:rbac:groups=konfidence.cloud,resources=deploymenttargets,verbs=get;list;watch

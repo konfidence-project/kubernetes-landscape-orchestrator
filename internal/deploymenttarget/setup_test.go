@@ -53,7 +53,7 @@ func TestValidate(t *testing.T) {
 		{
 			name:      "valid kubeconfig",
 			params:    &konfidencev1alpha1.Parameters{Kind: secretKind, Name: remoteName},
-			secret:    &corev1.Secret{Name: remoteName, Namespace: landscapeNs, Data: map[string][]byte{"value": []byte(validKubeconfig)}},
+			secret:    &corev1.Secret{Name: remoteName, Namespace: landscapeNs, Data: map[string][]byte{valueKey: []byte(validKubeconfig)}},
 			wantValid: true,
 		},
 		{name: "unsupported reference", params: &konfidencev1alpha1.Parameters{Kind: "ConfigMap", Name: remoteName}, wantValid: false},
@@ -65,12 +65,12 @@ func TestValidate(t *testing.T) {
 			wantValid: false,
 		},
 		{
-			name:   "invalid kubeconfig",
+			name:   invalidKubeconfig,
 			params: &konfidencev1alpha1.Parameters{Kind: secretKind, Name: "invalid"},
 			secret: &corev1.Secret{
 				Name:      "invalid",
 				Namespace: landscapeNs,
-				Data:      map[string][]byte{"value": []byte("not a kubeconfig")},
+				Data:      map[string][]byte{valueKey: []byte("not a kubeconfig")},
 			},
 			wantValid: false,
 		},
