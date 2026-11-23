@@ -1,27 +1,17 @@
 name: PR
-
 on:
   pull_request:
     branches: [main]
-
+permissions:
+  contents: read
 jobs:
   lint-test-build:
     name: PR
-    permissions:
-      contents: write
-      packages: write
-      attestations: write
-      id-token: write
     uses: ./.github/workflows/lint-test-build.yaml
-    secrets: inherit
-    with:
-      mode: pr
-      snapshot-tag: ${{ github.sha }}
-
   ci-gate:
     name: CI Gate
     needs: [lint-test-build]
     if: always()
-    uses: konfidence-project/.github/.github/workflows/ci-gate.yaml@v4
+    uses: konfidence-project/.github/.github/workflows/ci-gate.yaml@2de51ca6a1295e02bbceaf3c88bdba21b4cc0169 # hardened workflows
     with:
       needs-json: ${{ toJson(needs) }}

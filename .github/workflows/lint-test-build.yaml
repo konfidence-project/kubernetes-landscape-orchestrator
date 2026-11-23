@@ -1,46 +1,23 @@
 name: Lint, Test and Build
-
 on:
   workflow_call:
-    inputs:
-      mode:
-        description: 'Build mode: "pr" (compile only), "main" (build + push images tagged with SHA), "release" (full release via goreleaser)'
-        required: true
-        type: string
-      snapshot-tag:
-        description: Tag to use for snapshot builds (e.g. git SHA). Leave empty for release mode with actual git version tag.
-        required: false
-        type: string
-        default: ''
-
+permissions:
+  contents: read
 jobs:
   lint:
     name: Lint
-    uses: konfidence-project/.github/.github/workflows/golang-lint.yaml@v4
+    uses: konfidence-project/.github/.github/workflows/golang-lint.yaml@2de51ca6a1295e02bbceaf3c88bdba21b4cc0169 # hardened workflows
     with:
       codegen-cmd: fmt vet
-
   reuse-lint:
     name: REUSE
-    uses: konfidence-project/.github/.github/workflows/reuse-lint.yaml@v4
-
+    uses: konfidence-project/.github/.github/workflows/reuse-lint.yaml@2de51ca6a1295e02bbceaf3c88bdba21b4cc0169 # hardened workflows
   test:
     name: Test
-    uses: konfidence-project/.github/.github/workflows/test.yaml@v4
+    uses: konfidence-project/.github/.github/workflows/test.yaml@2de51ca6a1295e02bbceaf3c88bdba21b4cc0169 # hardened workflows
     with:
       test-cmd: test
-
   build:
     name: Build / Orchestrator
     needs: [lint, reuse-lint, test]
-    permissions:
-      contents: write
-      packages: write
-      attestations: write
-      id-token: write
-    uses: konfidence-project/.github/.github/workflows/goreleaser.yaml@v4
-    with:
-      runner: konfidence-large
-      registry: ghcr.io
-      mode: ${{ inputs.mode }}
-      snapshot-tag: ${{ inputs.snapshot-tag }}
+    uses: konfidence-project/.github/.github/workflows/goreleaser-pr.yaml@2de51ca6a1295e02bbceaf3c88bdba21b4cc0169 # read-only build
