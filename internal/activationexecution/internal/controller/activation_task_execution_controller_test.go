@@ -24,7 +24,7 @@ import (
 var _ = Describe("ActivationTaskExecution Controller", func() {
 	const (
 		ActivationTaskExecution = "activation-execution-001"
-		ActivationTaskExecSpec  = `{"artifactType":"helm.konfidence.cloud"}`
+		ActivationTaskExecSpec  = "{}"
 		ServiceName1            = "candidates"
 		ServicePort1            = 80
 		ServiceName2            = "interviews"
@@ -81,31 +81,6 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 	}
 
 	Context("When reconciling a gateway-route activation", func() {
-		It("does not route without an artifact type even when a target is ready", func() {
-			ctx := context.Background()
-			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
-			testutil.CreateReadyLocalDeploymentTarget(ctx, k8sClient, "local-target", Namespace, "helm.konfidence.cloud")
-			testutil.CreateVectorActivation(ctx, k8sClient, "vector-activation-001", Namespace, Stage, StageVersion, Vector001, VectorDeployment)
-			createVectorDeploymentWithResults(ctx, VectorDeployment, map[string]konfidencev1alpha1.ComponentDeploymentResults{
-				compA: {deploymentResult(ServiceName1, ServiceName1, ServicePort1, "http")},
-			})
-			testutil.CreateActivationTaskExecution(ctx, k8sClient, ActivationTaskExecution, Namespace,
-				"direct-reconcile", `{}`, "vector-activation-001")
-
-			clientProvider, err := deploymenttarget.NewKubernetesClientProvider(k8sClient, k8sClient)
-			Expect(err).NotTo(HaveOccurred())
-			reconciler := &ActivationTaskExecutionReconciler{
-				Client:         k8sClient,
-				Recorder:       events.NewFakeRecorder(10),
-				ClientProvider: clientProvider,
-			}
-			key := types.NamespacedName{Name: ActivationTaskExecution, Namespace: Namespace}
-			_, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: key})
-			Expect(k8serrors.IsNotFound(err)).To(BeTrue(), "expected no matching DeploymentTarget, got %v", err)
-			routeKey := types.NamespacedName{Name: StageRouteName(Stage), Namespace: Namespace}
-			Expect(k8serrors.IsNotFound(k8sClient.Get(ctx, routeKey, &gwapiv1.HTTPRoute{}))).To(BeTrue())
-		})
-
 		It("preserves stage routing when a result breaches the selected-port contract", func() {
 			ctx := context.Background()
 			testutil.CreateStage(ctx, k8sClient, Stage, Namespace)
@@ -138,9 +113,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 			clientProvider, err := deploymenttarget.NewKubernetesClientProvider(k8sClient, k8sClient)
 			Expect(err).NotTo(HaveOccurred())
 			reconciler := &ActivationTaskExecutionReconciler{
-				Client:         k8sClient,
-				Scheme:         reconcileScheme,
-				Recorder:       events.NewFakeRecorder(10),
+				Client: k8sClient, Scheme: reconcileScheme, Recorder: events.NewFakeRecorder(10),
 				ClientProvider: clientProvider,
 			}
 			key := types.NamespacedName{Name: ActivationTaskExecution, Namespace: Namespace}
@@ -393,7 +366,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 	})
 
 	Context("When the registration sets a gatewayClassName", func() {
-		const provisionSpec = `{"artifactType":"helm.konfidence.cloud","gatewayClassName":"eg"}`
+		const provisionSpec = `{"gatewayClassName":"eg"}`
 
 		routerKey := types.NamespacedName{Name: defaultGatewayName, Namespace: Namespace}
 		routeKey := types.NamespacedName{Name: StageRouteName(Stage), Namespace: Namespace}
@@ -511,7 +484,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 
 		It("reports a missing GatewayClass without creating a Gateway", func() {
 			ctx := context.Background()
-			activate(ctx, `{"artifactType":"helm.konfidence.cloud","gatewayClassName":"missing"}`)
+			activate(ctx, `{"gatewayClassName":"missing"}`)
 
 			waiting := eventuallyCondition(ctx, konfidencev1alpha1.ActivationTaskExecutionInProgress, reasonGatewayClassNotFound)
 			Expect(waiting.Message).To(ContainSubstring("missing"))
@@ -543,7 +516,7 @@ var _ = Describe("ActivationTaskExecution Controller", func() {
 
 		It("never provisions a Gateway when the registration names one", func() {
 			ctx := context.Background()
-			activate(ctx, `{"artifactType":"helm.konfidence.cloud","gatewayClassName":"eg","gatewayName":"internal","gatewayNamespace":"edge"}`)
+			activate(ctx, `{"gatewayClassName":"eg","gatewayName":"internal","gatewayNamespace":"edge"}`)
 
 			route := &gwapiv1.HTTPRoute{}
 			Eventually(func(g Gomega) {

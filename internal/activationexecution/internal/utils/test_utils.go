@@ -303,7 +303,6 @@ func CreateReadyLocalDeploymentTarget(ctx context.Context, k8sClient client.Clie
 	meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
 		Type:               konfidencev1alpha1.DeploymentTargetReadyCondition,
 		Status:             metav1.ConditionTrue,
-		ObservedGeneration: target.Generation,
 		Reason:             "Accepted",
 		Message:            "test",
 		LastTransitionTime: metav1.Now(),

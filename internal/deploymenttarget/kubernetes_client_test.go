@@ -11,7 +11,6 @@ import (
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -67,6 +66,19 @@ func configSecret() *corev1.Secret {
 	}
 }
 
+func TestClientForReadyTargetUsesLocalClientWithoutLookup(t *testing.T) {
+	local := fake.NewClientBuilder().Build()
+	provider, err := NewKubernetesClientProvider(local, &testReader{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := provider.ClientForReadyTarget(t.Context(), "landscape", "helm.konfidence.cloud")
+	if err != nil || got != local {
+		t.Fatalf("ClientForReadyTarget() = (%v, %v), want the local client", got, err)
+	}
+}
+
 func TestKubernetesClientProviderWithoutSecretRead(t *testing.T) {
 	local := fake.NewClientBuilder().Build()
 	for _, tt := range []struct {
@@ -88,9 +100,9 @@ func TestKubernetesClientProviderWithoutSecretRead(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := provider.clientForTarget(t.Context(), tt.target)
+			got, err := provider.ClientForTarget(t.Context(), tt.target)
 			if got != tt.want || (err != nil) != (tt.want == nil) {
-				t.Fatalf("clientForTarget() = (%v, %v), want (%v, error=%v)", got, err, tt.want, tt.want == nil)
+				t.Fatalf("ClientForTarget() = (%v, %v), want (%v, error=%v)", got, err, tt.want, tt.want == nil)
 			}
 		})
 	}
@@ -111,26 +123,20 @@ func TestKubernetesClientProviderTargetsSharingSecret(t *testing.T) {
 	firstTarget := targetWithParameters(konfidencev1alpha1.Parameters{Kind: secretKind, Name: remoteName})
 	firstTarget.Name = "first"
 	firstTarget.Spec.ArtifactType = konfidencev1alpha1.MustArtifactType("helm.konfidence.cloud")
-	firstTarget.Generation = 1
-	firstTarget.Status.Conditions = []metav1.Condition{{
-		Type:               konfidencev1alpha1.DeploymentTargetReadyCondition,
-		Status:             metav1.ConditionTrue,
-		ObservedGeneration: firstTarget.Generation,
-	}}
 	secondTarget := firstTarget.DeepCopy()
 	secondTarget.Name = "second"
 	secondTarget.Spec.ArtifactType = konfidencev1alpha1.MustArtifactType("kustomize.konfidence.cloud")
-	reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret, firstTarget, secondTarget).Build()
+	reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build()
 	provider, err := NewKubernetesClientProvider(reader, reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	first, err := provider.ClientForReadyTarget(t.Context(), landscapeNs, firstTarget.Spec.ArtifactType)
+	first, err := provider.ClientForTarget(t.Context(), firstTarget)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := provider.ClientForReadyTarget(t.Context(), landscapeNs, secondTarget.Spec.ArtifactType)
+	second, err := provider.ClientForTarget(t.Context(), secondTarget)
 	if err != nil || first == nil || first == reader || first != second {
 		t.Fatalf("targets did not share a remote client: %v", err)
 	}
@@ -160,9 +166,9 @@ func TestKubernetesClientProviderCache(t *testing.T) {
 	}
 	resolve := func(key types.NamespacedName) client.Client {
 		t.Helper()
-		c, err := p.clientForTarget(ctx, targetForSecret(key))
+		c, err := p.ClientForTarget(ctx, targetForSecret(key))
 		if err != nil || c == nil {
-			t.Fatalf("clientForTarget(%s) = (%v, %v)", key, c, err)
+			t.Fatalf("ClientForTarget(%s) = (%v, %v)", key, c, err)
 		}
 		return c
 	}
@@ -237,7 +243,7 @@ func TestKubernetesClientProviderFailuresPreserveCache(t *testing.T) {
 				var before client.Client
 				if cached {
 					var err error
-					before, err = p.clientForTarget(context.Background(), target)
+					before, err = p.ClientForTarget(context.Background(), target)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -255,7 +261,7 @@ func TestKubernetesClientProviderFailuresPreserveCache(t *testing.T) {
 					secret.Data[valueKey] = []byte(strings.Replace(validKubeconfig,
 						"insecure-skip-tls-verify: true", "certificate-authority-data: aW52YWxpZA==", 1))
 				}
-				got, err := p.clientForTarget(context.Background(), target)
+				got, err := p.ClientForTarget(context.Background(), target)
 				if got != nil || err == nil {
 					t.Fatalf("failure returned (%v, %v)", got, err)
 				}
@@ -271,7 +277,7 @@ func TestKubernetesClientProviderFailuresPreserveCache(t *testing.T) {
 				// Restore the original Secret. If a client was cached, the provider must reuse it.
 				secret = configSecret()
 				readErr = nil
-				got, err = p.clientForTarget(context.Background(), target)
+				got, err = p.ClientForTarget(context.Background(), target)
 				if err != nil || got == nil || (cached && got != before) {
 					t.Fatalf("recovery returned (%v, %v)", got, err)
 				}
@@ -308,7 +314,7 @@ func TestKubernetesClientProviderKubeconfigKeyPriority(t *testing.T) {
 				*obj.(*corev1.Secret) = *secret
 				return nil
 			}})
-			got, err := p.clientForTarget(context.Background(), targetForSecret(types.NamespacedName{Name: secretName}))
+			got, err := p.ClientForTarget(context.Background(), targetForSecret(types.NamespacedName{Name: secretName}))
 			if tt.err {
 				if err == nil || got != nil {
 					t.Fatalf("invalid value fell back: client=%v, err=%v", got, err)
@@ -344,9 +350,9 @@ func TestKubernetesClientProviderConcurrentRefresh(t *testing.T) {
 		return nil
 	}}
 	p := providerForTest(t, reader)
-	old, err := p.clientForTarget(t.Context(), target)
+	old, err := p.ClientForTarget(t.Context(), target)
 	if err != nil || old == nil {
-		t.Fatalf("initial clientForTarget: client=%v, err=%v", old, err)
+		t.Fatalf("initial ClientForTarget: client=%v, err=%v", old, err)
 	}
 	start := make(chan struct{})
 	var ready, done sync.WaitGroup
@@ -359,9 +365,9 @@ func TestKubernetesClientProviderConcurrentRefresh(t *testing.T) {
 			ready.Done()
 			<-start
 			var err error
-			results[i], err = p.clientForTarget(context.Background(), target)
+			results[i], err = p.ClientForTarget(context.Background(), target)
 			if err != nil {
-				t.Errorf("clientForTarget: %v", err)
+				t.Errorf("ClientForTarget: %v", err)
 			}
 		}()
 	}
@@ -385,7 +391,7 @@ func TestKubernetesClientProviderConcurrentRefresh(t *testing.T) {
 	if reads.Load() != callers+1 {
 		t.Fatalf("got %d reads, want %d", reads.Load(), callers+1)
 	}
-	if got, err := p.clientForTarget(t.Context(), target); err != nil || got != first {
-		t.Fatalf("clientForTarget did not reuse the replacement: client=%v, err=%v", got, err)
+	if got, err := p.ClientForTarget(t.Context(), target); err != nil || got != first {
+		t.Fatalf("ClientForTarget did not reuse the replacement: client=%v, err=%v", got, err)
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	konfidencev1alpha1 "github.com/konfidence-project/konfidence/api/v1alpha1"
-	"github.com/konfidence-project/kubernetes-landscape-orchestrator/internal/deploymenttarget"
 	"github.com/konfidence-project/kubernetes-landscape-orchestrator/pkg/deploymentresult"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -29,14 +28,18 @@ import (
 
 const ActivationTaskExecutionControllerName = "kubernetes-activation-task-execution-controller"
 
-// ActivationTaskExecutionReconciler maintains one HTTPRoute per stage on the configured Gateway.
-// The route matches the x-konfidence-stage and x-konfidence-service headers, sets the routing-key header
-// for the active vector, and forwards to the Services named in its deployment results.
+type RuntimeClientProvider interface {
+	ClientForReadyTarget(ctx context.Context, namespace string, artifactType konfidencev1alpha1.ArtifactType) (client.Client, error)
+}
+
+// ActivationTaskExecutionReconciler manages a stage's HTTPRoute on the configured Gateway.
+// The route matches x-konfidence-stage and x-konfidence-service, sets the routing key
+// for the active vector, and forwards requests to Services from its deployment results.
 type ActivationTaskExecutionReconciler struct {
 	client.Client
 	Scheme         *runtime.Scheme
 	Recorder       events.EventRecorder
-	ClientProvider *deploymenttarget.KubernetesClientProvider
+	ClientProvider RuntimeClientProvider
 }
 
 // gatewayRouteConfig is the optional per-landscape configuration carried verbatim in the ActivationTaskRegistration
@@ -45,8 +48,6 @@ type ActivationTaskExecutionReconciler struct {
 // TODO(konfidence-project/konfidence#391, ADR-0036): move this configuration onto the DeploymentTarget once it carries
 // per-landscape routing parameters. The current registration-blob location is interim.
 type gatewayRouteConfig struct {
-	// ArtifactType selects the DeploymentTarget for routing.
-	// If it is empty, no DeploymentTarget matches.
 	ArtifactType konfidencev1alpha1.ArtifactType `json:"artifactType,omitempty"`
 	// GatewayName is the Gateway the HTTPRoutes attach to; defaults to konfidence-router.
 	GatewayName string `json:"gatewayName,omitempty"`
@@ -172,8 +173,7 @@ func (r *ActivationTaskExecutionReconciler) reconcileActivationTaskExecution(
 		return ctrl.Result{}, nil
 	}
 
-	// Bind the route lifecycle to the Stage before creating it: the route may live on another cluster, so cleanup is
-	// driven by a Stage finalizer rather than owner references.
+	// Add the Stage finalizer before creating the route.
 	if err := r.ensureStageFinalizer(ctx, req.Namespace, vectorActivation.Spec.Stage); err != nil {
 		return ctrl.Result{}, err
 	}
