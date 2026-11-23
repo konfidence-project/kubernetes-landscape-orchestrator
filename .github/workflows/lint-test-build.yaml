@@ -20,4 +20,4 @@ jobs:
   build:
     name: Build / Orchestrator
     needs: [lint, reuse-lint, test]
-    uses: konfidence-project/.github/.github/workflows/goreleaser-pr.yaml@2de51ca6a1295e02bbceaf3c88bdba21b4cc0169 # read-only build
+    uses: konfidence-project/.github/.github/workflows/goreleaser-pr.yaml@22e69a2a9cd4fc6a9e160cc0008a40e0106abf22 # read-only build
