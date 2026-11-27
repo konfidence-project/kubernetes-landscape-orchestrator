@@ -6,18 +6,18 @@ permissions:
 jobs:
   lint:
     name: Lint
-    uses: konfidence-project/.github/.github/workflows/golang-lint.yaml@2de51ca6a1295e02bbceaf3c88bdba21b4cc0169 # hardened workflows
+    uses: konfidence-project/.github/.github/workflows/golang-lint.yaml@ef25064d200c2da0789c100878a4ee29a147518d # v5.0.0
     with:
       codegen-cmd: fmt vet
   reuse-lint:
     name: REUSE
-    uses: konfidence-project/.github/.github/workflows/reuse-lint.yaml@2de51ca6a1295e02bbceaf3c88bdba21b4cc0169 # hardened workflows
+    uses: konfidence-project/.github/.github/workflows/reuse-lint.yaml@ef25064d200c2da0789c100878a4ee29a147518d # v5.0.0
   test:
     name: Test
-    uses: konfidence-project/.github/.github/workflows/test.yaml@2de51ca6a1295e02bbceaf3c88bdba21b4cc0169 # hardened workflows
+    uses: konfidence-project/.github/.github/workflows/test.yaml@ef25064d200c2da0789c100878a4ee29a147518d # v5.0.0
     with:
       test-cmd: test
   build:
     name: Build / Orchestrator
     needs: [lint, reuse-lint, test]
-    uses: konfidence-project/.github/.github/workflows/goreleaser-pr.yaml@22e69a2a9cd4fc6a9e160cc0008a40e0106abf22 # read-only build
+    uses: konfidence-project/.github/.github/workflows/goreleaser-pr.yaml@ef25064d200c2da0789c100878a4ee29a147518d # v5.0.0
