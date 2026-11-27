@@ -1,27 +1,21 @@
 name: PR
-
 on:
   pull_request:
     branches: [main]
-
+  merge_group:
+permissions:
+  contents: read
 jobs:
+  workflow-security:
+    name: Workflow Security
+    uses: ./.github/workflows/workflow-lint.yaml
   lint-test-build:
     name: PR
-    permissions:
-      contents: write
-      packages: write
-      attestations: write
-      id-token: write
     uses: ./.github/workflows/lint-test-build.yaml
-    secrets: inherit
-    with:
-      mode: pr
-      snapshot-tag: ${{ github.sha }}
-
   ci-gate:
     name: CI Gate
-    needs: [lint-test-build]
+    needs: [workflow-security, lint-test-build]
     if: always()
-    uses: konfidence-project/.github/.github/workflows/ci-gate.yaml@v4
+    uses: konfidence-project/.github/.github/workflows/ci-gate.yaml@ef25064d200c2da0789c100878a4ee29a147518d # v5.0.0
     with:
       needs-json: ${{ toJson(needs) }}
