@@ -4,10 +4,10 @@ go 1.27.1
 
 require (
 	github.com/distribution/reference v0.6.0
-	github.com/fluxcd/helm-controller/api v1.7.1
-	github.com/fluxcd/kustomize-controller/api v1.10.1
-	github.com/fluxcd/pkg/apis/meta v1.38.0
-	github.com/fluxcd/source-controller/api v1.10.1
+	github.com/fluxcd/helm-controller/api v1.7.2
+	github.com/fluxcd/kustomize-controller/api v1.10.2
+	github.com/fluxcd/pkg/apis/meta v1.39.0
+	github.com/fluxcd/source-controller/api v1.10.2
 	github.com/go-logr/logr v1.4.4
 	github.com/konfidence-project/konfidence v0.0.0-20261029071408-ea5d82ea884d
 	github.com/onsi/ginkgo/v2 v2.34.0
@@ -19,7 +19,7 @@ require (
 	k8s.io/api v0.37.2
 	k8s.io/apimachinery v0.37.2
 	k8s.io/client-go v0.37.2
-	sigs.k8s.io/controller-runtime v0.25.2
+	sigs.k8s.io/controller-runtime v0.25.3
 	sigs.k8s.io/gateway-api v1.7.0
 )
 
